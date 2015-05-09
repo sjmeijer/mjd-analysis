@@ -67,6 +67,23 @@ def findParameter(paramName, searchString):
 
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
+def findStringParameter(paramName, searchString):
+    #regex on what i want to replace - parameter name, whitespace, then a number (optional minus sign, optional decimal point)
+    #skips commented lines
+    #i guess right now it really only works if the value is used once, but if you define it twice without comments, what are you doing anyway?
+    regex = "(?<!#)" + paramName + "\s+" + ".+"
+    pattern = re.compile(regex)
+    m = pattern.search(searchString)
+
+    if m is None:
+        return None
+    else:
+        return m.group()
+    
+
+
+'''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
+
 #replace a number in a line of a siggen conf file
 def replaceConfFileValue(fileName, paramName, newValue):
     
@@ -96,6 +113,25 @@ def replaceValue(replaceString, paramName, newValue):
     
     newString = replaceString.replace(oldLine, newLine)
 
+    return newString
+
+#replaces a siggen conf value in given string
+def replaceStringValue(replaceString, paramName, newValue):
+    
+    oldLine = findStringParameter(paramName, replaceString)
+    
+    if oldLine is None:
+        return None
+        print "No parameter with name %s was found!" % (paramName)
+        sys.exit
+    old_split = oldLine.split(None, 2)
+    old_split[1] = str(newValue)
+
+    newLine = old_split[0]
+    for bit in old_split[1:]:
+        newLine += "    " + bit
+
+    newString = replaceString.replace(oldLine, newLine)
     return newString
 
 
@@ -168,11 +204,12 @@ class SiggenCrystalInfo:
     
         for field in paramDict:
             if field.startswith("siggen_") and paramDict[field] is not None:
-                replaceValue(fileContent, field, paramDict[field])
+                fieldName = field[7:]
+                fileContent = replaceValue(fileContent, fieldName, paramDict[field])
     
         #also change the field and wp names
-        replaceValue(fileContent, 'field_name', "fields/%s_ev.dat" % self.fCrystalID)
-        replaceValue(fileContent, 'wp_name', "fields/%s_wp.dat" % self.fCrystalID)
+        fileContent = replaceStringValue(fileContent, 'field_name', "fields/%s_ev.dat" % self.fCrystalID)
+        fileContent = replaceStringValue(fileContent, 'wp_name', "fields/%s_wp.dat" % self.fCrystalID)
 
         #write the thing
         outFileName = "%s_autogen.conf" % self.fCrystalID

@@ -48,7 +48,7 @@ def adjustDetectorByName(crystalID):
 
     desiredDepletion = siggenInfo.fDepletionVoltage
 
-    realImpurityZ0 = findImpurityZ0(confFileStr, desiredDepletion)
+    realImpurityZ0 =findImpurityZ0(confFileStr, desiredDepletion)
 
     print "Determined the real impurity gradient to be %f" % realImpurityZ0
 

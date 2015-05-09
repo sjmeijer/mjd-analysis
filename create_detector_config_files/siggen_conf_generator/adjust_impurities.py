@@ -27,8 +27,8 @@ from conf_file_interface import *
 
 '''Setup options'''
 
-#mjd_siggen_dir = "~/Dev/mjd_siggen/"
-mjd_siggen_dir = "~/Dev/siggen/mjd_siggen/"
+mjd_siggen_dir = "~/Dev/mjd_siggen/"
+#mjd_siggen_dir = "~/Dev/siggen/mjd_siggen/"
 grid_size = 0.5 #fielgen grid size.  usually 0.1 or 0.5.  0.5 is WAY faster
 depletion_tolerance = 10 #guaranteed to be within this tolerance
 
@@ -128,15 +128,15 @@ def findImpurityZ0(fileName, desiredDepletion):
     #return to the original sign
     newImpurityZ0 = math.copysign(newRealImpurityZ0, original_impurity_z0)
     
-    print "new impurity will be " + str(newImpurityZ0)
 
     #test it
-    newDepletion = findDepletion(testConfigFileStr, original_bias, depletion_tolerance, impurity_z0=newImpurityZ0)
-
-    if newDepletion == -1:
-        print "new depletion is above bias voltage!"
-        sys.exit()
-
+    newDepletion = -1
+    while newDepletion == -1:
+        print "new impurity will be " + str(newImpurityZ0)
+        newDepletion = findDepletion(testConfigFileStr, original_bias, depletion_tolerance, impurity_z0=newImpurityZ0)
+        if newDepletion == -1:
+            print "new depletion is above bias voltage! Adjusting impurity grad down..."
+            newImpurityZ0 *= 0.9    
 
     #implement the golden section search
     #using the abs is "dumb" but easier to code for now
