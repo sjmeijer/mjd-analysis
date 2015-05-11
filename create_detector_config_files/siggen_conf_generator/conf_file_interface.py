@@ -109,7 +109,10 @@ def replaceValue(replaceString, paramName, newValue):
         print "No parameter with name %s was found!" % (paramName)
         sys.exit
 
-    newLine = re.sub("-?[0-9]\d*(\.\d+)", str(newValue), oldLine)
+    newLine = re.sub("\s[-+]?\d+[\.]?\d*", " " + str(newValue), oldLine)
+
+    print "     " + oldLine
+    print "     " + newLine + " (new value is %f)" % newValue
     
     newString = replaceString.replace(oldLine, newLine)
 
@@ -206,6 +209,7 @@ class SiggenCrystalInfo:
             if field.startswith("siggen_") and paramDict[field] is not None:
                 fieldName = field[7:]
                 fileContent = replaceValue(fileContent, fieldName, paramDict[field])
+                print "Replaced %s with %f" % (fieldName, paramDict[field])
     
         #also change the field and wp names
         fileContent = replaceStringValue(fileContent, 'field_name', "fields/%s_ev.dat" % self.fCrystalID)

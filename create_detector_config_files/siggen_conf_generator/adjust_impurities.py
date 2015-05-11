@@ -27,8 +27,8 @@ from conf_file_interface import *
 
 '''Setup options'''
 
-mjd_siggen_dir = "~/Dev/mjd_siggen/"
-#mjd_siggen_dir = "~/Dev/siggen/mjd_siggen/"
+#mjd_siggen_dir = "~/Dev/mjd_siggen/"
+mjd_siggen_dir = "~/Dev/siggen/mjd_siggen/"
 grid_size = 0.5 #fielgen grid size.  usually 0.1 or 0.5.  0.5 is WAY faster
 depletion_tolerance = 10 #guaranteed to be within this tolerance
 
@@ -36,6 +36,9 @@ depletion_tolerance = 10 #guaranteed to be within this tolerance
 #define the golden ratio so I don't require scipy to do golden section search
 golden = (1 + 5 ** 0.5) / 2
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
+
+def setFieldGenDir(fieldgenDir):
+    mjd_siggen_dir = fieldgenDir
 
 
 def main(argv):
@@ -99,6 +102,15 @@ def findImpurityZ0(fileName, desiredDepletion):
     
     print "average impurity is %f" % averageImpurity
     
+    #test it
+    newDepletion = -1
+    while newDepletion == -1:
+        newDepletion = findDepletion(testConfigFileStr, original_bias, depletion_tolerance, impurity_z0=original_impurity_z0)
+        if newDepletion == -1:
+            print "original impurity grad gives depletion is above bias voltage! Adjusting impurity grad down..."
+            original_impurity_z0 *= 0.9
+    
+    
     #find the original depletion voltage
     #currentDepletion = 1090
     currentDepletion = findDepletion(testConfigFileStr, original_bias, depletion_tolerance)
@@ -135,7 +147,7 @@ def findImpurityZ0(fileName, desiredDepletion):
         print "new impurity will be " + str(newImpurityZ0)
         newDepletion = findDepletion(testConfigFileStr, original_bias, depletion_tolerance, impurity_z0=newImpurityZ0)
         if newDepletion == -1:
-            print "new depletion is above bias voltage! Adjusting impurity grad down..."
+            print "new impurity grad gives depletion is above bias voltage! Adjusting impurity grad down..."
             newImpurityZ0 *= 0.9    
 
     #implement the golden section search
@@ -226,7 +238,7 @@ def findDepletion(fileName, startingBias, tolerance, impurity_z0="default"):
     startTime = time.clock()
     
     while abs(biasMax - biasMin) > tolerance:
-        print "   testMin is %f, testMax is %f" % (testMin, testMax)
+        print "   biasMin is %f, biasMax is %f" % (biasMin, biasMax)
 
         #calculate max test point (if not already cached)
         if testMax in depletionCache:
