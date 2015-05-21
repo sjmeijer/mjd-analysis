@@ -27,8 +27,8 @@ from conf_file_interface import *
 
 '''Setup options'''
 
-#mjd_siggen_dir = "~/Dev/mjd_siggen/"
-mjd_siggen_dir = "~/Dev/siggen/mjd_siggen/"
+mjd_siggen_dir = "~/Dev/mjd_siggen/"
+#mjd_siggen_dir = "~/Dev/siggen/mjd_siggen/"
 grid_size = 0.5 #fielgen grid size.  usually 0.1 or 0.5.  0.5 is WAY faster
 depletion_tolerance = 10 #guaranteed to be within this tolerance
 
@@ -36,9 +36,6 @@ depletion_tolerance = 10 #guaranteed to be within this tolerance
 #define the golden ratio so I don't require scipy to do golden section search
 golden = (1 + 5 ** 0.5) / 2
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
-
-def setFieldGenDir(fieldgenDir):
-    mjd_siggen_dir = fieldgenDir
 
 
 def main(argv):
@@ -70,7 +67,7 @@ def writeFieldFiles(fileName, impurityZ0):
 
     #run fieldgen, save field files
     fieldGenDir = os.path.expanduser(mjd_siggen_dir)
-    args = [fieldGenDir + "mjd_fieldgen", '-c', fileName, "-w", "1", "-p", "1"]
+    args = [fieldGenDir + "mjd_fieldgen", '-c', finalConfigFileStr, "-w", "1", "-p", "1"]
     output = subprocess.check_output(args)
 
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
@@ -99,36 +96,35 @@ def findImpurityZ0(fileName, desiredDepletion):
     
     #average impurity in the crystal
     averageImpurity = calcAvgImpurity(crystal_length, realImpurity, impurity_grad)
+    print "original average impurity is %f" % averageImpurity
     
-    print "average impurity is %f" % averageImpurity
-    
-    #test it
+    #test the original impurity to make sure it isn't obviously too high
     newDepletion = -1
     while newDepletion == -1:
         newDepletion = findDepletion(testConfigFileStr, original_bias, depletion_tolerance, impurity_z0=original_impurity_z0)
         if newDepletion == -1:
             print "original impurity grad gives depletion is above bias voltage! Adjusting impurity grad down..."
             original_impurity_z0 *= 0.9
-    
-    
-    #find the original depletion voltage
-    #currentDepletion = 1090
-    currentDepletion = findDepletion(testConfigFileStr, original_bias, depletion_tolerance)
 
-    deltaDepletion = desiredDepletion - currentDepletion
-    
+    #OK, Let's use this as a starting point.  Check to make sure we aren't already right....
+    startDepletion = newDepletion
+    deltaDepletion = desiredDepletion - startDepletion
+    print "delta depletion is %f" % deltaDepletion
+
     if abs(deltaDepletion) < depletion_tolerance:
         return original_impurity_z0
     
-    #else, launch into a golden section search
+    #No? Gonna need to do a golden section search
     
     #first, guess a new impurity to give us a second bound
     #increase concentration to increase depletion voltage (and vice versa)
     #expect change by a slope of ~2500 V/impurityx10^10
-    
-    print "delta depletion is %f" % deltaDepletion
-    voltageslope =  2500 / 1.5 #overestimate by a factor of 50% for safety?
 
+    #average impurity in the crystal
+    averageImpurity = calcAvgImpurity(crystal_length, abs(original_impurity_z0), impurity_grad)
+    print "adjusted average impurity is %f" % averageImpurity
+    
+    voltageslope =  2500 / 3 #overestimate by factor of 3 for safety?
     newAvgImpurity = averageImpurity + deltaDepletion / voltageslope
     print "new avg impururity is %f" % newAvgImpurity
     
@@ -141,14 +137,26 @@ def findImpurityZ0(fileName, desiredDepletion):
     newImpurityZ0 = math.copysign(newRealImpurityZ0, original_impurity_z0)
     
 
-    #test it
+    #test the new guess to make sure its depleted.  Else, screw it, crank the bias voltage (safer than reducing impurity grad)
     newDepletion = -1
     while newDepletion == -1:
         print "new impurity will be " + str(newImpurityZ0)
         newDepletion = findDepletion(testConfigFileStr, original_bias, depletion_tolerance, impurity_z0=newImpurityZ0)
         if newDepletion == -1:
-            print "new impurity grad gives depletion is above bias voltage! Adjusting impurity grad down..."
-            newImpurityZ0 *= 0.9    
+            print "new impurity grad gives depletion is above bias voltage! Increasing bias voltage..."
+            original_bias += 250
+
+    goldenCache = {}
+    goldenCache[newImpurityZ0] = newDepletion
+    goldenCache[original_impurity_z0] = startDepletion
+
+    #Check to make sure the bounds in our search are actually bounding the depletion voltage
+    print "Desired depletion is %d, current bounds are %d and %d" % (desiredDepletion, newDepletion, startDepletion)
+    if min(newDepletion, startDepletion) <= desiredDepletion <= max(newDepletion, startDepletion):
+      print "-->Looks OK!"
+    else:
+      print "Desired depletion voltage not bounded by starting impurity guesses!  Uh oh"
+      sys.exit()
 
     #implement the golden section search
     #using the abs is "dumb" but easier to code for now
@@ -158,7 +166,7 @@ def findImpurityZ0(fileName, desiredDepletion):
     testMin = maxImpurity - (maxImpurity - minImpurity)/golden
     testMax = minImpurity + (maxImpurity - minImpurity)/golden
 
-    goldenCache = {}
+
 
     while abs(deltaDepletion) > depletion_tolerance:
 

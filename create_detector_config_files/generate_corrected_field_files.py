@@ -15,11 +15,9 @@ from siggen_conf_generator.parse_spreadsheets import *
 from siggen_conf_generator.adjust_impurities import *
 
 ortec_spreadsheet = "ortec_ORTEC_Measurements.csv"
-fieldgen_path = "~/Dev/siggen/mjd_siggen/"
 
 
 def main():
-    setFieldGenDir(fieldgen_path)
     
     #parse in Alan's spreadsheet of ortec detectors
     detectorFile = open(ortec_spreadsheet, 'r')
@@ -51,7 +49,7 @@ def adjustDetectorByName(crystalID):
 
     desiredDepletion = siggenInfo.fDepletionVoltage
 
-    realImpurityZ0 =findImpurityZ0(confFileStr, desiredDepletion)
+    realImpurityZ0 = findImpurityZ0(confFileStr, desiredDepletion)
 
     print "Determined the real impurity gradient to be %f" % realImpurityZ0
 
