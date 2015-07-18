@@ -59,7 +59,7 @@ def main(argv):
     plt.ion()
     fig = plt.figure(1)
     fig2 = plt.figure(2)
-
+    fig3 = plt.figure(3)
 
     for ientry in xrange( elist.GetN() ):
         entryNumber = chain2.GetEntryNumber(ientry);
@@ -89,6 +89,23 @@ def main(argv):
 
             print('>>>Event:%s Waveform: %s' % (ientry, i_wfm))
             
+
+            
+
+            orig_length = wf.GetLength()
+            wflength = 2**10
+            wf.SetLength(wflength)
+
+#            wf.SetLength(wflength)
+            for i in xrange(wflength-orig_length):
+                at_sizet = vector("size_t")(1)
+                at_sizet[0] = int((orig_length-i)-1)
+                #print orig_length-i
+                wf.SetValue(i+orig_length, wf.At(at_sizet[0]))
+            
+            np_data = wf.GetVectorData()
+
+
             wfHist = wf.GimmeHist().Clone()
             textsize = 0.06;
             wfHist.SetTitle("");
@@ -104,22 +121,6 @@ def main(argv):
             gPad.SetMargin(0.15, 0.1, 0.15, 0.1)
             wfHist.Draw()
             canvas.Update()
-            
-
-            
-
-            
-            wflength = 2**10
-            wf.SetLength(wflength)
-            np_data = wf.GetVectorData()
-            
-#            np_data = np.empty(wflength)
-#            
-#            start_offset = np.floor((wf.GetLength() - wflength) * .5)
-#            waveform_vector = wf.GetVectorData()
-#            
-#            for i in xrange(wflength):
-#                np_data[i] = waveform_vector.at(int(i+start_offset))
 
             #print np_data[0:10]
             
@@ -127,13 +128,15 @@ def main(argv):
             plt.clf()
 #            fig.canvas.clear()
 
-            rwt = plotRWT(np_data)
+            nvoice = 12.;
+            oct = 5.
+            scale = 64.
+
+            rwt = plotRWT(np_data, nvoice, oct, scale)
             fig.canvas.draw()
             
-            plt.figure(fig2.number)
-            plt.clf()
-            numWfs = plotSkel(rwt)
-            fig2.canvas.draw()
+            plotSkel(rwt, nvoice, oct, scale, fig2, fig3)
+
 #
 
 #            if numWfs != 1:
@@ -149,28 +152,50 @@ def main(argv):
 
     exit(1)
 
-def plotSkel(rwt):
+def plotSkel(rwt, nvoice, oct, scale, fig1, fig2):
     maxmap = mallat_wavelets.MM_RWT(rwt, 1000);
     (skellist,skelptr,skellen) = mallat_wavelets.SkelMap(maxmap);
 
     #set(gcf, 'NumberTitle','off', 'Name','Window 2')
     l = len(skelptr)
     
-    n = 2**10
-    nvoice = 12.
-    oct = 3.
-    scale = 128.
+    (n,nscale) = rwt.shape;
     minscale = 2
+    
+    plt.figure(fig1.number)
+    plt.clf()
+    ridges = mallat_wavelets.PlotSkelMap(n,scale,skellist,skelptr[0:l],skellen[0:l],'','b',[],nvoice,minscale,oct, rwt);
+    
+    plt.gca().set_xlabel('Time stamp number')
+    plt.gca().set_ylabel('log2(Wavelet scale)')
+    
+    fig1.canvas.draw()
+    
+    plt.figure(fig2.number)
+    plt.clf()
+    
+    
+    for i in range(len(ridges)):
+        ridge = mallat_wavelets.ExtractRidge(ridges[i],rwt,skellist,skelptr,skellen,oct,scale)
+        
+        plt.plot(ridge[:,0],ridge[:,1]);
+    #plt.xticks(ytix)
+    #plt.gca().invert_xaxis()
 
-    numWfs = mallat_wavelets.PlotSkelMap(n,scale,skellist,skelptr[0:l],skellen[0:l],'','b',[],nvoice,minscale,oct, rwt);
+    plt.gca().set_ylabel('Wavelet power')
+    plt.gca().set_xlabel('log2(Wavelet scale)')
 
-    return numWfs
+    #plt.xlim(minscale, minscale+oct);
 
 
-def plotRWT(x):
-    nvoice = 12.;
-    oct = 3
-    scale = 128
+    fig2.canvas.draw()
+
+
+    return
+
+
+def plotRWT(x, nvoice, oct, scale):
+
     
     wavelet = 'DerGauss';
 
@@ -213,14 +238,30 @@ def plotRWT(x):
 #        amin = np.amin(im_rwt[:,k]);
 #        im_rwt[:,k] = ((im_rwt[:,k])-amin) / (amax-amin) *256;
 
-    ytix   = [pow(2, (2+(oct-np.floor(np.log2(scale))))),n*2/scale];
-    plt.imshow( np.flipud( np.transpose(im_rwt) ) , cmap='gray_r', origin='lower',extent=[0,n,ytix[0],ytix[1]], aspect='auto')
+#ybounds   = [(2+(oct-np.floor(np.log2(scale)))), np.log2(n*2/scale)];
+
+    minOct = oct
+    maxOct = np.floor(np.log2(n))
+    
+    minScale = pow(2,minOct) * scale
+    maxScale = pow(2,maxOct) * scale
+
+    print "minscale %f, maxscale %f: " % (np.floor(np.log2(minScale)),  np.floor(np.log2(maxScale) ) )
+    
+    ybounds   = [ 2+(oct-np.floor(np.log2(scale))),np.log2(n)+2-np.floor(np.log2(scale)) ];
+    
+    #plt.imshow( np.flipud( np.transpose(im_rwt) ) , cmap='gray_r', origin='lower',extent=[0,n,ytix[0],ytix[1]], aspect='auto')
+    #plt.imshow( np.flipud( np.transpose(im_rwt) ) , cmap='gray_r', origin='lower',extent=[0,n,ytix[0],ytix[1]], aspect='auto')
+    plt.imshow( np.flipud( np.transpose(rwt) ) , cmap='gray_r', origin='lower', extent=[0,n,ybounds[0],ybounds[1]],aspect='auto')
     #plt.yticks(ytix)
     plt.gca().invert_yaxis()
 
     #mallat_wavelets.ImageRWT( np.fliplr( np.transpose(linrwt) ),'Individual','gray','lin',3,16)
     cb = plt.colorbar()
-
+    
+    plt.gca().set_xlabel('Time stamp number')
+    plt.gca().set_ylabel('log2(Scale)')
+    
     return rwt
 
     #plt.axis('ij')

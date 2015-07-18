@@ -8,8 +8,11 @@ def rwt(x,nvoice,wavelet,oct=2,scale=4):
 #%    rwt(x,nvoice,wavelet)
 #%  Inputs
 #%    x        signal, dyadic length n=2^J, real-valued
-#%    nvoice   number of voices/octave
+#%    nvoice   number of voices/octave (ie, your resolution)
 #%    wavelet  string 'Gauss', 'DerGauss','Sombrero', 'Morlet'
+#     oct      lowest octave which will be addressed
+#     scale    the starting scale factor, which will be modified by the octave
+#              should be a 2^n int
 #%  Outputs
 #%    rwtMat    matrix n by nscale where
 #%             nscale = nvoice .* noctave
@@ -27,26 +30,32 @@ def rwt(x,nvoice,wavelet,oct=2,scale=4):
     
     xhat = np.fft.fft(x);
 
-
     xi   = np.linspace(0, n/2., n/2.+1)
     xi2 = np.linspace(-n/2.+1, -1, n/2.-1)
     xi = np.concatenate((xi,xi2)) * (2.*np.pi/n)
 
 #    print "size of xi: " + str (xi.shape)
     #root
-    omega0 = 5.;
+    #omega0 = 5.;
+
+    #largest octave available is set by the length of your dataset...
     noctave = np.floor(np.log2(n))-oct;
+    #so I can loop from the highest scale [2^log2(n)] to the lowest scale [2^log2(oct)]
+
     nscale  = nvoice * noctave;
 
+    print "nscale will be %d, noctave %d" % (nscale, noctave)
     rwtMat = np.zeros((n,nscale));
 
     kscale  = 0;
 
-    for jo in  range( int(noctave) ):
+    for jo in  range(int(noctave)):
+        #scale here will be the initial scale * 2^jo
+        oct_scale = scale * pow(2, jo)
         for jv in range(1, int(nvoice)+1 ):
-            qscale = scale * pow(2, float(jv)/nvoice);
+            qscale = oct_scale * pow(2, float(jv)/nvoice);
             
-            #print "scale %f, nvoice %f, jv %f, qscale %f" % (scale, nvoice, jv, qscale)
+            #print "scale %f, nvoice %f, jo %d, jv %f, (qscale) %f" % (oct_scale, nvoice, jo, jv, (qscale))
             
             omega =  n * xi / qscale ;
             #print "omega: " + str(omega[0:5])
@@ -58,8 +67,8 @@ def rwt(x,nvoice,wavelet,oct=2,scale=4):
                 window = ( np.square(omega) ) * np.exp(-np.square(omega) /2.);
 #            elif strcmp(wavelet,'Morlet'):
 #                window = exp(-(omega - omega0).^2 ./2) - exp(-(omega.^2 + omega0.^2)/2);
-#Renormalisation comme dans le bouquin
 
+            #Renormalization by scale
             window = window / np.sqrt(qscale);
             what = window * xhat;
             w    = np.fft.ifft(what);
@@ -70,7 +79,6 @@ def rwt(x,nvoice,wavelet,oct=2,scale=4):
             rwtMat[ :,kscale] = np.transpose( np.real(w) );
 
             kscale = kscale+1;
-        scale  = scale *2.;
 
     return rwtMat
 
@@ -91,13 +99,15 @@ def log2lin(logim,nvoice=1.):
     
     (mn,n) = logim.shape
     
-    print "mn %d, n %d" % (mn, n)
+    #print "mn %d, n %d" % (mn, n)
     
-    m= mn/nvoice;
+    m= mn/nvoice; #this is the number of octaves
     s0 = n/(pow(2,m));
     j0 = np.log2(s0);
     s1 = n;
     max = np.floor(n/ 2**(1./nvoice) );
+    
+    print "s0 %f, j0 %f, max %f" % (s0, j0, max)
     
 #% normally, linim has size (max-s0+1,n);
 #% but this is too big (out of memory for n = 1024)
@@ -194,7 +204,9 @@ def MM_RWT(rwt,par=1000):
     t      = range(n);
     tplus  = np.roll(t, 1)
     tminus = np.roll(t, -1)
-    rwt    = np.abs(rwt);
+    
+    #only look for maxes, don't look for mins
+    #rwt    = np.abs(rwt);
     
     for k in xrange( int(nscale) ):
         
@@ -251,7 +263,7 @@ def SkelMap(maxmap):
     count  = 0;
     
     (a,b) = np.nonzero(maxmap)
-    print "maxmap nonzero size " + str(len(a))
+    #print "maxmap nonzero size " + str(len(a))
     
     while np.any(np.any(maxmap)): #start new chain
         (iNonzero, jNonzero) = np.nonzero(maxmap)
@@ -410,7 +422,7 @@ def PlotSkelMap(n,nscale,skellist,skelptr,skellen,
     rwtMax = np.amax(np.amax( rwt ))
     maxLength = np.amax(skellen)
 
-    plotNumber = 0
+    passingRidges = []
 
 
     for k in range(int(nchain)):
@@ -429,7 +441,7 @@ def PlotSkelMap(n,nscale,skellist,skelptr,skellen,
         
         
         #cut on length
-        if skellen[k] < 0.75 * maxLength:
+        if skellen[k] < 0.1 * maxLength:
             continue
         
         #find the max value
@@ -437,11 +449,11 @@ def PlotSkelMap(n,nscale,skellist,skelptr,skellen,
         
         for j in range(len(pvec1)):
             chainVal = rwt[pvec1[j], pvec2[j]]
-            if abs(chainVal) > chainMax:
+            if chainVal > chainMax:
                 chainMax = chainVal
 
 #print "chainMax %f, rwtMax %f, percent %f" % (chainMax, rwtMax, (chainMax/rwtMax*100))
-        if (chainMax/rwtMax < 0.5):
+        if (chainMax/rwtMax < 0.1):
             #print "skipping chain %d of %d" % (k+1, nchain)
             continue
 #        print skellist[ix]
@@ -451,13 +463,69 @@ def PlotSkelMap(n,nscale,skellist,skelptr,skellen,
         #print vec.shape
                            
         plt.plot(pvec1,pvec2);
-        plotNumber +=1
+        passingRidges.append(k)
 
         
     plt.show()
 
-    return plotNumber
+    return passingRidges
 
+def ExtractRidge(ridgenum,wt,skellist,skelptr,skellen,oct=2,sc=4):
+#% ExtractRidge -- Pull One Ridge Continuous Wavelet Transform
+#%  Usage
+#%    ridge = ExtractRidge(ridgenum,wt,skellist,skelptr,skellen)
+#%  Inputs
+#%    ridgenum  index of ridge to extract, 0 <= ridgenum <= nchains -1
+#%    wt        continuous wavelet transform output by CWT
+#%    skellist  storage for list of chains
+#%    skelptr   vector of length nchain -- pointers to heads of chains
+#%    skellen   vector of length nchain -- length of skellists
+#%  Outputs
+#%	 ridge	   len by 2 array of numbers,
+#%              each row is a scale, amplitude pair
+#%
+#%  Description
+#%    The amplitude of the wavelet transform is followed along the
+#%    ridge chain.
+#%
+#%  See Also
+#%    CWT, WTMM, BuildSkelMap, PlotSkelMap
+#%
+
+    nchain  = len(skelptr);
+    (n,nscale) = wt.shape;
+    noctave = np.log2(n)-oct;
+    nvoice  = nscale/noctave;
+    
+    if ridgenum < 0 or ridgenum > nchain:
+        print 'ridge #%d not in range (0,%d)\n' %(ridgenum,nchain),
+    
+    head = skelptr[ridgenum];
+    length  = skellen[ridgenum];
+    
+    ridge = np.zeros((length,2));
+
+
+    vec = np.zeros((2,length));
+    ix  = np.arange( int(head), (int(head + 2*length)))
+
+    vecFlat = vec.flatten(1)
+    vecFlat[:] = skellist[ix];
+    vec = vecFlat.reshape((2,length), order='F')
+
+#pvec2   = minscale+noctave - (vec[0,:]+1)/nvoice;
+#print length
+    for i in range(int(length)):
+        iscale = vec[0,i];
+        ipos   = vec[1,i];
+        #scale  = (2 + oct - np.log2(sc) + iscale/nvoice);
+        scale =  2 + noctave - (iscale+1)/nvoice;
+        #amp    =  np.log2(np.abs((wt[ipos,iscale])));
+        amp    =  (np.abs((wt[ipos,iscale])));
+        ridge[i,0] = scale;
+        ridge[i,1] = amp;
+
+    return ridge
 #def iconv(f,x):
 #    #% iconv -- Convolution Tool for Two-Scale Transform
 #    #%  Usage
