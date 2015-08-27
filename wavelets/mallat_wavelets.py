@@ -1,7 +1,9 @@
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
+from scipy import signal
 import pylab
+from scipy.stats import scoreatpercentile
 
 def rwt(x,nvoice,wavelet,oct=2,scale=4):
 #%  Usage
@@ -44,7 +46,7 @@ def rwt(x,nvoice,wavelet,oct=2,scale=4):
 
     nscale  = nvoice * noctave;
 
-    print "nscale will be %d, noctave %d" % (nscale, noctave)
+#print "nscale will be %d, noctave %d" % (nscale, noctave)
     rwtMat = np.zeros((n,nscale));
 
     kscale  = 0;
@@ -76,10 +78,20 @@ def rwt(x,nvoice,wavelet,oct=2,scale=4):
 #            print "size of w: " + str (w.shape)
 #            print "size of rwtMat: " + str (rwtMat.shape)
 
-            rwtMat[ :,kscale] = np.transpose( np.real(w) );
+            #do some clipping
+            w_real = np.real(w)
+            
+            wmax = float(np.amax(w_real))
+
+#print "wmax is %f" % wmax
+            w_real = w_real.clip(min= (wmax * 0.05))
+
+            rwtMat[ :,kscale] = np.transpose( w_real);
 
             kscale = kscale+1;
 
+    rwtMat[0:100,:] = 0
+    rwtMat[-100::,:] = 0
     return rwtMat
 
 def log2lin(logim,nvoice=1.):
@@ -107,7 +119,7 @@ def log2lin(logim,nvoice=1.):
     s1 = n;
     max = np.floor(n/ 2**(1./nvoice) );
     
-    print "s0 %f, j0 %f, max %f" % (s0, j0, max)
+    #print "s0 %f, j0 %f, max %f" % (s0, j0, max)
     
 #% normally, linim has size (max-s0+1,n);
 #% but this is too big (out of memory for n = 1024)
@@ -197,33 +209,65 @@ def MM_RWT(rwt,par=1000):
 #%
 
     (n, nscale) = rwt.shape;
-
     
+#    rwt[0:50,:] = 0
+#    rwt[975:1024,:] = 0
+
+#    rwtmax = np.amax(np.amax(rwt))
+#    
+#    print "rwtmax is "
+#    
+#    above_thresh = np.greater( rwt, .01*rwtmax)
+#    rwt = np.multiply(above_thresh, rwt)
+
     maxmap = np.zeros((n, nscale));
     
-    t      = range(n);
-    tplus  = np.roll(t, 1)
-    tminus = np.roll(t, -1)
+    #do some thresholding
     
-    #only look for maxes, don't look for mins
-    #rwt    = np.abs(rwt);
     
-    for k in xrange( int(nscale) ):
-        
-        #are you higher than t-1 and t+1?
-        localmax =  np.logical_and( np.greater(rwt[t,k], rwt[tplus,k]), np.greater(rwt[t,k], rwt[tminus,k]) )
-        
-        #find the rwt value for the maxes (by multiplying by the boolean localmax matrix)
-        y =  np.multiply(localmax[:], rwt[:,k]);
+    
+    localmaxes = signal.argrelextrema(rwt, np.greater, axis=0, order=1)
+    
+#    print len(localmaxes)
+#    print localmaxes[0]
+#    print localmaxes[1]
 
-        #print "localmax size " + str(localmax.shape) + " y size + " + str(y.shape)
-        maxy = np.amax(y);
-            #print "maxy " + str(maxy)
-        maxmap[t,k] = (y >= maxy/par);
+    maxmap[localmaxes] = 1
+    
+    #print np.where(maxmap)
+    
+    
+    
+#    t      = range(n);
+#    tplus  = np.roll(t, 1)
+#    tminus = np.roll(t, -1)
+#    
+#    #only look for maxes, don't look for mins
+#    #rwt    = np.abs(rwt);
+#    
+#    for k in xrange( int(nscale) ):
+
+    
+    
+#        #are you higher than t-1 and t+1?
+#        localmax =  np.logical_and( np.greater(rwt[t,k], rwt[tplus,k]), np.greater(rwt[t,k], rwt[tminus,k]) )
+#        
+#        #find the rwt value for the maxes (by multiplying by the boolean localmax matrix)
+#        y =  np.multiply(localmax[:], rwt[:,k]);
+#
+#        #print "localmax size " + str(localmax.shape) + " y size + " + str(y.shape)
+#        maxy = np.amax(y);
+#            #print "maxy " + str(maxy)
+#        maxmap[t,k] = (y >= maxy/par);
+
+    #maxmap[0:50,:] = 0
+    #maxmap[975:1024,:] = 0
+    
+    print "maxmap shape" + str( maxmap.shape)
 
     return maxmap
 
-def SkelMap(maxmap):
+def SkelMap(maxmap, maxNumberChains=1000):
 #% SkelMap -- Chain together Ridges of Wavelet Transform
 #%  Usage
 #%    [skellist,skelptr,skellen] = SkelMap(maxmap)
@@ -253,6 +297,8 @@ def SkelMap(maxmap):
 #%  See Also
 #%    RWT, MM_RWT, PlotSkelMap, ExtractRidge
 #%
+    #don't allow for chains at the edges
+    
 
     (n,nscale) = (maxmap.shape);
     noctave = np.floor(np.log2(n))-5;
@@ -266,6 +312,10 @@ def SkelMap(maxmap):
     #print "maxmap nonzero size " + str(len(a))
     
     while np.any(np.any(maxmap)): #start new chain
+        
+        if nchain > maxNumberChains:
+            break
+        
         (iNonzero, jNonzero) = np.nonzero(maxmap)
 
         ind = np.lexsort((iNonzero, jNonzero))
@@ -307,12 +357,17 @@ def SkelMap(maxmap):
                 (pos) = np.argmin(circdist);
                 
                 dist = circdist[pos]
+        
                     #print "dist %d, pos is none" % (dist)
             else:
                 #print "circdistdim is %d, I don't understand!  Crash!" % circdistdim
                 sys.exit(0)
         
             if (pos is not None):
+                #maximum length to allow chains to continue over
+                if dist > 5:
+                    continue
+                
                 ipos = j[pos];
                 #print "nchain %d, iscale %d, ipos %d" % (nchain, iscale, ipos)
                 chains[nchain,iscale] = ipos+1;
@@ -440,10 +495,10 @@ def PlotSkelMap(n,nscale,skellist,skelptr,skellen,
         pvec2   = minscale+noctave - (vec[0,:]+1)/nvoice;
         
         
-        #cut on length
-        if skellen[k] < 0.1 * maxLength:
-            continue
-        
+#        #cut on length
+#        if skellen[k] < 0.1 * maxLength:
+#            continue
+
         #find the max value
         chainMax = 0
         
@@ -453,9 +508,10 @@ def PlotSkelMap(n,nscale,skellist,skelptr,skellen,
                 chainMax = chainVal
 
 #print "chainMax %f, rwtMax %f, percent %f" % (chainMax, rwtMax, (chainMax/rwtMax*100))
-        if (chainMax/rwtMax < 0.1):
-            #print "skipping chain %d of %d" % (k+1, nchain)
-            continue
+#        if (chainMax/rwtMax < 0.1):
+#            #print "skipping chain %d of %d" % (k+1, nchain)
+#            continue
+
 #        print skellist[ix]
 #        print vec[1,:5]
 #        print vec[0,:5]
@@ -560,3 +616,196 @@ def ExtractRidge(ridgenum,wt,skellist,skelptr,skellen,oct=2,sc=4):
 
 def is_power2(num):
     return num != 0 and ((num & (num - 1)) == 0)
+
+
+##################################################################
+def scipy_ridges(matr, max_distances, gap_thresh):
+    
+    
+    if(len(max_distances) < matr.shape[0]):
+        raise ValueError('Max_distances must have at least as many rows as matr')
+
+    all_max_cols = _boolrelextrema(matr, np.greater, axis=1, order=1)
+    all_max_cols_less = _boolrelextrema(matr, np.less, axis=1, order=1)
+
+    #all_max_cols = np.logical_or(all_max_cols, all_max_cols_less)
+
+    has_relmax = np.where(all_max_cols.any(axis=1))[0]
+    
+    if(len(has_relmax) == 0):
+        return []
+
+    start_row = has_relmax[-1]
+    #Each ridge line is a 3-tuple:
+    #rows, cols,Gap number
+    ridge_lines = [[[start_row],
+                    [col],
+                    0] for col in np.where(all_max_cols[start_row])[0]]
+    final_lines = []
+    rows = np.arange(start_row - 1, -1, -1)
+    cols = np.arange(0, matr.shape[1])
+    for row in rows:
+        this_max_cols = cols[all_max_cols[row]]
+        
+        #Increment gap number of each line,
+        #set it to zero later if appropriate
+        for line in ridge_lines:
+            line[2] += 1
+        
+        #XXX These should always be all_max_cols[row]
+        #But the order might be different. Might be an efficiency gain
+        #to make sure the order is the same and avoid this iteration
+        prev_ridge_cols = np.array([line[1][-1] for line in ridge_lines])
+        #Look through every relative maximum found at current row
+        #Attempt to connect them with existing ridge lines.
+        for ind, col in enumerate(this_max_cols):
+            """
+                If there is a previous ridge line within
+                the max_distance to connect to, do so.
+                Otherwise start a new one.
+                """
+            line = None
+            if(len(prev_ridge_cols) > 0):
+                diffs = np.abs(col - prev_ridge_cols)
+                closest = np.argmin(diffs)
+                if diffs[closest] <= max_distances[row]:
+                    line = ridge_lines[closest]
+            if(line is not None):
+                #Found a point close enough, extend current ridge line
+                line[1].append(col)
+                line[0].append(row)
+                line[2] = 0
+            else:
+                new_line = [[row],
+                            [col],
+                            0]
+                ridge_lines.append(new_line)
+        
+        #Remove the ridge lines with gap_number too high
+        #XXX Modifying a list while iterating over it.
+        #Should be safe, since we iterate backwards, but
+        #still tacky.
+        for ind in xrange(len(ridge_lines) - 1, -1, -1):
+            line = ridge_lines[ind]
+            if line[2] > gap_thresh:
+                final_lines.append(line)
+                del ridge_lines[ind]
+
+    out_lines = []
+    for line in (final_lines + ridge_lines):
+        sortargs = np.array(np.argsort(line[0]))
+        rows, cols = np.zeros_like(sortargs), np.zeros_like(sortargs)
+        rows[sortargs] = line[0]
+        cols[sortargs] = line[1]
+        out_lines.append([rows, cols])
+
+    return out_lines
+
+def _boolrelextrema(data, comparator,
+                    axis=0, order=1, mode='clip'):
+    """
+        Calculate the relative extrema of `data`.
+        Relative extrema are calculated by finding locations where
+        ``comparator(data[n], data[n+1:n+order+1])`` is True.
+        Parameters
+        ----------
+        data : ndarray
+        Array in which to find the relative extrema.
+        comparator : callable
+        Function to use to compare two data points.
+        Should take 2 numbers as arguments.
+        axis : int, optional
+        Axis over which to select from `data`.  Default is 0.
+        order : int, optional
+        How many points on each side to use for the comparison
+        to consider ``comparator(n,n+x)`` to be True.
+        mode : str, optional
+        How the edges of the vector are treated.  'wrap' (wrap around) or
+        'clip' (treat overflow as the same as the last (or first) element).
+        Default 'clip'.  See numpy.take
+        Returns
+        -------
+        extrema : ndarray
+        Boolean array of the same shape as `data` that is True at an extrema,
+        False otherwise.
+        See also
+        --------
+        argrelmax, argrelmin
+        Examples
+        --------
+        >>> testdata = np.array([1,2,3,2,1])
+        >>> _boolrelextrema(testdata, np.greater, axis=0)
+        array([False, False,  True, False, False], dtype=bool)
+        """
+    if((int(order) != order) or (order < 1)):
+        raise ValueError('Order must be an int >= 1')
+    
+    datalen = data.shape[axis]
+    locs = np.arange(0, datalen)
+
+    results = np.ones(data.shape, dtype=bool)
+    main = data.take(locs, axis=axis, mode=mode)
+    for shift in xrange(1, order + 1):
+        plus = data.take(locs + shift, axis=axis, mode=mode)
+        minus = data.take(locs - shift, axis=axis, mode=mode)
+        results &= comparator(main, plus)
+        results &= comparator(main, minus)
+        if(~results.any()):
+            return results
+    return results
+def filter_ridge_lines(cwt, ridge_lines, window_size=None, min_length=None,
+                        min_snr=1, noise_perc=10):
+    """
+        Filter ridge lines according to prescribed criteria. Intended
+        to be used for finding relative maxima.
+        Parameters
+        ----------
+        cwt : 2-D ndarray
+        Continuous wavelet transform from which the `ridge_lines` were defined.
+        ridge_lines : 1-D sequence
+        Each element should contain 2 sequences, the rows and columns
+        of the ridge line (respectively).
+        window_size : int, optional
+        Size of window to use to calculate noise floor.
+        Default is ``cwt.shape[1] / 20``.
+        min_length : int, optional
+        Minimum length a ridge line needs to be acceptable.
+        Default is ``cwt.shape[0] / 4``, ie 1/4-th the number of widths.
+        min_snr : float, optional
+        Minimum SNR ratio. Default 1. The signal is the value of
+        the cwt matrix at the shortest length scale (``cwt[0, loc]``), the
+        noise is the `noise_perc`th percentile of datapoints contained within a
+        window of `window_size` around ``cwt[0, loc]``.
+        noise_perc : float, optional
+        When calculating the noise floor, percentile of data points
+        examined below which to consider noise. Calculated using
+        scipy.stats.scoreatpercentile.
+        References
+        ----------
+        Bioinformatics (2006) 22 (17): 2059-2065. doi: 10.1093/bioinformatics/btl355
+        http://bioinformatics.oxfordjournals.org/content/22/17/2059.long
+        """
+    num_points = cwt.shape[1]
+    if min_length is None:
+        min_length = np.ceil(cwt.shape[0] / 4)
+    if window_size is None:
+        window_size = np.ceil(num_points / 20)
+    hf_window = window_size / 2
+    
+    #Filter based on SNR
+    row_one = cwt[0, :]
+    noises = np.zeros_like(row_one)
+    for ind, val in enumerate(row_one):
+        window = np.arange(max([ind - hf_window, 0]), min([ind + hf_window, num_points]))
+        window = window.astype(int)
+        noises[ind] = scoreatpercentile(row_one[window], per=noise_perc)
+    
+    def filt_func(line):
+        if len(line[0]) < min_length:
+            return False
+        snr = abs(cwt[line[0][0], line[1][0]] / noises[line[1][0]])
+        if snr < min_snr:
+            return False
+        return True
+    
+    return list(filter(filt_func, ridge_lines))
