@@ -50,7 +50,9 @@ def main():
         built_file = TFile(builtFilePath)
         built_tree = built_file.Get(builtTreeName)
 
-        makeSkimFile(built_tree, gat_tree)
+        newTreeName = "waveletParamSkim_run%d.root" % iRun
+
+        makeSkimFile(built_tree, gat_tree, newTreeName)
 
 
 #makeSkimFile(chain, calibrationMap)
@@ -96,7 +98,11 @@ def calcWaveletParam(data, nvoice, oct, scale):
     return waveletParamSecondMax[0]
 
 ##############################################################################################
-def makeSkimFile(builtTree, gatTree):
+def makeSkimFile(builtTree, gatTree, newTreeName):
+    
+    oFile = TFile(newTreeName,"recreate");
+    oFile.cd();
+    outTree = TTree("waveletTree","Wavelet Chain Param");
     
     
     gaussianFilterSigma = 3
@@ -104,101 +110,95 @@ def makeSkimFile(builtTree, gatTree):
     builtTree.AddFriend(gatTree)
 
     numEntries = builtTree.GetEntries()
+    numEntries = 500
+    cutOffEnergy = 1000 #keV
+    
+    EnergykeV = vector("double")()
+    Chan = vector("double")()
+    waveletParam = vector("double")()
+
+    inRun = array.array( 'd', [ 0 ] )
+
+    outTree.Branch("EnergykeV",EnergykeV);
+    outTree.Branch("channel",Chan);
+    #outTree.Branch("run",inRun, "run\D");
+    outTree.Branch("waveletParam",waveletParam);
+
     for iEntry in xrange(numEntries):
         update_progress(float(iEntry)/numEntries)
         
         builtTree.GetEntry(iEntry)
-        
         gatTree.GetEntry(iEntry)
         
+        EnergykeV.clear();
+        Chan.clear();
+        waveletParam.clear()
         
+        inEnergyCal = gatTree.energyCal
+        inChan = gatTree.channel
+        inRun = gatTree.run
+        
+        chanLength = inChan.size()
+
+        EnergykeV.resize(chanLength);
+        Chan.resize(chanLength);
+        waveletParam.resize(chanLength);
+        #what do i do with run?
         
         event = builtTree.event
         
-        for i_wfm in xrange( event.GetNWaveforms() ):
-            digData   = event.GetDigitizerData( i_wfm )
+        for ichan in xrange( chanLength ):
+            
+            dchan = inChan.at(ichan)
+            
+            Chan[ichan]=dchan;
+            EnergykeV[ichan]= inEnergyCal[ichan]
+            
+            digData   = event.GetDigitizerData( ichan )
             channel   = digData.GetChannel()
-        
-            wf = event.GetWaveform(i_wfm)
-
-            orig_length = wf.GetLength()
-            next_pow_2 = np.ceil(np.log2(orig_length))
-            #print "next pow 2 is " + str(next_pow_2)
-            wflength = int(pow(2,next_pow_2))
-
-            wf.SetLength(wflength)
-
-            #reflective extension to 2^n
-            for i in xrange(wflength-orig_length):
-                at_sizet = vector("size_t")(1)
-                at_sizet[0] = int((orig_length-i)-1)
-                #print orig_length-i
-                wf.SetValue(i+orig_length, wf.At(at_sizet[0]))
             
-            np_data = wf.GetVectorData()
-            np_data_smoothed = ndimage.filters.gaussian_filter1d(np_data, gaussianFilterSigma)
-            
-            wfParam = calcWaveletParam(np_data_smoothed, nvoice, oct, scale)
+            if inEnergyCal[ichan] < cutOffEnergy:
+                wfParam = -1
+            else:
+                wf = event.GetWaveform(ichan)
 
+                orig_length = wf.GetLength()
+                next_pow_2 = np.ceil(np.log2(orig_length))
+                #print "next pow 2 is " + str(next_pow_2)
+                wflength = int(pow(2,next_pow_2))
+
+                wf.SetLength(wflength)
+
+                #reflective extension to 2^n
+                for i in xrange(wflength-orig_length):
+                    at_sizet = vector("size_t")(1)
+                    at_sizet[0] = int((orig_length-i)-1)
+                    #print orig_length-i
+                    wf.SetValue(i+orig_length, wf.At(at_sizet[0]))
+                
+                np_data = wf.GetVectorData()
+                np_data_smoothed = ndimage.filters.gaussian_filter1d(np_data, gaussianFilterSigma)
+                
+                wfParam = calcWaveletParam(np_data_smoothed, nvoice, oct, scale)
+            waveletParam[ichan]= wfParam;
+    
+    
+        outTree.Fill();
+    oFile.Write();
+    oFile.Close()
 #            print wfParam
 #            value = raw_input('  --> Press q to quit, any other key to continue\n')
 #            exit(1)
+
+
 
 
 #print "wf param: %f" % wfParam
 
 
 
-#    outfilename = "wavelet_skim.root";
-#    oFile = TFile(outfilename,"recreate");
-#    oFile.cd();
-#    outTree = TTree("waveletTree","Only energy");
-#
-#    EnergykeV = vector("double")()
-#    EnergyBoard = vector("double")()
-#    EnergyRaw = vector("double")()
-#    Chan = vector("double")()
-#    
-#    inRun = array.array( 'd', [ 0 ] )
-#    
-#    outTree.Branch("EnergykeV",EnergykeV);
-#    outTree.Branch("EnergyBoard",EnergyBoard);
-#    outTree.Branch("EnergyRaw",EnergyRaw);
-#    outTree.Branch("channel",Chan);
-#    outTree.Branch("run",inRun, "run\D");
-#
-#    inEnergyRaw = []
-#
-#    for iChan in xrange(len(channels)):
-#        if (energyName == "energy"):
-#            inEnergyRaw.append("energy");
-#        else:
-#            print "Energies besides onboard not yet supported.  I'm sorta lazy."
-#
-#    print "there are %d entries in the chain " % chain.GetEntries()
+
 #    for iEntry in xrange(chain.GetEntries()):
-#        update_progress(iEntry/float(chain.GetEntries()))
-#        
-#        EnergykeV.clear();
-#        EnergyRaw.clear();
-#        EnergyBoard.clear();
-#        Chan.clear();
-#        
-#        #chain.LoadTree( iEntry )
-#        chain.GetEntry(iEntry)
-#        
-#        inEnergyBoard = chain.energy
-#        inChan = chain.channel
-#        inRun = chain.run
-#        
-#        chanLength = inChan.size()
-#        
-#        #print "chanLength is " + str(chanLength)
-#
-#        EnergykeV.resize(chanLength);
-#        EnergyRaw.resize(chanLength);
-#        EnergyBoard.resize(chanLength);
-#        Chan.resize(chanLength);
 #
 #        for ichan in xrange(chanLength):
 #            dchan = inChan.at(ichan)
