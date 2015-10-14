@@ -52,7 +52,7 @@ def main(argv):
 
     realImpurityZ0 = findImpurityZ0(configFileStr, desiredDepletion)
 
-    print "Determined the real impurity gradient to be %f" % realImpurityZ0
+    print "Determined the real impurity z0 to be %f" % realImpurityZ0
 
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
