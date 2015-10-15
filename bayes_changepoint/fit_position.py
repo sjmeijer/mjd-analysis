@@ -115,20 +115,20 @@ def fitWaveform(wf, wfFig, zoomFig):
   
   np_data_early = np_data[firstFitSampleIdx:lastFitSampleIdx]
   
-  t0_guess = 40
+  t0_guess = 36
   siggen_model = pymc.Model( sm.createSignalModelSiggen(np_data_early, t0_guess, wfMax) )
  
   M = pymc.MCMC(siggen_model)
-  M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale], delay=1000)
-  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_distribution='Normal', proposal_sd=4)
+  M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale, M.switchpoint], delay=1000)
+#  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_distribution='Normal', proposal_sd=4)
   M.sample(iter=50000)
  
-  t0 = t0_guess#M.trace('t0Est')[-1]
+  t0 = M.trace('switchpoint')[-1]
   r = M.trace('radEst')[-1]
   z = M.trace('zEst')[-1]
   phi = M.trace('phiEst')[-1]
   scale = M.trace('wfScale')[-1]
-  startVal = t0_guess + firstFitSampleIdx
+  startVal = t0 + firstFitSampleIdx
   
   # Two subplots, the axes array is 1-d
   f, axarr = plt.subplots(5, sharex=True)

@@ -40,8 +40,8 @@ if doPlots:
 
 def createSignalModelSiggen(data, t0_guess, energy_guess):
 
-  switchpoint = DiscreteUniform('switchpoint', lower=t0_guess-10, upper=t0_guess+10)
-#  switchpoint = t0_guess
+
+#  switchpoint = t0_gues
 
   noise_sigma = HalfNormal('noise_sigma', tau=sigToTau(.01))
   exp_sigma = HalfNormal('exp_sigma', tau=sigToTau(.05))
@@ -50,6 +50,7 @@ def createSignalModelSiggen(data, t0_guess, energy_guess):
   zEst = Uniform('zEst', lower=5, upper=detZ)
   phiEst = Uniform('phiEst', lower=0, upper=np.pi/4)
   
+  switchpoint = Normal('switchpoint', mu=t0_guess, tau=sigToTau(1))
   wfScale = Normal('wfScale', mu=energy_guess, tau=sigToTau(.01*energy_guess))
   
   print "switchpoint is %d" % switchpoint
@@ -59,6 +60,8 @@ def createSignalModelSiggen(data, t0_guess, energy_guess):
   @deterministic(plot=False, name="test")
   def uncertainty_model(s=switchpoint, n=noise_sigma, e=exp_sigma):
     ''' Concatenate Uncertainty sigmas (or taus or whatever) '''
+    
+    s = np.around(s)
     out = np.empty(len(data))
     out[:s] = n
     out[s:] = e
@@ -77,8 +80,8 @@ def createSignalModelSiggen(data, t0_guess, energy_guess):
     siggen_data = findSiggenWaveform(rad,phi,z)
     
     siggen_data *= e
-    
-    out[s:] = siggen_data[0:(len(data) - switchpoint)]
+    s = np.around(s)
+    out[s:] = siggen_data[0:(len(data) - s)]
     
     if doPlots:
       plt.figure(fig.number)
