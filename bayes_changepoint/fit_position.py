@@ -47,9 +47,9 @@ def main(argv):
       print ">>>Skipping file " + gatFilePath
       continue
   
-    gat_file = TFile(gatFilePath)
+    gat_file = TFile.Open(gatFilePath)
     gatTree = gat_file.Get(gatTreeName)
-    built_file = TFile(builtFilePath)
+    built_file = TFile.Open(builtFilePath)
     builtTree = built_file.Get(builtTreeName)
     
     builtTree.AddFriend(gatTree)
@@ -107,9 +107,9 @@ def fitWaveform(wf, wfFig, zoomFig):
   wfMax = np.amax(np_data)
   
   #perform the fit up to this index.  Currently set by 99% timepoint (no real point in fitting on the falling edge)
-  lastFitSampleIdx = 1060#findTimePoint(np_data, 0.99)
+  lastFitSampleIdx = 1150#findTimePoint(np_data, 0.99)
   
-  fitSamples = 110 # 1 microsecond
+  fitSamples = 200 # 1 microsecond
   
   firstFitSampleIdx = lastFitSampleIdx - fitSamples
   
@@ -121,9 +121,9 @@ def fitWaveform(wf, wfFig, zoomFig):
   M = pymc.MCMC(siggen_model)
   M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale, M.switchpoint], delay=1000)
 #  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_distribution='Normal', proposal_sd=4)
-  M.sample(iter=50000)
+  M.sample(iter=500000)
  
-  t0 = M.trace('switchpoint')[-1]
+  t0 = np.around(M.trace('switchpoint')[-1])
   r = M.trace('radEst')[-1]
   z = M.trace('zEst')[-1]
   phi = M.trace('phiEst')[-1]
