@@ -107,15 +107,16 @@ def fitWaveform(wf, wfFig, zoomFig):
   wfMax = np.amax(np_data)
   
   #perform the fit up to this index.  Currently set by 99% timepoint (no real point in fitting on the falling edge)
-  lastFitSampleIdx = 1150#findTimePoint(np_data, 0.99)
+  lastFitSampleIdx = 1060#findTimePoint(np_data, 0.99)
   
-  fitSamples = 200 # 1 microsecond
+  fitSamples = 110 # 1 microsecond
   
   firstFitSampleIdx = lastFitSampleIdx - fitSamples
   
   np_data_early = np_data[firstFitSampleIdx:lastFitSampleIdx]
   
-  t0_guess = 36
+  startGuess = 986
+  t0_guess = startGuess - firstFitSampleIdx
   siggen_model = pymc.Model( sm.createSignalModelSiggen(np_data_early, t0_guess, wfMax) )
  
   M = pymc.MCMC(siggen_model)

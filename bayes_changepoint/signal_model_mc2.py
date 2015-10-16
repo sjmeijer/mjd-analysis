@@ -14,8 +14,9 @@ import matplotlib.pyplot as plt
 
 
 siggen_conf = "P42661C_autogen_final.conf"
+#siggen_conf = "P42661C_lowgrad.conf"
 rcIntTimeConstant = 48.7 * CLHEP.ns
-pzCorrTimeConstant = 74.1*CLHEP.us
+pzCorrTimeConstant = 72*CLHEP.us
 gaussianSmoothing = 1.6
 detZ = np.floor(41.5)
 detRad = np.floor(35.41)
