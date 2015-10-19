@@ -11,6 +11,7 @@ import numpy as np
 import pymc
 import signal_model_mc2 as sm
 
+plt.style.use('presentation')
 
 gatDataName = "mjd_run"
 gatTreeName = "mjdTree"
@@ -107,38 +108,61 @@ def fitWaveform(wf, wfFig, zoomFig):
   wfMax = np.amax(np_data)
   
   #perform the fit up to this index.  Currently set by 99% timepoint (no real point in fitting on the falling edge)
-  lastFitSampleIdx = 1060#findTimePoint(np_data, 0.99)
+  lastFitSampleIdx = 1100#findTimePoint(np_data, 0.99)
   
-  fitSamples = 110 # 1 microsecond
+  fitSamples = 150 # 1 microsecond
   
   firstFitSampleIdx = lastFitSampleIdx - fitSamples
   
   np_data_early = np_data[firstFitSampleIdx:lastFitSampleIdx]
   
-  startGuess = 986
+  
+  startGuess = 992
+  #startGuess = 973
   t0_guess = startGuess - firstFitSampleIdx
+  
   siggen_model = pymc.Model( sm.createSignalModelSiggen(np_data_early, t0_guess, wfMax) )
  
-  M = pymc.MCMC(siggen_model)
+  M = pymc.MCMC(siggen_model, db='pickle', dbname='Waveform_mcmc.pickle')
+  M.db
   M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale, M.switchpoint], delay=1000)
+#  M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale], delay=1000)
 #  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_distribution='Normal', proposal_sd=4)
-  M.sample(iter=500000)
+  M.sample(iter=50000)
+  M.db.close()
  
-  t0 = np.around(M.trace('switchpoint')[-1])
-  r = M.trace('radEst')[-1]
-  z = M.trace('zEst')[-1]
-  phi = M.trace('phiEst')[-1]
-  scale = M.trace('wfScale')[-1]
+  burnin = 10000
+ 
+  t0 = t0_guess#np.around( np.median(M.trace('switchpoint')[burnin:]))
+  r =  np.median(M.trace('radEst')[burnin:])
+  z =  np.median(M.trace('zEst')[burnin:])
+  phi =  np.median(M.trace('phiEst')[burnin:])
+  scale =  np.median(M.trace('wfScale')[burnin:])
   startVal = t0 + firstFitSampleIdx
   
   # Two subplots, the axes array is 1-d
   f, axarr = plt.subplots(5, sharex=True)
   
   axarr[0].plot(M.trace('radEst')[:])
+  axarr[0].set_ylabel('r [mm]')
   axarr[1].plot(M.trace('zEst')[:])
+  axarr[1].set_ylabel('z [mm]')
   axarr[2].plot(M.trace('phiEst')[:])
+  axarr[2].set_ylabel('phi [rad]')
   axarr[3].plot(M.trace('wfScale')[:])
+  axarr[3].set_ylabel('ADCscale [Arb.]')
   axarr[4].plot(M.trace('switchpoint')[:])
+  axarr[4].set_ylabel('t_0 [s]')
+  axarr[0].set_xlabel('MCMC Step Number')
+  axarr[0].set_title('Raw MCMC Sampling')
+
+
+#  t0 = t0_guess
+#  r =  30
+#  z =  13
+#  phi =  .74
+#  scale =  3990
+#  startVal = startGuess
 
   
   print ">>> t0guess was %d" % (firstFitSampleIdx+t0_guess)
@@ -153,9 +177,12 @@ def fitWaveform(wf, wfFig, zoomFig):
   plt.figure(wfFig.number)
   plt.clf()
   plt.title("Charge waveform")
+  plt.xlabel("Sample number [10s of ns]")
+  plt.ylabel("Raw ADC Value [Arb]")
   plt.plot( np_data  ,color="red" )
   plt.xlim( lastFitSampleIdx - fitSamples, lastFitSampleIdx+25)
-  #plt.ylim(-0.1, 2.5)
+#  plt.xlim( startVal-10, startVal+10)
+#  plt.ylim(-10, 25)
   plt.plot(np.arange(startVal, 800+startVal), siggen_fit  ,color="blue" )
 #  plt.plot(np.arange(0, startVal), np.zeros(startVal)  ,color="blue" )
   plt.axvline(x=lastFitSampleIdx, linewidth=1, color='r',linestyle=":")
