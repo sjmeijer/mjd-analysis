@@ -188,6 +188,34 @@ def fitWaveform(wf, wfFig, zoomFig):
   plt.axvline(x=lastFitSampleIdx, linewidth=1, color='r',linestyle=":")
   plt.axvline(x=startVal, linewidth=1, color='g',linestyle=":")
   
+  rad_arr = M.trace('radEst')[burnin:]
+  z_arr = M.trace('zEst')[burnin:]
+  phi_arr = M.trace('phiEst')[burnin:]
+  n_bins=25
+  
+  
+  fig0 = plt.figure(6)
+  weights = np.ones_like(rad_arr)/float(len(rad_arr))
+  n, bins, patches = plt.hist(rad_arr, n_bins, histtype='step', linewidth=5, weights=weights)
+  plt.xlabel("r value [mm]")
+  plt.ylabel("probability")
+  plt.savefig("pdf_r.pdf")
+  
+  fig0 = plt.figure(7)
+  weights = np.ones_like(z_arr)/float(len(z_arr))
+  n, bins, patches = plt.hist(z_arr, n_bins, histtype='step', linewidth=5, weights=weights)
+  plt.xlabel("z value [mm]")
+  plt.ylabel("probability")
+  plt.savefig("pdf_z.pdf")
+  
+  fig0 = plt.figure(8)
+  weights = np.ones_like(phi_arr)/float(len(phi_arr))
+  n, bins, patches = plt.hist(phi_arr, n_bins, histtype='step', linewidth=5, weights=weights)
+  plt.xlabel("phi value [rad]")
+  plt.ylabel("probability")
+  plt.savefig("pdf_phi.pdf")
+
+  
 #  plt.figure(zoomFig.number)
 #  plt.clf()
 #  plt.title("Zoom in near the start time")
