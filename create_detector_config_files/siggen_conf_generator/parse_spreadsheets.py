@@ -25,6 +25,7 @@ B. Shanks, 5/5/15
 
 
 impurity_grad_min = 0.04
+impurity_grad_max = 0.08
 
 
 #reads in alan's ortec data from .csv files generated from the google spreadsheet
@@ -106,9 +107,12 @@ def read_alans_ortec_data(crystalID, ortecMeasurementFile, starrettMeasurementFi
     #check to make sure the gradient is something reasonable
 
     if impurity_grad < impurity_grad_min:
-        print "   Adjusting impurity gradient upwards from %f to %f\n" % (impurity_grad, impurity_grad_min)
-        impurity_grad = impurity_grad_min
-
+      print "   Adjusting impurity gradient upwards from %f to %f\n" % (impurity_grad, impurity_grad_min)
+      impurity_grad = impurity_grad_min
+    if impurity_grad > impurity_grad_max:
+      print "   Adjusting impurity gradient downards from %f to %f\n" % (impurity_grad, impurity_grad_max)
+      impurity_grad = impurity_grad_max
+       
     siggenInfo.siggen_impurity_z0 = impurity_z0
     siggenInfo.siggen_impurity_gradient = impurity_grad
 
