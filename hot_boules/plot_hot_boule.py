@@ -77,17 +77,17 @@ for chan in chanCutCold:
 sepEnergyCut = "energyCal>%f && energyCal<%f" % (2100,2107);
 depEnergyCut = "energyCal>%f && energyCal<%f" % (1590,1596);
 
-sepCut = sepEnergyCut + " && channel == %d" % chanCut
-depCut = depEnergyCut + " && channel == %d" % chanCut
-chanCutStr = "channel == %d" % chanCut
-
-aePassStr = "abs(%s/%s) -(%.15f*(%s)) > %.7f" % (currentName, energyName, aeScale, energyName, aeCut)
-aeCutStr = "abs(%s/%s) -(%.15f*(%s)) < %.7f" % (currentName, energyName, aeScale, energyName, aeCut)
-
-chanCutStr = "channel == %f" % chanCut
-
-totalCutStr = aeCutStr + " && " + chanCutStr
-totalPassStr = aePassStr + " && " + chanCutStr
+#sepCut = sepEnergyCut + " && channel == %d" % chanCut
+#depCut = depEnergyCut + " && channel == %d" % chanCut
+#chanCutStr = "channel == %d" % chanCut
+#
+#aePassStr = "abs(%s/%s) -(%.15f*(%s)) > %.7f" % (currentName, energyName, aeScale, energyName, aeCut)
+#aeCutStr = "abs(%s/%s) -(%.15f*(%s)) < %.7f" % (currentName, energyName, aeScale, energyName, aeCut)
+#
+#chanCutStr = "channel == %f" % chanCut
+#
+#totalCutStr = aeCutStr + " && " + chanCutStr
+#totalPassStr = aePassStr + " && " + chanCutStr
 
 ###########################################
 
