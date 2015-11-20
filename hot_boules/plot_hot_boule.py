@@ -132,7 +132,7 @@ aeHistCold = TH1F("hAECold","",aeBins,ae_min,ae_max);
 chainGat.Project("hAEHot", draw, hotHighECut);
 chainGat.Project("hAECold", draw, coldHighECut);
 
-aeHistColdMax = depHist.GetMaximum()
+aeHistColdMax = aeHistCold.GetMaximum()
 
 aeHistCold.SetLineColor(kBlue)
 aeHistCold.SetYTitle("Counts")
