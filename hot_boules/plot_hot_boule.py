@@ -36,9 +36,9 @@ binsPerKev = nEbinskeV/emaxkeV
 
 energyName = "trapECal"
 
-currentName = "rcdwfMax"
-ae_max = 0.06 #for the a/e hist plot
-ae_min = 0.02
+currentName = "TSCurrent100nsMax"
+ae_max = 1 #for the a/e hist plot
+ae_min = 0.0
 aeBins = 200
 aeScale = 0
 aeCut = 0
