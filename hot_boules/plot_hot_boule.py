@@ -74,9 +74,9 @@ for chan in chanCutCold:
   if chan == chanCutCold[-1]: break
   chanCutStrCold += " || "
 
-sepEnergyCut = "energyCal>%f && energyCal<%f" % (2100,2107);
-depEnergyCut = "energyCal>%f && energyCal<%f" % (1590,1596);
-
+#sepEnergyCut = "energyCal>%f && energyCal<%f" % (2100,2107);
+#depEnergyCut = "energyCal>%f && energyCal<%f" % (1590,1596);
+#
 #sepCut = sepEnergyCut + " && channel == %d" % chanCut
 #depCut = depEnergyCut + " && channel == %d" % chanCut
 #chanCutStr = "channel == %d" % chanCut
@@ -121,7 +121,7 @@ pad2.cd()
 draw = "abs(%s/%s) - (%.15f)*(%s) " % (currentName, energyName, aeScale, energyName)
 print "The hist drawing will be: " + draw
 
-highECut =  "energyCal > 1000"
+highECut =  "%s > 1000" % energyName
 
 hotHighECut = highECut + " && " + chanCutStrHot
 coldHighECut = highECut + " && " + chanCutStrHot
