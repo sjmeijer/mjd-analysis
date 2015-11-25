@@ -108,9 +108,9 @@ def fitWaveform(wf, wfFig, zoomFig):
   wfMax = np.amax(np_data)
   
   #perform the fit up to this index.  Currently set by 99% timepoint (no real point in fitting on the falling edge)
-  lastFitSampleIdx = 1100#findTimePoint(np_data, 0.99)
+  lastFitSampleIdx = 1060#findTimePoint(np_data, 0.99)
   
-  fitSamples = 150 # 1 microsecond
+  fitSamples = 110 # 1 microsecond
   
   firstFitSampleIdx = lastFitSampleIdx - fitSamples
   
@@ -128,17 +128,23 @@ def fitWaveform(wf, wfFig, zoomFig):
   M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale, M.switchpoint], delay=1000)
 #  M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale], delay=1000)
 #  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_distribution='Normal', proposal_sd=4)
-  M.sample(iter=50000)
+  M.sample(iter=500000)
   M.db.close()
  
-  burnin = 10000
+  burnin = 100000
  
-  t0 = t0_guess#np.around( np.median(M.trace('switchpoint')[burnin:]))
+  t0 = np.around( np.median(M.trace('switchpoint')[burnin:]))
   r =  np.median(M.trace('radEst')[burnin:])
   z =  np.median(M.trace('zEst')[burnin:])
   phi =  np.median(M.trace('phiEst')[burnin:])
   scale =  np.median(M.trace('wfScale')[burnin:])
   startVal = t0 + firstFitSampleIdx
+  
+  print "<<<startVal is %d" % startVal
+  print "<<<r is %d" % r
+  print "<<<z is %d" % z
+  print "<<<phi is %d" % phi
+  print "<<<scale is %d" % scale
   
   # Two subplots, the axes array is 1-d
   f, axarr = plt.subplots(5, sharex=True)
@@ -171,6 +177,9 @@ def fitWaveform(wf, wfFig, zoomFig):
   siggen_fit = sm.findSiggenWaveform(r, phi, z)
   
   siggen_fit *= scale
+  
+  
+  np.save("fit_waveform.npy", siggen_fit)
   
   #plotting
 
