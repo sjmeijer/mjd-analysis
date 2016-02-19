@@ -4,12 +4,10 @@ TROOT.gApplication.ExecuteFile("$MGDODIR/Root/LoadMGDOClasses.C")
 TROOT.gApplication.ExecuteFile("$MGDODIR/Majorana/LoadMGDOMJClasses.C")
 #ROOT.gApplication.ExecuteFile("$DISSDIR/Data/figure_style.C")
 
-import sys, os, csv
-#import pylab
+import sys, os, csv, array, pymc
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import ndimage
-import pymc
 import slowpulse_model_mc2 as sm
 
 flatTimeSamples = 2000 #in number of samples, not time
@@ -21,6 +19,8 @@ flatTimeSamples = 2000 #in number of samples, not time
 dirPrefix = '$MJDDATADIR/malbek/'
 
 doPlots=0
+
+newTreeName = "spParamSkim.root"
 
 def main(argv):
 
@@ -47,12 +47,22 @@ def main(argv):
   tree_nort.AddFriend(tree_wf)
 
   #Loop through events within a given energy range
-  energy_low = 1.
-  energy_high = 3.
+  energy_low = 0.6
+  energy_high = 10.
   count = 0
   
   if not doPlots:
-    outputFile = open('results.csv', 'w')
+    oFile = TFile(newTreeName,"recreate");
+    oFile.cd();
+    outTree = TTree("slowpulseParamTree","Slowpulse Param");
+    energy = np.zeros(1, dtype=float)
+    spParam = np.zeros(1, dtype=float)
+    riseTime = np.zeros(1, dtype=float)
+    wpar = np.zeros(1, dtype=float)
+    outTree.Branch("energykeV",energy, "energykeV/D");
+    outTree.Branch("spParam",spParam, "spParam/D");
+    outTree.Branch("riseTime",riseTime, "riseTime/D");
+    outTree.Branch("wpar",riseTime, "wpar/D");
 
   energyCut = "rfEnergy_keV>%f && rfEnergy_keV<%f" % (energy_low,energy_high)
 
@@ -62,57 +72,52 @@ def main(argv):
 #
 #  cut = "%s && %s" % (energyCut, riseTimeCut)
 
-  tree_nort.SetEntryList(0)
-  tree_nort.Draw(">>elist", cut, "entrylist")
-  elist = gDirectory.Get("elist")
-  tree_nort.SetEntryList(elist);
-  tree_wf.SetEntryList(elist);
+#  tree_nort.SetEntryList(0)
+#  tree_nort.Draw(">>elist", cut, "entrylist")
+#  elist = gDirectory.Get("elist")
+#  tree_nort.SetEntryList(elist);
+#  tree_wf.SetEntryList(elist);
+#  numEntries = elist.GetN()
+#  print "Total number of entries (w/ energy cut): %d" % numEntries
 
-  numEntries = elist.GetN()
-  print "Total number of entries (w/ energy cut): %d" % numEntries
-  
+
+  numEntries = tree_nort.GetEntries()
+
   for i in xrange( numEntries):
     print "Entry %d of %d" % (i, numEntries)
-    entryNumber = tree_nort.GetEntryNumber(i);
-    
+#    entryNumber = tree_nort.GetEntryNumber(i);
+    entryNumber = i
+
     tree_nort.GetEntry(entryNumber)
     tree_wf.GetEntry(entryNumber)
   
     #Check to see if wf is in the energy range  
-    if tree_nort.rfEnergy_keV > energy_low and tree_nort.rfEnergy_keV < energy_high:
-      current_run = tree_nort.rfRunID
-      current_id = tree_nort.rfEventID   
-      if tree_wf.GetEntryWithIndex(current_run, current_id) == -1:
-        print 'waveform %s, %s not found' % (current_run, current_id)
-        break
-      waveform = tree_wf.waveform.Clone()
-            
-      #Baseline subtract it here (should eventually be incorporated into the model)
-      baseline.TransformInPlace(waveform)
-      
-      # #draw wf
-      # canvas = TCanvas()
-      # temp_hist = TH1D()
-      # waveform.LoadIntoHist(temp_hist)
-      # frame = TH2D("frame","frame;time (ns);voltage (au)",
-      #               1, 20000, 50000, 100, -500, 10000)
-      # frame.Draw()
-      # frame.GetYaxis().CenterTitle(1)
-      # frame.GetXaxis().CenterTitle(1)
-      #
-      # temp_hist.Draw('same')
-      # canvas.Update()
-      # raw_input('')
-      
-      #MCMC fit and plot the results
-      spParam = fitWaveform(waveform, tree_nort.rfEnergy_keV)
-      if doPlots:
-        print "risetime:     %f" % tree_nort.rfRiseTime
-      else:
-        outputFile.write("%f,%f,%f\n" % (tree_nort.rfEnergy_keV, spParam, tree_nort.rfRiseTime))
+    #if tree_nort.rfEnergy_keV > energy_low and tree_nort.rfEnergy_keV < energy_high:
+    current_run = tree_nort.rfRunID
+    current_id = tree_nort.rfEventID   
+    if tree_wf.GetEntryWithIndex(current_run, current_id) == -1:
+      print 'waveform %s, %s not found' % (current_run, current_id)
+      break
+    waveform = tree_wf.waveform.Clone()
+          
+    #Baseline subtract it here (should eventually be incorporated into the model)
+    baseline.TransformInPlace(waveform)
+    
+    #MCMC fit and plot the results
+    spParamTemp = fitWaveform(waveform, tree_nort.rfEnergy_keV)
+    if doPlots:
+      print "risetime:     %f" % tree_nort.rfRiseTime
+    else:
+      energy[0] = tree_nort.rfEnergy_keV
+      riseTime[0] = tree_nort.rfRiseTime
+      spParam[0] = spParamTemp
+      wpar[0] = tree_nort.rfWpar
+      outTree.Fill();
 
   if not doPlots:
-    outputFile.close()
+    oFile.Write();
+    oFile.Close()
+
 
 def fitWaveform(wf, energy):
 
