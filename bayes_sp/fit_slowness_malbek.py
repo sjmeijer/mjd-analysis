@@ -47,8 +47,8 @@ def main(argv):
   tree_nort.AddFriend(tree_wf)
 
   #Loop through events within a given energy range
-  energy_low = 1.
-  energy_high = 3.
+  energy_low = 0.6
+  energy_high = 1.
   count = 0
   
   if not doPlots:
@@ -122,7 +122,7 @@ def fitWaveform(wf, energy):
   wfMax = np.amax(np_data)
   
   lastFitSampleIdx = 4300
-  fitSamples = 800 #can't be longer than 800 right now (that's the length of the siggen wf...)
+  fitSamples = 2000 #can't be longer than 800 right now (that's the length of the siggen wf...)
 
   firstFitSampleIdx = lastFitSampleIdx - fitSamples
   
@@ -140,8 +140,8 @@ def fitWaveform(wf, energy):
   #adaptiveDelay = 100
   
   
-  # in case you gotta plot wtf is going on before the fit
-#  plt.figure(wfFig.number)
+  #in case you gotta plot wtf is going on before the fit
+#  plt.figure(1)
 #  plt.clf()
 #  #plt.title("Charge waveform")
 #  plt.xlabel("Digitizer samples")
