@@ -72,21 +72,20 @@ def main(argv):
 #
 #  cut = "%s && %s" % (energyCut, riseTimeCut)
 
-#  tree_nort.SetEntryList(0)
-#  tree_nort.Draw(">>elist", cut, "entrylist")
-#  elist = gDirectory.Get("elist")
-#  tree_nort.SetEntryList(elist);
-#  tree_wf.SetEntryList(elist);
-#  numEntries = elist.GetN()
-#  print "Total number of entries (w/ energy cut): %d" % numEntries
+  tree_nort.SetEntryList(0)
+  tree_nort.Draw(">>elist", cut, "entrylist")
+  elist = gDirectory.Get("elist")
+  tree_nort.SetEntryList(elist);
+  tree_wf.SetEntryList(elist);
+  numEntries = elist.GetN()
+  print "Total number of entries (w/ energy cut): %d" % numEntries
 
-
-  numEntries = tree_nort.GetEntries()
+#numEntries = tree_nort.GetEntries()
 
   for i in xrange( numEntries):
     print "Entry %d of %d" % (i, numEntries)
-#    entryNumber = tree_nort.GetEntryNumber(i);
-    entryNumber = i
+    entryNumber = tree_nort.GetEntryNumber(i);
+    #    entryNumber = i
 
     tree_nort.GetEntry(entryNumber)
     tree_wf.GetEntry(entryNumber)
@@ -127,7 +126,7 @@ def fitWaveform(wf, energy):
   wfMax = np.amax(np_data)
   
   lastFitSampleIdx = 4300
-  fitSamples = 800 #can't be longer than 800 right now (that's the length of the siggen wf...)
+  fitSamples = 2000 #can't be longer than 800 right now (that's the length of the siggen wf...)
 
   firstFitSampleIdx = lastFitSampleIdx - fitSamples
   
@@ -145,8 +144,8 @@ def fitWaveform(wf, energy):
   #adaptiveDelay = 100
   
   
-  # in case you gotta plot wtf is going on before the fit
-#  plt.figure(wfFig.number)
+  #in case you gotta plot wtf is going on before the fit
+#  plt.figure(1)
 #  plt.clf()
 #  #plt.title("Charge waveform")
 #  plt.xlabel("Digitizer samples")
