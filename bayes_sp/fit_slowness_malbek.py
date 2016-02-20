@@ -23,7 +23,7 @@ from multiprocessing import Process, Manager
 dirPrefix = '$MJDDATADIR/malbek/'
 
 doPlots=0
-writeFile = 0
+writeFile = 1
 interactive = 0 #run wf by wf
 
 
