@@ -10,7 +10,8 @@ import numpy as np
 from scipy import ndimage
 import slowpulse_model_mc2 as sm
 
-flatTimeSamples = 2000 #in number of samples, not time
+from guppy import hpy
+from multiprocessing import Process, Manager
 
 #Graham's directory prefix
 #dirPrefix = '$DISSDIR/Data'
@@ -19,8 +20,9 @@ flatTimeSamples = 2000 #in number of samples, not time
 dirPrefix = '$MJDDATADIR/malbek/'
 
 doPlots=0
-
 newTreeName = "spParamSkim.root"
+
+flatTimeSamples = 2000 #in number of samples, not time
 
 def main(argv):
 
@@ -48,7 +50,7 @@ def main(argv):
 
   #Loop through events within a given energy range
   energy_low = 0.6
-  energy_high = 10.
+  energy_high = 1.
   count = 0
   
   if not doPlots:
@@ -82,7 +84,11 @@ def main(argv):
 
 #numEntries = tree_nort.GetEntries()
 
+  manager = Manager()
+  return_dict = manager.dict()
+
   for i in xrange( numEntries):
+    
     print "Entry %d of %d" % (i, numEntries)
     entryNumber = tree_nort.GetEntryNumber(i);
     #    entryNumber = i
@@ -103,7 +109,13 @@ def main(argv):
     baseline.TransformInPlace(waveform)
     
     #MCMC fit and plot the results
-    spParamTemp = fitWaveform(waveform, tree_nort.rfEnergy_keV)
+    p = Process(target=fitWaveform, args=(waveform, tree_nort.rfEnergy_keV, return_dict))
+    #spParamTemp = fitWaveform(waveform, tree_nort.rfEnergy_keV)
+    p.start()
+    p.join()
+
+    spParamTemp = return_dict["spParam"]
+
     if doPlots:
       print "risetime:     %f" % tree_nort.rfRiseTime
     else:
@@ -118,7 +130,7 @@ def main(argv):
     oFile.Close()
 
 
-def fitWaveform(wf, energy):
+def fitWaveform(wf, energy, returnDict):
 
   np_data = wf.GetVectorData()
 
@@ -176,7 +188,7 @@ def fitWaveform(wf, energy):
   startVal = t0 + firstFitSampleIdx
   
 
-  
+  returnDict["spParam"] = sigma
 #  print ">>> noise_sigma:    %f" % (M.trace('noise_sigma')[-1])**(-.5)
 
 
@@ -247,7 +259,23 @@ def fitWaveform(wf, energy):
     if value == 'q':
       exit(1)
 
-  return sigma
+
+def getSiggenWaveformFromEdge():
+  siggen_conf = "malbek.conf"
+  rcIntTimeConstant = 50 * CLHEP.ns
+  pzCorrTimeConstant = 69.88*CLHEP.us
+  gaussianSmoothing = 1.6
+  detZ = np.floor(30.)
+  detRad = np.floor(30.3)
+  signalLength = 2000
+
+  siggenInst = GATSiggenInstance(siggen_conf)
+  rcint = MGWFRCIntegration()
+  rcint.SetTimeConstant(rcIntTimeConstant)
+  rcdiff = MGWFRCDifferentiation()
+  rcdiff.SetTimeConstant(pzCorrTimeConstant)
+
+  return 0
 
 
 
