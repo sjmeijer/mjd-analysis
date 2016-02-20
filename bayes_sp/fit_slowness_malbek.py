@@ -11,9 +11,7 @@ from scipy import ndimage
 import slowpulse_model_mc2 as sm
 
 from guppy import hpy
-hp = hpy()
-
-flatTimeSamples = 2000 #in number of samples, not time
+from multiprocessing import Process, Manager
 
 #Graham's directory prefix
 #dirPrefix = '$DISSDIR/Data'
@@ -23,14 +21,19 @@ dirPrefix = '$MJDDATADIR/malbek/'
 
 doPlots=0
 writeFile = 0
+interactive = 0 #run wf by wf
+
 
 newTreeName = "spParamSkim.root"
 
+flatTimeSamples = 2000 #in number of samples, not time
+
 def main(argv):
 
-  plt.ion()
-  fig = plt.figure(1) #waveform fit plot
-  fig2 = plt.figure(2)
+  if interactive:
+    plt.ion()
+    fig = plt.figure(1) #waveform fit plot
+    fig2 = plt.figure(2)
 
   #Instantiate and prepare the baseline remover transform:
   baseline = MGWFBaselineRemover()
@@ -51,7 +54,7 @@ def main(argv):
 
   #Loop through events within a given energy range
   energy_low = 0.6
-  energy_high = 1.
+  energy_high = 10.
   count = 0
   
   if writeFile:
@@ -85,8 +88,10 @@ def main(argv):
 
 #numEntries = tree_nort.GetEntries()
 
+  manager = Manager()
+  return_dict = manager.dict()
+
   for i in xrange( numEntries):
-    before = hp.heap()
     print "Entry %d of %d" % (i, numEntries)
     entryNumber = tree_nort.GetEntryNumber(i);
     #    entryNumber = i
@@ -107,8 +112,14 @@ def main(argv):
     baseline.TransformInPlace(waveform)
     
     #MCMC fit and plot the results
-    spParamTemp = fitWaveform(waveform, tree_nort.rfEnergy_keV, entryNumber)
-    if doPlots:
+    p = Process(target=fitWaveform, args=(waveform, tree_nort.rfEnergy_keV, entryNumber, return_dict))
+    #spParamTemp = fitWaveform(waveform, tree_nort.rfEnergy_keV)
+    p.start()
+    p.join()
+
+    spParamTemp = return_dict["spParam"]
+
+    if interactive:
       print "risetime:     %f" % tree_nort.rfRiseTime
     if writeFile:
       energy[0] = tree_nort.rfEnergy_keV
@@ -117,18 +128,11 @@ def main(argv):
       wpar[0] = tree_nort.rfWpar
       outTree.Fill();
 
-    after = hpy.heap()
-    leftover =  after - before
-    print leftover
-
   if writeFile:
     oFile.Write();
     oFile.Close()
 
-
-
-
-def fitWaveform(wf, energy, entryNumber):
+def fitWaveform(wf, energy, entryNumber, returnDict):
 
   np_data = wf.GetVectorData()
 
@@ -172,7 +176,7 @@ def fitWaveform(wf, energy, entryNumber):
 
   
   siggen_model = pymc.Model( sm.createSignalModelSiggen(np_data_early, t0_guess, energy_guess, noise_sigma_guess, baseline_guess) )
-  M = pymc.MCMC(siggen_model, verbose=0, db="txt", dbname="Event_%d" % entryNumber)
+  M = pymc.MCMC(siggen_model, verbose=0)#, db="txt", dbname="Event_%d" % entryNumber)
   M.use_step_method(pymc.AdaptiveMetropolis, [M.slowness_sigma, M.wfScale, M.switchpoint], interval=500, shrink_if_necessary=1)
 #  M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale], delay=1000)
 #  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_distribution='Normal', proposal_sd=4)
@@ -185,82 +189,89 @@ def fitWaveform(wf, energy, entryNumber):
 #  baselineM =  0#np.median(M.trace('baselineM')[burnin:])
   startVal = t0 + firstFitSampleIdx
 
+  returnDict["spParam"] = sigma
+#  print ">>> noise_sigma:    %f" % (M.trace('noise_sigma')[-1])**(-.5)
+
   M.halt()
 
   if doPlots:
-  
     print ">>> startVal:    %d" % startVal
     print ">>> scale:       %f" % scale
     print ">>> slowness:    %f" % sigma
   
 #########  Plots for MC Steps
-  stepsFig = plt.figure(2)
-  plt.clf()
-  ax0 = stepsFig.add_subplot(311)
-  ax1 = stepsFig.add_subplot(312, sharex=ax0)
-  ax2 = stepsFig.add_subplot(313, sharex=ax0)
-  
-  ax0.plot(M.trace('switchpoint')[:])
-  ax0.set_ylabel('t0')
-  ax1.plot(M.trace('slowness_sigma')[:])
-  ax1.set_ylabel('slowness')
-  ax2.plot(M.trace('wfScale')[:])
-  ax2.set_ylabel('energy')
-  
-#  axarr[3].plot(M.trace('noise_sigma')[:])
-#  axarr[3].set_ylabel('noise_sigma')
+    stepsFig = plt.figure()
+    plt.clf()
+    ax0 = stepsFig.add_subplot(311)
+    ax1 = stepsFig.add_subplot(312, sharex=ax0)
+    ax2 = stepsFig.add_subplot(313, sharex=ax0)
+    
+    ax0.plot(M.trace('switchpoint')[:])
+    ax0.set_ylabel('t0')
+    ax1.plot(M.trace('slowness_sigma')[:])
+    ax1.set_ylabel('slowness')
+    ax2.plot(M.trace('wfScale')[:])
+    ax2.set_ylabel('energy')
+    
+  #  axarr[3].plot(M.trace('noise_sigma')[:])
+  #  axarr[3].set_ylabel('noise_sigma')
 
-  ax2.set_xlabel('MCMC Step Number')
-  ax0.set_title('Raw MCMC Sampling')
+    ax2.set_xlabel('MCMC Step Number')
+    ax0.set_title('Raw MCMC Sampling')
 
-  del M
-  del siggen_model
+    stepsFig.savefig("mcsteps_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
 
-  stepsFig.savefig("mcsteps_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
+  #########  Waveform fit plot
 
-#########  Waveform fit plot
+    detZ = np.floor(30.0)/2.
+    detRad = np.floor(30.3)
+    phiAvg = np.pi/8
+    siggen_fit = sm.findSiggenWaveform(detRad, phiAvg, detZ)
+    siggen_fit *= scale
 
-  detZ = np.floor(30.0)/2.
-  detRad = np.floor(30.3)
-  phiAvg = np.pi/8
-  siggen_fit = sm.findSiggenWaveform(detRad, phiAvg, detZ)
-  siggen_fit *= scale
-  
-#  out = np.arange(0, len(np_data_early), 1)
-#  out = np.multiply(baselineM, out)
-#  out += baselineB
+    out = np.zeros(len(np_data_early))
+    out[t0:] += siggen_fit[0:(len(siggen_fit) - t0)]
+    out = ndimage.filters.gaussian_filter1d(out, sigma)
 
-#  print "length of np_data_early: %d" % len(np_data_early)
-#  print "length of siggen_fit: %d" % len(siggen_fit)
+    f = plt.figure()
+    plt.clf()
+    #plt.title("Charge waveform")
+    plt.xlabel("Digitizer time [ns]")
+    plt.ylabel("Raw ADC Value [Arb]")
+    plt.plot(np.arange(0, len(np_data)*10, 10), np_data  ,color="red" )
+    plt.xlim( firstFitSampleIdx*10, (lastFitSampleIdx+25)*10)
 
+    plt.plot(np.arange(firstFitSampleIdx*10, lastFitSampleIdx*10, 10), out  ,color="blue" )
+  #  plt.plot(np.arange(0, startVal), np.zeros(startVal)  ,color="blue" )
+  #  plt.xlim( startVal-10, startVal+10)
+  #  plt.ylim(-10, 25)
+    plt.axvline(x=lastFitSampleIdx*10, linewidth=1, color='r',linestyle=":")
+    plt.axvline(x=startVal*10, linewidth=1, color='g',linestyle=":")
 
-  out = np.zeros(len(np_data_early))
-  out[t0:] += siggen_fit[0:(len(siggen_fit) - t0)]
-  out = ndimage.filters.gaussian_filter1d(out, sigma)
-
-  f = plt.figure(1)
-  plt.clf()
-  #plt.title("Charge waveform")
-  plt.xlabel("Digitizer time [ns]")
-  plt.ylabel("Raw ADC Value [Arb]")
-  plt.plot(np.arange(0, len(np_data)*10, 10), np_data  ,color="red" )
-  plt.xlim( firstFitSampleIdx*10, (lastFitSampleIdx+25)*10)
-
-  plt.plot(np.arange(firstFitSampleIdx*10, lastFitSampleIdx*10, 10), out  ,color="blue" )
-#  plt.plot(np.arange(0, startVal), np.zeros(startVal)  ,color="blue" )
-#  plt.xlim( startVal-10, startVal+10)
-#  plt.ylim(-10, 25)
-  plt.axvline(x=lastFitSampleIdx*10, linewidth=1, color='r',linestyle=":")
-  plt.axvline(x=startVal*10, linewidth=1, color='g',linestyle=":")
-
-  f.savefig("wf_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
+    f.savefig("wf_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
 
   if doPlots:
     value = raw_input('  --> Press q to quit, any other key to continue\n')
     if value == 'q':
       exit(1)
 
-  return sigma
+
+def getSiggenWaveformFromEdge():
+  siggen_conf = "malbek.conf"
+  rcIntTimeConstant = 50 * CLHEP.ns
+  pzCorrTimeConstant = 69.88*CLHEP.us
+  gaussianSmoothing = 1.6
+  detZ = np.floor(30.)
+  detRad = np.floor(30.3)
+  signalLength = 2000
+
+  siggenInst = GATSiggenInstance(siggen_conf)
+  rcint = MGWFRCIntegration()
+  rcint.SetTimeConstant(rcIntTimeConstant)
+  rcdiff = MGWFRCDifferentiation()
+  rcdiff.SetTimeConstant(pzCorrTimeConstant)
+
+  return 0
 
 
 

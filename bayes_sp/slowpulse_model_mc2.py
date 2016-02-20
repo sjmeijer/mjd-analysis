@@ -76,19 +76,19 @@ def createSignalModelSiggen(data, t0_guess, energy_guess, noise_sigma_guess, bas
 #    out = np.multiply(baselineM, out)
 #    out = np.add(baselineB, out)
 
-    siggen_data = np.copy(siggen_wf)#findSiggenWaveform(rad,phi,z)
+    siggen_data = siggen_wf#findSiggenWaveform(rad,phi,z)
     
     if e<0:
       e=0
     
-    siggen_data *= e
+    #siggen_data *= e
     if s<0:
       s =0
     if s>len(data):
       s=len(data)
     s = np.around(s)
     
-    out[s:] += siggen_data[0:(len(data) - s)]
+    out[s:] += siggen_data[0:(len(data) - s)]*e
     
     out = ndimage.filters.gaussian_filter1d(out, sig)
     
