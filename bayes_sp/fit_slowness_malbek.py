@@ -5,7 +5,7 @@ TROOT.gApplication.ExecuteFile("$MGDODIR/Majorana/LoadMGDOMJClasses.C")
 #ROOT.gApplication.ExecuteFile("$DISSDIR/Data/figure_style.C")
 
 import matplotlib
-matplotlib.use('agg') #use a backend that can handle multiprocessing
+matplotlib.use('pdf') #use a non-interactive backend that can handle multiprocessing
 import matplotlib.pyplot as plt
 
 import sys, os, csv, array, pymc
