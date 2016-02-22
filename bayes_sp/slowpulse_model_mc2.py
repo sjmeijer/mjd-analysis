@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 #siggen_conf = "P42661C_lowgrad.conf" #works better
 
 siggen_conf = "malbek.conf"
-rcIntTimeConstant = 50 * CLHEP.ns
+rcIntTimeConstant = 150 * CLHEP.ns
 pzCorrTimeConstant = 69.88*CLHEP.us
-gaussianSmoothing = 1.6
+gaussianSmoothing = 0
 detZ = np.floor(30.)
 detRad = np.floor(30.3)
 signalLength = 2000
@@ -137,11 +137,14 @@ def findSiggenWaveform(r,phi,z, gaussianSmoothing=0):
     print "Point out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
     exit(0)
   
+  #siggen_data = np.lib.pad(siggen_data, (0,signalLength-len(siggen_data)), 'edge')
+  
+  
   rcint.TransformInPlace(sigWf)
   rcdiff.TransformInPlace(sigWf)
   siggen_data = sigWf.GetVectorData()
   
-  siggen_data = np.lib.pad(siggen_data, (0,signalLength-len(siggen_data)), 'edge')
+
   
   if gaussianSmoothing>0:
     siggen_data = ndimage.filters.gaussian_filter1d(siggen_data, gaussianSmoothing)
@@ -154,3 +157,6 @@ def findSiggenWaveform(r,phi,z, gaussianSmoothing=0):
 
 #calculate a "characteristic" detector wf we'll use for fits
 siggen_wf =   findSiggenWaveform(detRad,np.pi/8,detZ/2.)
+
+def getSiggenWaveform():
+  return siggen_wf
