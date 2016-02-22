@@ -23,7 +23,7 @@ from multiprocessing import Process, Manager
 dirPrefix = '$MJDDATADIR/malbek/'
 
 doPlots=0
-writeFile = 0
+writeFile = 1
 interactive = 0 #run wf by wf
 
 
@@ -56,8 +56,8 @@ def main(argv):
   tree_nort.AddFriend(tree_wf)
 
   #Loop through events within a given energy range
-  energy_low = 0.6
-  energy_high = 10.
+  energy_low = 9.
+  energy_high = 9.5
   count = 0
   
   if writeFile:
@@ -203,60 +203,60 @@ def fitWaveform(wf, energy, entryNumber, returnDict):
     print ">>> slowness:    %f" % sigma
   
 #########  Plots for MC Steps
-  stepsFig = plt.figure()
-  plt.clf()
-  ax0 = stepsFig.add_subplot(311)
-  ax1 = stepsFig.add_subplot(312, sharex=ax0)
-  ax2 = stepsFig.add_subplot(313, sharex=ax0)
-  
-  ax0.plot(M.trace('switchpoint')[:])
-  ax0.set_ylabel('t0')
-  ax1.plot(M.trace('slowness_sigma')[:])
-  ax1.set_ylabel('slowness')
-  ax2.plot(M.trace('wfScale')[:])
-  ax2.set_ylabel('energy')
-  
-#  axarr[3].plot(M.trace('noise_sigma')[:])
-#  axarr[3].set_ylabel('noise_sigma')
+    stepsFig = plt.figure()
+    plt.clf()
+    ax0 = stepsFig.add_subplot(311)
+    ax1 = stepsFig.add_subplot(312, sharex=ax0)
+    ax2 = stepsFig.add_subplot(313, sharex=ax0)
+    
+    ax0.plot(M.trace('switchpoint')[:])
+    ax0.set_ylabel('t0')
+    ax1.plot(M.trace('slowness_sigma')[:])
+    ax1.set_ylabel('slowness')
+    ax2.plot(M.trace('wfScale')[:])
+    ax2.set_ylabel('energy')
+    
+  #  axarr[3].plot(M.trace('noise_sigma')[:])
+  #  axarr[3].set_ylabel('noise_sigma')
 
-  ax2.set_xlabel('MCMC Step Number')
-  ax0.set_title('Raw MCMC Sampling')
+    ax2.set_xlabel('MCMC Step Number')
+    ax0.set_title('Raw MCMC Sampling')
 
-  stepsFig.savefig("mcsteps_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
+    stepsFig.savefig("mcsteps_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
 
-#########  Waveform fit plot
+  #########  Waveform fit plot
 
-  detZ = np.floor(30.0)/2.
-  detRad = np.floor(30.3)
-  phiAvg = np.pi/8
-  siggen_fit = sm.findSiggenWaveform(detRad, phiAvg, detZ)
-  siggen_fit *= scale
+    detZ = np.floor(30.0)/2.
+    detRad = np.floor(30.3)
+    phiAvg = np.pi/8
+    siggen_fit = sm.findSiggenWaveform(detRad, phiAvg, detZ)
+    siggen_fit *= scale
 
-  out = np.zeros(len(np_data_early))
-  out[t0:] += siggen_fit[0:(len(siggen_fit) - t0)]
-  out = ndimage.filters.gaussian_filter1d(out, sigma)
+    out = np.zeros(len(np_data_early))
+    out[t0:] += siggen_fit[0:(len(siggen_fit) - t0)]
+    out = ndimage.filters.gaussian_filter1d(out, sigma)
 
-  f = plt.figure()
-  plt.clf()
-  #plt.title("Charge waveform")
-  plt.xlabel("Digitizer time [ns]")
-  plt.ylabel("Raw ADC Value [Arb]")
-  plt.plot(np.arange(0, len(np_data)*10, 10), np_data  ,color="red" )
-  plt.xlim( firstFitSampleIdx*10, (lastFitSampleIdx+25)*10)
+    f = plt.figure()
+    plt.clf()
+    #plt.title("Charge waveform")
+    plt.xlabel("Digitizer time [ns]")
+    plt.ylabel("Raw ADC Value [Arb]")
+    plt.plot(np.arange(0, len(np_data)*10, 10), np_data  ,color="red" )
+    plt.xlim( firstFitSampleIdx*10, (lastFitSampleIdx+25)*10)
 
-  plt.plot(np.arange(firstFitSampleIdx*10, lastFitSampleIdx*10, 10), out  ,color="blue" )
-#  plt.plot(np.arange(0, startVal), np.zeros(startVal)  ,color="blue" )
-#  plt.xlim( startVal-10, startVal+10)
-#  plt.ylim(-10, 25)
-  plt.axvline(x=lastFitSampleIdx*10, linewidth=1, color='r',linestyle=":")
-  plt.axvline(x=startVal*10, linewidth=1, color='g',linestyle=":")
+    plt.plot(np.arange(firstFitSampleIdx*10, lastFitSampleIdx*10, 10), out  ,color="blue" )
+  #  plt.plot(np.arange(0, startVal), np.zeros(startVal)  ,color="blue" )
+  #  plt.xlim( startVal-10, startVal+10)
+  #  plt.ylim(-10, 25)
+    plt.axvline(x=lastFitSampleIdx*10, linewidth=1, color='r',linestyle=":")
+    plt.axvline(x=startVal*10, linewidth=1, color='g',linestyle=":")
 
-  f.savefig("wf_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
+    f.savefig("wf_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
 
-  if doPlots:
-    value = raw_input('  --> Press q to quit, any other key to continue\n')
-    if value == 'q':
-      exit(1)
+
+#    value = raw_input('  --> Press q to quit, any other key to continue\n')
+#    if value == 'q':
+#      exit(1)
 
 
 def getSiggenWaveformFromEdge():
