@@ -22,16 +22,20 @@ from multiprocessing import Process, Manager
 #Ben's direcoty prefix
 dirPrefix = '$MJDDATADIR/malbek/'
 
-doPlots=0
+doPlots=1
 writeFile = 1
 interactive = 0 #run wf by wf
 
 
-newTreeName = "spParamSkim.root"
+newTreeName = "spParamSkim_190.root"
+outputDir = "output190"
+
 
 flatTimeSamples = 2000 #in number of samples, not time
 
 def main(argv):
+
+  setupDirs(outputDir)
 
   if interactive:
     plt.ion()
@@ -56,8 +60,8 @@ def main(argv):
   tree_nort.AddFriend(tree_wf)
 
   #Loop through events within a given energy range
-  energy_low = 9.
-  energy_high = 9.5
+  energy_low = 0.6
+  energy_high = 10.
   count = 0
   
   if writeFile:
@@ -71,7 +75,7 @@ def main(argv):
     outTree.Branch("energykeV",energy, "energykeV/D");
     outTree.Branch("spParam",spParam, "spParam/D");
     outTree.Branch("riseTime",riseTime, "riseTime/D");
-    outTree.Branch("wpar",riseTime, "wpar/D");
+    outTree.Branch("wpar",wpar, "wpar/D");
 
   energyCut = "rfEnergy_keV>%f && rfEnergy_keV<%f" % (energy_low,energy_high)
 
@@ -149,7 +153,11 @@ def fitWaveform(wf, energy, entryNumber, returnDict):
   
   np_data_early = np_data[firstFitSampleIdx:lastFitSampleIdx]
   
-  startGuess = 3850
+  startGuess_9kev = 3850
+  startGuess_p6kev = 3450
+  
+  startGuess = startGuess_p6kev + (startGuess_9kev - startGuess_p6kev) * (energy -0.6)/9
+  
   t0_guess = startGuess - firstFitSampleIdx
   startVal = startGuess
   baseline_guess = 0
@@ -157,7 +165,7 @@ def fitWaveform(wf, energy, entryNumber, returnDict):
   noise_sigma_guess = np.std(np_data[0:flatTimeSamples])
   
   iterations = 2000
-  burnin = iterations-100
+  burnin = iterations-500
   #adaptiveDelay = 100
   
   
@@ -180,7 +188,11 @@ def fitWaveform(wf, energy, entryNumber, returnDict):
   
   siggen_model = pymc.Model( sm.createSignalModelSiggen(np_data_early, t0_guess, energy_guess, noise_sigma_guess, baseline_guess) )
   M = pymc.MCMC(siggen_model, verbose=0)#, db="txt", dbname="Event_%d" % entryNumber)
-  M.use_step_method(pymc.AdaptiveMetropolis, [M.slowness_sigma, M.wfScale, M.switchpoint], interval=500, shrink_if_necessary=1)
+  M.use_step_method(pymc.Metropolis, M.slowness_sigma, proposal_sd=1., proposal_distribution='Normal')
+  M.use_step_method(pymc.Metropolis, M.wfScale, proposal_sd=10., proposal_distribution='Normal')
+  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_sd=1., proposal_distribution='Normal')
+
+#M.use_step_method(pymc.AdaptiveMetropolis, [M.slowness_sigma, M.wfScale, M.switchpoint], , shrink_if_necessary=1)
 #  M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale], delay=1000)
 #  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_distribution='Normal', proposal_sd=4)
   M.sample(iter=iterations, verbose=0)
@@ -222,7 +234,7 @@ def fitWaveform(wf, energy, entryNumber, returnDict):
     ax2.set_xlabel('MCMC Step Number')
     ax0.set_title('Raw MCMC Sampling')
 
-    stepsFig.savefig("mcsteps_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
+    stepsFig.savefig(outputDir + "/energy%d/mcsteps_Event%d_energy%0.3f_spparam%0.3f.pdf" % (floor(energy), entryNumber, energy, sigma))
 
   #########  Waveform fit plot
 
@@ -251,32 +263,17 @@ def fitWaveform(wf, energy, entryNumber, returnDict):
     plt.axvline(x=lastFitSampleIdx*10, linewidth=1, color='r',linestyle=":")
     plt.axvline(x=startVal*10, linewidth=1, color='g',linestyle=":")
 
-    f.savefig("wf_Event%d_energy%0.3f_spparam%0.3f.pdf" % (entryNumber, energy, sigma))
+    f.savefig(outputDir + "/energy%d/wf_Event%d_energy%0.3f_spparam%0.3f.pdf" % (floor(energy), entryNumber, energy, sigma))
 
 
 #    value = raw_input('  --> Press q to quit, any other key to continue\n')
 #    if value == 'q':
 #      exit(1)
 
-
-def getSiggenWaveformFromEdge():
-  siggen_conf = "malbek.conf"
-  rcIntTimeConstant = 50 * CLHEP.ns
-  pzCorrTimeConstant = 69.88*CLHEP.us
-  gaussianSmoothing = 1.6
-  detZ = np.floor(30.)
-  detRad = np.floor(30.3)
-  signalLength = 2000
-
-  siggenInst = GATSiggenInstance(siggen_conf)
-  rcint = MGWFRCIntegration()
-  rcint.SetTimeConstant(rcIntTimeConstant)
-  rcdiff = MGWFRCDifferentiation()
-  rcdiff.SetTimeConstant(pzCorrTimeConstant)
-
-  return 0
-
-
+def setupDirs(outputDir):
+  os.makedirs(outputDir)
+  for i in xrange(0,10):
+    os.makedirs(outputDir + "/energy%d" % i)
 
 def findTimePoint(data, percent):
   #don't screw up the data, bro

@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 #siggen_conf = "P42661C_lowgrad.conf" #works better
 
 siggen_conf = "malbek.conf"
-rcIntTimeConstant = 150 * CLHEP.ns
+rcIntTimeConstant = 190 * CLHEP.ns
 pzCorrTimeConstant = 69.88*CLHEP.us
 gaussianSmoothing = 0
 detZ = np.floor(30.)
@@ -45,7 +45,7 @@ def createSignalModelSiggen(data, t0_guess, energy_guess, noise_sigma_guess, bas
 
   verbose = 0
 
-  slowness_sigma = HalfNormal('slowness_sigma', tau=.001)
+  slowness_sigma = HalfNormal('slowness_sigma', tau=.01)
   
   switchpoint = Normal('switchpoint', mu=t0_guess, tau=.001)
   wfScale = Normal('wfScale', mu=energy_guess, tau=sigToTau(.25*energy_guess))
