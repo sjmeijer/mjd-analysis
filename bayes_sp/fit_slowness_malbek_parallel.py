@@ -22,15 +22,15 @@ import wavelet_denoise_malbek as denoiser
 #Ben's directory prefix
 dirPrefix = '$MJDDATADIR/malbek/'
 
-numCores = 4
+numCores = 8
 sleepTime = 1
 
 doPlots=1
 writeFile = 1
 waveletDenoise = 1
 
-newTreeName = "spParamSkim_190_parallel.root"
-outputDir = "output190_parallel"
+newTreeName = "spParamSkim_190_lead.root"
+outputDir = "output190_lead"
 
 
 flatTimeSamples = 2000 #in number of samples, not time
@@ -44,11 +44,11 @@ def main(argv):
   baseline.SetBaselineSamples(flatTimeSamples)
 
   #Load the malbek t4 tree without any RT cuts
-  file = TFile(dirPrefix + 'ThesisAll_newCal.root')
+  file = TFile(dirPrefix + 'LinearCrateSpecial.root')
   tree_nort = file.Get('fTree_noRT')
 
   #Load the malbek t4 waveform tree
-  wf_file = TFile(dirPrefix + 't4_wf_all.root')
+  wf_file = TFile(dirPrefix + 'pb_t4_wf.root')
   tree_wf = wf_file.Get('tree')
 
   #Build an index for wf tree for later access
@@ -71,15 +71,16 @@ def main(argv):
   numEntries = elist.GetN()
   print "Total number of entries (w/ energy cut): %d" % numEntries
 
-  results_queue   = mp.JoinableQueue()
-
+#  results_queue   = mp.JoinableQueue()
+  manager = mp.Manager()
+  results_list = manager.list()
   argsList = []
   
   energyList = np.empty(numEntries)
   riseTimeList = np.empty(numEntries)
   wparList = np.empty(numEntries)
   
-  numEntries = 10
+  #numEntries = 10
 
   for i in xrange( numEntries):
     print "Entry %d of %d" % (i, numEntries)
@@ -101,7 +102,7 @@ def main(argv):
     
     wfParams = (tree_nort.rfEnergy_keV, tree_nort.rfWpar, tree_nort.rfRiseTime) # (energy, wpar, risetime -- just passing anything I want into the parallel process)
 
-    argsList.append( (waveform, wfParams, entryNumber, results_queue) )
+    argsList.append( (waveform, wfParams, entryNumber, results_list) )
 
 
   runningProcesses = []
@@ -111,28 +112,39 @@ def main(argv):
     p = mp.Process(target = fitWaveform, args=argsList.pop())
     p.start()
     runningProcesses.append(p)
-
+  counter = 0
   #keep numCores jobs running simultaneously
   while len(argsList) > 0:
       for p in runningProcesses:
         if not p.is_alive():
+          p.join()
           runningProcesses.remove(p)
+          counter +=1
+          print "finished job number %d of %d" % (counter, numEntries)
           new_p = mp.Process(target = fitWaveform, args=argsList.pop())
           new_p.start()
           runningProcesses.append(new_p)
+          if len(argsList) == 0: break
+      print "straight loopin"
       time.sleep(sleepTime)
 
+  while len(runningProcesses)>0:
+    for p in runningProcesses:
+      if not p.is_alive():
+        p.join()
+        runningProcesses.remove(p)
+  
   #pull results out of the queue
-  results = []
-  for _ in range(numEntries):
-    # indicate done results processing
-    results.append(results_queue.get())
-    results_queue.task_done()
+#  results = []
+#  for _ in range(numEntries):
+#    # indicate done results processing
+#    results.append(results_queue.get())
+#    results_queue.task_done()
+#
+#  results_queue.join()
+#  results_queue.close()
 
-  results_queue.join()
-  results_queue.close()
-
-#  for (i, result) in enumerate(results):
+#  for (i, result) in enumerate(results_list):
 #    print "Result %d" % i
 #    print "-->spParam %f" % result[0]
 #    print "-->energy  %f" % result[1][0]
@@ -152,7 +164,7 @@ def main(argv):
     outTree.Branch("riseTime",riseTime, "riseTime/D");
     outTree.Branch("wpar",wpar, "wpar/D");
 
-    for (iEntry, result) in enumerate(results):
+    for (iEntry, result) in enumerate(results_list):
       energy[0] = result[1][0]
       spParam[0] = result[0]
       riseTime[0] = result[1][2]
@@ -162,7 +174,11 @@ def main(argv):
     oFile.Close()
 
 
-def fitWaveform( wf, wfParams, entryNumber, resultsQueue ):
+def fitWaveform( wf, wfParams, entryNumber, results_list ):
+  
+  f = open(os.devnull, 'w')
+  sys.stdout = f
+  
   np_data = wf.GetVectorData()
   
 #  #TODO: find noise characteristics BEFORE denoising?
@@ -210,22 +226,22 @@ def fitWaveform( wf, wfParams, entryNumber, resultsQueue ):
 #  if value == 'q':
 #    exit(1)
 
-  if doPlots:
-    verbosity = 1
-  else:
-    verbosity = 0
+#  if doPlots:
+#    verbosity = 1
+#  else:
+  verbosity = None
 
   
   siggen_model = pymc.Model( sm.createSignalModelSiggen(np_data_early, t0_guess, energy_guess, noise_sigma_guess, baseline_guess) )
-  M = pymc.MCMC(siggen_model, verbose=0)#, db="txt", dbname="Event_%d" % entryNumber)
-  M.use_step_method(pymc.Metropolis, M.slowness_sigma, proposal_sd=1., proposal_distribution='Normal')
-  M.use_step_method(pymc.Metropolis, M.wfScale, proposal_sd=10., proposal_distribution='Normal')
-  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_sd=1., proposal_distribution='Normal')
+  M = pymc.MCMC(siggen_model, verbose=verbosity)#, db="txt", dbname="Event_%d" % entryNumber)
+  M.use_step_method(pymc.Metropolis, M.slowness_sigma, proposal_sd=1., proposal_distribution='Normal', verbose=verbosity)
+  M.use_step_method(pymc.Metropolis, M.wfScale, proposal_sd=10., proposal_distribution='Normal', verbose=verbosity)
+  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_sd=1., proposal_distribution='Normal', verbose=verbosity)
 
 #M.use_step_method(pymc.AdaptiveMetropolis, [M.slowness_sigma, M.wfScale, M.switchpoint], , shrink_if_necessary=1)
 #  M.use_step_method(pymc.AdaptiveMetropolis, [M.radEst, M.zEst, M.phiEst, M.wfScale], delay=1000)
 #  M.use_step_method(pymc.DiscreteMetropolis, M.switchpoint, proposal_distribution='Normal', proposal_sd=4)
-  M.sample(iter=iterations, verbose=0)
+  M.sample(iter=iterations, verbose=verbosity)
 
   t0 = np.around( np.median(M.trace('switchpoint')[burnin:]))
   scale =  np.median(M.trace('wfScale')[burnin:])
@@ -298,7 +314,7 @@ def fitWaveform( wf, wfParams, entryNumber, resultsQueue ):
 
     f.savefig(outputDir + "/energy%d/wf_Event%d_energy%0.3f_spparam%0.3f.pdf" % (floor(energy), entryNumber, energy, sigma))
 
-    resultsQueue.put( (sigma, wfParams) )
+    results_list.append( (sigma, wfParams) )
 
 #    value = raw_input('  --> Press q to quit, any other key to continue\n')
 #    if value == 'q':
