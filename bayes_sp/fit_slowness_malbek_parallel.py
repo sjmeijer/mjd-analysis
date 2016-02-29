@@ -29,27 +29,45 @@ doPlots=1
 writeFile = 1
 waveletDenoise = 1
 
-newTreeName = "spParamSkim_190_lead.root"
-outputDir = "output190_lead"
+
+newTreeName = "spParamSkim_190_wavelet_pulser1.root"
+outputDir = "output190_wavelet_pulser1"
 
 
 flatTimeSamples = 2000 #in number of samples, not time
 
 def main(argv):
 
-  setupDirs(outputDir)
+  setupDirs(outputDir, 0, 15)
 
   #Instantiate and prepare the baseline remover transform:
   baseline = MGWFBaselineRemover()
   baseline.SetBaselineSamples(flatTimeSamples)
+  
+#  #Load the malbek t4 tree without any RT cuts
+#  file = TFile(dirPrefix + 'test1_t4.root')
+#  tree_nort = file.Get('fTree')
+#
+#  #Load the malbek t4 waveform tree
+#  wf_file = TFile(dirPrefix + 'test1_t4_wf.root')
+#  tree_wf = wf_file.Get('tree')
 
+  
   #Load the malbek t4 tree without any RT cuts
-  file = TFile(dirPrefix + 'LinearCrateSpecial.root')
+  file = TFile(dirPrefix + 'ThesisAll_newCal.root')
   tree_nort = file.Get('fTree_noRT')
-
+  
   #Load the malbek t4 waveform tree
-  wf_file = TFile(dirPrefix + 'pb_t4_wf.root')
+  wf_file = TFile(dirPrefix + 't4_wf_all.root')
   tree_wf = wf_file.Get('tree')
+
+#  #Load the malbek t4 tree without any RT cuts
+#  file = TFile(dirPrefix + 'LinearCrateSpecial.root')
+#  tree_nort = file.Get('fTree_noRT')
+#
+#  #Load the malbek t4 waveform tree
+#  wf_file = TFile(dirPrefix + 'pb_t4_wf.root')
+#  tree_wf = wf_file.Get('tree')
 
   #Build an index for wf tree for later access
   tree_wf.BuildIndex('run_id', 'event_id')
@@ -58,7 +76,7 @@ def main(argv):
 
   #Loop through events within a given energy range
   energy_low = 0.6
-  energy_high = 10.
+  energy_high = 15.
   count = 0
   energyCut = "rfEnergy_keV>%f && rfEnergy_keV<%f" % (energy_low,energy_high)
   cut = energyCut
@@ -81,9 +99,8 @@ def main(argv):
   wparList = np.empty(numEntries)
   
   #numEntries = 10
-
+  print "Pulling root data for %d events" % (numEntries)
   for i in xrange( numEntries):
-    print "Entry %d of %d" % (i, numEntries)
     entryNumber = tree_nort.GetEntryNumber(i);
     #    entryNumber = i
 
@@ -320,9 +337,9 @@ def fitWaveform( wf, wfParams, entryNumber, results_list ):
 #    if value == 'q':
 #      exit(1)
 
-def setupDirs(outputDir):
+def setupDirs(outputDir, low, high):
   os.makedirs(outputDir)
-  for i in xrange(0,10):
+  for i in xrange(low,high):
     os.makedirs(outputDir + "/energy%d" % i)
 
 if __name__=="__main__":
