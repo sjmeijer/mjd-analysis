@@ -30,8 +30,8 @@ writeFile = 1
 waveletDenoise = 1
 
 
-newTreeName = "spParamSkim_190_wavelet_pulser1.root"
-outputDir = "output190_wavelet_pulser1"
+newTreeName = "spParamSkim_190_wavelet.root"
+outputDir = "output190_wavelet"
 
 
 flatTimeSamples = 2000 #in number of samples, not time
@@ -150,6 +150,8 @@ def main(argv):
       if not p.is_alive():
         p.join()
         runningProcesses.remove(p)
+        counter +=1
+        print "finished job number %d of %d" % (counter, numEntries)
   
   #pull results out of the queue
 #  results = []
@@ -174,16 +176,22 @@ def main(argv):
     outTree = TTree("slowpulseParamTree","Slowpulse Param");
     energy = np.zeros(1, dtype=float)
     spParam = np.zeros(1, dtype=float)
+    spParam5 = np.zeros(1, dtype=float)
+    spParam10 = np.zeros(1, dtype=float)
     riseTime = np.zeros(1, dtype=float)
     wpar = np.zeros(1, dtype=float)
     outTree.Branch("energykeV",energy, "energykeV/D");
     outTree.Branch("spParam",spParam, "spParam/D");
+    outTree.Branch("spParam5",spParam5, "spParam/D");
+    outTree.Branch("spParam10",spParam10, "spParam/D");
     outTree.Branch("riseTime",riseTime, "riseTime/D");
     outTree.Branch("wpar",wpar, "wpar/D");
 
     for (iEntry, result) in enumerate(results_list):
       energy[0] = result[1][0]
-      spParam[0] = result[0]
+      spParam[0] = result[0][0]
+      spParam5[0] = result[0][1]
+      spParam10[0] = result[0][2]
       riseTime[0] = result[1][2]
       wpar[0] = result[1][1]
       outTree.Fill();
@@ -266,6 +274,9 @@ def fitWaveform( wf, wfParams, entryNumber, results_list ):
 #  baselineB =  np.median(M.trace('baselineB')[burnin:])
 #  baselineM =  0#np.median(M.trace('baselineM')[burnin:])
   startVal = t0 + firstFitSampleIdx
+  
+  sigma5 = np.percentile(M.trace('slowness_sigma')[burnin:], 5)
+  sigma10 = np.percentile(M.trace('slowness_sigma')[burnin:], 10)
 
   #returnDict["spParam"] = sigma
 #  print ">>> noise_sigma:    %f" % (M.trace('noise_sigma')[-1])**(-.5)
@@ -331,7 +342,7 @@ def fitWaveform( wf, wfParams, entryNumber, results_list ):
 
     f.savefig(outputDir + "/energy%d/wf_Event%d_energy%0.3f_spparam%0.3f.pdf" % (floor(energy), entryNumber, energy, sigma))
 
-    results_list.append( (sigma, wfParams) )
+    results_list.append( ((sigma, sigma5, sigma10), wfParams) )
 
 #    value = raw_input('  --> Press q to quit, any other key to continue\n')
 #    if value == 'q':
