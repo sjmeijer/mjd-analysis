@@ -4,40 +4,48 @@ TROOT.gApplication.ExecuteFile("$MGDODIR/Root/LoadMGDOClasses.C")
 TROOT.gApplication.ExecuteFile("$MGDODIR/Majorana/LoadMGDOMJClasses.C")
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import ndimage
+
 #Does all the interfacing with siggen for you, stores/loads lookup tables, and does electronics shaping
 
 class Detector:
-  def __init__(self, siggen_config_file, preampRisetime, preampFalltime, detZ, detRad ):
+  def __init__(self, siggen_config_file, detZ, detRad,  preampRisetime, preampFalltimeLong, preampFalltimeShort=0,  preampFalltimeShortFraction=0, zeroPadding=200, chargeTrappingTime = 0, gaussian_smoothing = 0, temperature=0):
     #self.siggenConfigFile = siggen_config_file
     
     # in ns
     self.preampRiseTime = preampRisetime
-    self.preampFallTime = preampFalltime
+    self.preampFalltimeLong = preampFalltimeLong
+    self.preampFalltimeShort = preampFalltimeShort
+    self.preampFalltimeShortFraction = preampFalltimeShortFraction
+    self.chargeTrappingTime = chargeTrappingTime
     
     # in mm
     self.length = detZ
     self.radius = detRad
 
     self.siggenSignalLength = 800
-    self.zeroPadding = 200
+    self.zeroPadding = zeroPadding
     
-    self.lookup_steps_r = 0.1
-    self.lookup_steps_z = 0.1
+    self.lookup_steps_r = 1. #mm
+    self.lookup_steps_z = 1. #mm
     self.lookup_number_theta = 5
     self.lookupTable = None
+    
+    self.gaussian_smoothing = gaussian_smoothing
 
 #    self.lookup_steps_r = 0.1
 #    self.lookup_steps_z = 0.1
 #    self.lookup_number_theta = 25
 
     self.siggenInst = GATSiggenInstance(siggen_config_file)
-#    self.rcint = MGWFRCIntegration()
-#    self.rcdiff = MGWFRCDifferentiation()
-#    self.rcint.SetTimeConstant(preampRisetime)
-#    self.rcdiff.SetTimeConstant(preampFalltime)
+  
+  
+    if temperature > 0:
+      self.siggenInst.SetTemperature(temperature)
+
 
 ########################################################################################################
-  def GetSiggenWaveform(self, r,phi,z):
+  def GetSiggenWaveform(self, r,phi,z, energy=1):
 
     x = r * np.sin(phi)
     y = r * np.cos(phi)
@@ -45,20 +53,71 @@ class Detector:
     #print "x, y, z is (%0.1f, %0.1f, %0.1f)" % (x,y,z)
 
     hitPosition = TVector3(x, y, z);
+    
+#    sigWfHoles = MGTWaveform();
+#    calcFlagHoles = self.siggenInst.MakeSignal(hitPosition, sigWfHoles, 1., energy);
+#    if calcFlagHoles == 0:
+#      print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
+#      return None
+#    
+#    sigWfElectrons = MGTWaveform();
+#    calcFlagElectrons = self.siggenInst.MakeSignal(hitPosition, sigWfElectrons, -1.,energy);
+#    if calcFlagElectrons == 0:
+#      print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
+#      return None
+#
+#    siggen_data_holes = sigWfHoles.GetVectorData()
+#    siggen_data_electrons = sigWfElectrons.GetVectorData()
+#    
+#    siggen_data = np.add(siggen_data_holes, siggen_data_electrons)
+
     sigWf = MGTWaveform();
-    calcFlag = self.siggenInst.CalculateWaveform(hitPosition, sigWf, 1);
-    
+    calcFlag = self.siggenInst.CalculateWaveform(hitPosition, sigWf, energy);
     if calcFlag == 0:
-      siggen_data = sigWf.GetVectorData()
-      siggen_data = np.multiply(siggen_data, 1) #changes it to numpy array
-    
-      print siggen_data
-      print "Point out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
+#      siggen_data = sigWf.GetVectorData()
+#      siggen_data = np.multiply(siggen_data, 1) #changes it to numpy array
+#    
+#      print siggen_data
+      print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
       return None
-    
-    siggen_data = sigWf.GetVectorData()
+    siggen_data = np.multiply(sigWf.GetVectorData(),1)
 
     return siggen_data
+    
+  def ProcessWaveform(self, wf):
+  
+    wf = np.pad(wf, (self.zeroPadding,0), 'constant', constant_values=(0, 0))
+    
+
+    
+    if self.chargeTrappingTime > 0:
+      wf = self.RcDifferentiate(wf, self.chargeTrappingTime)
+    
+    rc_int = self.RcIntegrate(wf)
+    
+    siggen_data_pz_long = self.RcDifferentiate(rc_int, self.preampFalltimeLong)
+    
+    
+    if self.preampFalltimeShort > 0:
+#      plt.figure()
+#      plt.plot(rc_int, color="r")
+#      plt.plot(siggen_data_pz_long, color="b")
+      siggen_data_pz_short = self.RcDifferentiate(rc_int, self.preampFalltimeShort)
+#      plt.plot(siggen_data_pz_short, color="g")
+
+      wf = (1-self.preampFalltimeShortFraction)*siggen_data_pz_long +self.preampFalltimeShortFraction*siggen_data_pz_short
+
+    else:
+      wf = siggen_data_pz_long
+    
+    if self.gaussian_smoothing > 0:
+      wf = ndimage.filters.gaussian_filter1d(wf, self.gaussian_smoothing)
+    
+    wf /= np.amax(wf)
+    
+
+    return wf
+  
 
 ########################################################################################################
   def GenerateLookupTable(self,fileName=None):
@@ -84,6 +143,7 @@ class Detector:
 
 ########################################################################################################
   def LoadLookupTable(self, fileName):
+    print "Loading lookup table.  Could take a while.  Throw on some Mac and chill a minute."
     self.lookupTable = np.load(fileName)
   
 ########################################################################################################
@@ -94,30 +154,40 @@ class Detector:
     
     theta_idx = np.around(theta/theta_steps)
     
-    print "--> lookup indices are (%d,%d,%d)" % (r_idx,theta_idx,z_idx)
+#    print "--> lookup position is (%0.2f,%0.2f,%0.2f) indices (%d,%d,%d)" % (r,theta,z, r_idx,theta_idx,z_idx)
 
     wf = self.lookupTable[r_idx, theta_idx, z_idx, :]
   
     if np.isnan(wf[0]):
       print "Out of crystal alert"
       return wf
-    wf = np.pad(wf, (self.zeroPadding,0), 'constant', constant_values=(0, 0))
+#    wf = self.ProcessWaveform(wf)
+
     
-    plt.figure(1)
+#    plt.figure(1)
 #    plt.clf()
-    plt.plot(wf, color="red")
-    plt.ylim(-0.1, 1.1)
+#    plt.plot(wf[self.zeroPadding:self.zeroPadding+110], color="blue")
+#    plt.ylim(-0.1, 1.1)
+
+    #kills some of the zero padding.  makes it easier for me to deal with for now.
+    return wf[self.zeroPadding:]
     
-    wf = self.RcDifferentiate( self.RcIntegrate(wf) )
-    
-    wf /= np.amax(wf)
-    
+  def GetWaveformByIndex(self, rIdx, phiIdx, zIdx):
+    wf = self.lookupTable[rIdx, phiIdx, zIdx, :]
+  
+    if np.isnan(wf[0]):
+      print "Out of crystal alert"
+      return None
+
     return wf
+  
   
 ########################################################################################################
 
-  def RcDifferentiate(self, anInput):
-    timeConstantInSamples = self.preampFallTime / 10.
+  def RcDifferentiate(self, anInput, timeConstantInNs = None):
+    if timeConstantInNs is None:
+      timeConstantInNs = self.preampFallTime
+    timeConstantInSamples = timeConstantInNs / 10.
     dummy = anInput[0];
     anOutput = np.copy(anInput)
     dummy2 = 0.0;
@@ -128,7 +198,7 @@ class Detector:
    
     return anOutput
 
-  def RcIntegrate(self, anInput, ):
+  def RcIntegrate(self, anInput ):
     timeConstant= self.preampRiseTime/ 10. #switch to samples
     timeConstant = 1./timeConstant
 
@@ -137,6 +207,9 @@ class Detector:
     for i in xrange(1,len(anInput)):
       anOutput[i] = anInput[i] + expTimeConstant*anOutput[i-1];
     return anOutput
+
+  def SetTemperature(self, temp):
+    self.siggenInst.SetTemperature(temp)
 
 
 
