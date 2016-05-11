@@ -168,35 +168,40 @@ def CreateSignalModelOpAmp(data, t0_guess, energy_guess, rcdiff_guess):
     baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
   return signal_model
 
-def CreateSignalModelFoldedCascode(data, t0_guess, energy_guess, rcdiff_guess):
+def CreateSignalModelFoldedCascode(data, t0_guess, energy_guess):
   
   with Model() as signal_model:
   
     t0 = DiscreteUniform('switchpoint', lower = t0_guess-10, upper=t0_guess+10, testval=t0_guess)
     wfScale = Normal('wfScale', mu=energy_guess, sd=.01*energy_guess)
-    rc_diff = Normal('rc_diff', mu=rcdiff_guess, sd=100.) #also in ns
+#    rc_diff = Normal('rc_diff', mu=rcdiff_guess, sd=100.) #also in ns
+
+    fc_c1 = Wald('fcC1', mu=5.)
+    fc_c2 = Wald('fcC2', mu=5.)
+    fc_r = Wald('fcR', mu=5.)
     
-    c1 = Wald('preampC1', mu=5.)
-    c2 = Wald('preampC2', mu=5.)
-    r = Wald('preampR', mu=5.)
+    pa_r1 = Wald('preampR1', mu=5.)
+    pa_r2 = Wald('preampR2', mu=5.)
+    pa_c = Wald('preampC', mu=5.)
     
  
-    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar,T.dscalar, T.dscalar], otypes=[T.dvector])
-    def pulser_model(s, e, c1, c2, r, fall_time):
+    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar,T.dscalar, T.dscalar,T.dscalar, T.dscalar], otypes=[T.dvector])
+    def pulser_model(s, e, pa_r1, pa_r2, pa_c, fc_c1, fc_c2, fc_r):
 
       step_wf = np.zeros_like(data)
       step_wf[s:] = 1.
       
-      step_rlc = FoldedCascodeFilter(step_wf, c1, c2, r)
+      step_rlc = OpAmpFilter(step_wf, pa_r1, pa_r2, pa_c)
+      step_wf_decayed = FoldedCascodeFilter(step_wf, fc_c1, fc_c2, fc_r)
       
-      step_wf_decayed = RcDifferentiate(step_rlc, fall_time)
-      
+#      step_wf_decayed = RcDifferentiate(step_rlc, fall_time)
+
       model_wf = step_wf_decayed*e
       
       return model_wf
 
 #    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff, rc_diff_short, fall_time_short_frac, detectorListIdx)
-    baseline_model = pulser_model(t0,  wfScale, c1, c2, r,  rc_diff)
+    baseline_model = pulser_model(t0,  wfScale, pa_r1, pa_r2, pa_c, fc_c1, fc_c2, fc_r)
     baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
   return signal_model
 
@@ -221,7 +226,7 @@ def fitWaveform(wf, wfFig):
 
 #  pulser_model = CreateSignalModelOpAmp(np_data_early, t0_guess, wfMax, 72 * CLHEP.us)
 
-  pulser_model = CreateSignalModelFoldedCascode(np_data_early, t0_guess, wfMax, 72 * CLHEP.us)
+  pulser_model = CreateSignalModelFoldedCascode(np_data_early, t0_guess, wfMax)
 
   plt.figure(wfFig.number)
   plt.clf()
@@ -249,14 +254,14 @@ def fitWaveform(wf, wfFig):
     scale =         np.median(  trace['wfScale'][burnin:])
     fall_time =     np.median(  trace['rc_diff'][burnin:])
     
-    c1 =         np.median(  trace['preampC1'][burnin:])
-    c2 =         np.median(  trace['preampC2'][burnin:])
-    r =         np.median(  trace['preampR'][burnin:])
+    fc_c1 =         np.median(  trace['fcC1'][burnin:])
+    fc_c2 =         np.median(  trace['fcC2'][burnin:])
+    fc_r =         np.median(  trace['fcR'][burnin:])
 
+    pa_r1 =         np.median(  trace['preampR1'][burnin:])
+    pa_r2 =         np.median(  trace['preampR2'][burnin:])
+    pa_c=         np.median(  trace['preampC'][burnin:])
     
-#    r1 =         np.median(  trace['preampR1'][burnin:])
-#    r2 =         np.median(  trace['preampR2'][burnin:])
-#    c =         np.median(  trace['preampC'][burnin:])
 #    rc =         np.median(  trace['preampRC'][burnin:])
 #    lc =     np.median(  trace['preampLC'][burnin:])
 
@@ -281,9 +286,13 @@ def fitWaveform(wf, wfFig):
   step_wf[t0:] = 1.
 #  step_1 = RLCFilter(step_wf, rc, lc)
 #  step_1 = OpAmpFilter(step_wf, r1, r2, c)
-  step_1 = FoldedCascodeFilter(step_wf, c1, c2, r)
 
-  step_wf_decayed = RcDifferentiate(step_1, fall_time)
+  step_rlc = OpAmpFilter(step_wf, pa_r1, pa_r2, pa_c)
+  step_wf_decayed = FoldedCascodeFilter(step_wf, fc_c1, fc_c2, fc_r)
+
+#  step_1 = FoldedCascodeFilter(step_wf, c1, c2, r)
+#
+#  step_wf_decayed = RcDifferentiate(step_1, fall_time)
   model_wf = step_wf_decayed*scale
 
 
