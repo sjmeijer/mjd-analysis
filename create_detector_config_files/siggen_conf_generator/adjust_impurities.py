@@ -13,7 +13,7 @@ import sys
 import array
 import cmath
 from ctypes import c_ulonglong
-import os
+import os, shutil
 import subprocess
 import math
 import re
@@ -56,24 +56,74 @@ def main(argv):
 
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
+def copyConfFileWithNewGradient(fileName, newGradient):
+    configFileSplit = fileName.split(".")
+    appendString = "_grad%0.3f." % newGradient
+    newConfigFileStr = configFileSplit[0] + appendString +  configFileSplit[1]
+    print "cp %s %s" % (fileName, newConfigFileStr)
+    #os.rename(fileName, newConfigFileStr )
+    shutil.copy(fileName, newConfigFileStr)
+    replaceConfFileValue(newConfigFileStr, 'impurity_gradient', newGradient)
+
+    field_name= "fields/" + configFileSplit[0] + ("_grad%0.4f" %newGradient) + "_"
+
+    replaceConfFileValue(newConfigFileStr, 'field_name', field_name + "ev.dat")
+    replaceConfFileValue(newConfigFileStr, 'wp_name', field_name + "wp.dat")
+
+    return newConfigFileStr
+'''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
+
+def copyConfFileWithNewPcRadius(fileName, newRadius, newFileStart=None):
+    configFileSplit = fileName.split(".")
+    
+    appendString = "_pcrad%0.4f" % newRadius
+    if newFileStart is None:
+      newFileStart = configFileSplit[:-1]
+
+    newConfigFileStr = newFileStart + appendString + "." + configFileSplit[-1]
+    
+    print "cp %s %s" % (fileName, newConfigFileStr)
+    #os.rename(fileName, newConfigFileStr )
+    shutil.copy(fileName, newConfigFileStr)
+    
+    replaceConfFileValue(newConfigFileStr, 'pc_length', newRadius)
+    replaceConfFileValue(newConfigFileStr, 'pc_radius', newRadius)
+
+    field_name= "fields/" + newFileStart + appendString + "_"
+
+    replaceConfFileValue(newConfigFileStr, 'field_name', field_name + "ev.dat")
+    replaceConfFileValue(newConfigFileStr, 'wp_name', field_name + "wp.dat")
+
+    return newConfigFileStr
+'''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
+
 def writeFieldFiles(fileName, impurityZ0):
     #create a test file for changing the impurity gradient
     configFileSplit = fileName.split(".")
-    finalConfigFileStr = configFileSplit[0] + "_final." +  configFileSplit[1]
+#    appendString = "_grad%0.2f." % impurityZ0
+
+    finalConfigFileStr = '.'.join(configFileSplit[:-1]) + "_final." +  configFileSplit[-1]
+    #finalConfigFileStr = configFileSplit[:-2] + "_final." +  configFileSplit[-1]
     os.system(  "cp %s %s" % (fileName, finalConfigFileStr) )
     
     #change the impurity grad in the copied config file
     replaceConfFileValue(finalConfigFileStr, 'impurity_z0', impurityZ0)
 
-    #run fieldgen, save field files
+    runFieldgen(finalConfigFileStr)
+'''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
+
+
+def runFieldgen(fileName):
+      #run fieldgen, save field files
     fieldGenDir = os.path.expanduser(mjd_siggen_dir)
-    args = [fieldGenDir + "mjd_fieldgen", '-c', finalConfigFileStr, "-w", "1", "-p", "1"]
+    args = [fieldGenDir + "mjd_fieldgen", '-c', fileName, "-w", "1", "-p", "1"]
     output = subprocess.check_output(args)
 
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
 def findImpurityZ0(fileName, desiredDepletion):
     #read in original parameters
+    #originalParams = paramStructure#readConfigurationFile(fileName)
     originalParams = readConfigurationFile(fileName)
     original_impurity_z0 = originalParams['impurity_z0']
     original_bias = originalParams['bias']
@@ -85,18 +135,25 @@ def findImpurityZ0(fileName, desiredDepletion):
     
     #create a test file for changing the impurity gradient
     configFileSplit = fileName.split(".")
-    testConfigFileStr = configFileSplit[0] + "_test." +  configFileSplit[1]
+    testConfigFileStr = '.'.join(configFileSplit[:-1]) + "_test." +  configFileSplit[-1]
     os.system(  "cp %s %s" % (fileName, testConfigFileStr) )
     
     #change the grid size in the copied config file
     replaceConfFileValue(testConfigFileStr, 'xtal_grid', grid_size)
     
-    #sign of the impurity indicates crystal type.  Take absolute value to get the concentration
-    realImpurity = abs(original_impurity_z0)
+    #should be negative for p type crystal
+    realImpurity = original_impurity_z0
     
     #average impurity in the crystal
     averageImpurity = calcAvgImpurity(crystal_length, realImpurity, impurity_grad)
     print "original average impurity is %f" % averageImpurity
+    
+    impurity_z0_lowest = -impurity_grad * crystal_length/10
+    
+    if original_impurity_z0 > impurity_z0_lowest:
+      print "For this impurity gradient, can't allow impurity_z0 closer to zero than %0.3f" %impurity_z0_lowest
+      print "-->Consider adjusting impurity_z0 from %0.3f to %0.3f" % (original_impurity_z0, impurity_z0_lowest)
+      exit(0)
     
     #test the original impurity to make sure it isn't obviously too high
     newDepletion = -1
@@ -117,24 +174,38 @@ def findImpurityZ0(fileName, desiredDepletion):
     #No? Gonna need to do a golden section search
     
     #first, guess a new impurity to give us a second bound
-    #increase concentration to increase depletion voltage (and vice versa)
-    #expect change by a slope of ~2500 V/impurityx10^10
+    if deltaDepletion > 0:
+      #increase concentration to increase depletion voltage (and vice versa)
+      #expect change by a slope of ~2500 V/impurityx10^10
+      
+      voltageslope =  -2500 / 3 #overestimate by factor of 3 for safety?
+      newAvgImpurity = averageImpurity + deltaDepletion / voltageslope
+    else:
+      #find how low you can possibly go before you're totally out of impurities at the top of the crystal
 
-    #average impurity in the crystal
-    averageImpurity = calcAvgImpurity(crystal_length, abs(original_impurity_z0), impurity_grad)
-    print "adjusted average impurity is %f" % averageImpurity
+      newAvgImpurity = calcAvgImpurity(crystal_length, impurity_z0_lowest - 0.001, impurity_grad)
+
+    print "adjusted avg impurity is %f" % newAvgImpurity
     
-    voltageslope =  2500 / 3 #overestimate by factor of 3 for safety?
-    newAvgImpurity = averageImpurity + deltaDepletion / voltageslope
-    print "new avg impururity is %f" % newAvgImpurity
-    
-    if newAvgImpurity < 0:
-        print "better come up with a better first guess impurity!"
-        sys.exit()
-    
-    newRealImpurityZ0 = calcImpurityZ0(crystal_length, newAvgImpurity, impurity_grad)
-    #return to the original sign
-    newImpurityZ0 = math.copysign(newRealImpurityZ0, original_impurity_z0)
+#    if newAvgImpurity < 0:
+#        print "better come up with a better first guess impurity!"
+#        sys.exit()
+
+
+
+    newImpurityZ0 = calcImpurityZ0(crystal_length, newAvgImpurity, impurity_grad)
+
+    impurityAtTop = calcImpurityAtEnd(crystal_length, newAvgImpurity, impurity_grad)
+    print "Impurity at the top of the crystal is %0.3f" % impurityAtTop
+    print "Impurity at the bottom of the crystal is %0.3f" % newImpurityZ0
+
+    if impurityAtTop > 0:
+      print "Impurity at the top of the crystal is positive!!"
+      exit(0)
+
+#          #return to the original sign
+#    newImpurityZ0 = math.copysign(newRealImpurityZ0, original_impurity_z0)
+
     
 
     #test the new guess to make sure its depleted.  Else, screw it, crank the bias voltage (safer than reducing impurity grad)
@@ -320,11 +391,16 @@ def calcAvgImpurity(length, impurity_z0, impurity_grad):
 
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
-#find impurity at z0 given length and gradient (units of e10/cm^4)
+#find impurity at either end given length and gradient (units of e10/cm^4)
 def calcImpurityZ0(length, avg_impurity, impurity_grad):
     length /= 10
     
     return ( avg_impurity - impurity_grad*length/2)
+
+def calcImpurityAtEnd(length, avg_impurity, impurity_grad):
+    length /= 10
+    
+    return ( avg_impurity + impurity_grad*length/2)
 
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 

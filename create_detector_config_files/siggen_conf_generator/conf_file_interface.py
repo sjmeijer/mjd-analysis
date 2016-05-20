@@ -91,9 +91,12 @@ def replaceConfFileValue(fileName, paramName, newValue):
     fileContent = inFile.read()
     inFile.close()
     
-    print "replacing %s to %s in %s" % (paramName, str(newValue), fileName)
-    
-    newContent = replaceValue(fileContent, paramName, newValue)
+    if not isinstance(newValue, basestring):
+      print "replacing %s to %s in %s" % (paramName, str(newValue), fileName)
+      newContent = replaceValue(fileContent, paramName, newValue)
+    else:
+      print "replacing %s to %s in %s" % (paramName, newValue, fileName)
+      newContent = replaceStringValue(fileContent, paramName,newValue)
     
     outFile = open(fileName, 'w')
     outFile.write(newContent)
@@ -105,9 +108,9 @@ def replaceValue(replaceString, paramName, newValue):
     oldLine = findParameter(paramName, replaceString)
     
     if oldLine is None:
-        return None
         print "No parameter with name %s was found!" % (paramName)
-        sys.exit
+        sys.exit()
+        return None
 
     newLine = re.sub("\s[-+]?\d+[\.]?\d*", " " + str(newValue), oldLine)
 
