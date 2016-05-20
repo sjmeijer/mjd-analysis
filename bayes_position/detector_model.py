@@ -4,12 +4,12 @@ TROOT.gApplication.ExecuteFile("$MGDODIR/Root/LoadMGDOClasses.C")
 TROOT.gApplication.ExecuteFile("$MGDODIR/Majorana/LoadMGDOMJClasses.C")
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import ndimage
+from scipy import ndimage, signal
 
 #Does all the interfacing with siggen for you, stores/loads lookup tables, and does electronics shaping
 
 class Detector:
-  def __init__(self, siggen_config_file, detZ, detRad,  preampRisetime, preampFalltimeLong, preampFalltimeShort=0,  preampFalltimeShortFraction=0, zeroPadding=200, chargeTrappingTime = 0, gaussian_smoothing = 0, temperature=0):
+  def __init__(self, siggen_config_file, detZ, detRad,  preampRisetime, preampFalltimeLong, preampFalltimeShort=0,  preampFalltimeShortFraction=0, zeroPadding=200, chargeTrappingTime = 0, gaussian_smoothing = 0, temperature=0, preampRC = 0, preampLC = 0):
     #self.siggenConfigFile = siggen_config_file
     
     # in ns
@@ -18,6 +18,12 @@ class Detector:
     self.preampFalltimeShort = preampFalltimeShort
     self.preampFalltimeShortFraction = preampFalltimeShortFraction
     self.chargeTrappingTime = chargeTrappingTime
+    
+    
+    #RLC Circuit
+    self.preampRC = preampRC
+    self.preampLC = preampLC
+    
     
     # in mm
     self.length = detZ
@@ -32,6 +38,8 @@ class Detector:
     self.lookupTable = None
     
     self.gaussian_smoothing = gaussian_smoothing
+
+
 
 #    self.lookup_steps_r = 0.1
 #    self.lookup_steps_z = 0.1
@@ -117,7 +125,68 @@ class Detector:
     
 
     return wf
+    
+  def ProcessWaveformRLC(self, wf):
   
+    #zero pad at start to allow for smearing
+    wf = np.pad(wf, (self.zeroPadding,0), 'constant', constant_values=(0, 0))
+    
+
+    num = [1]
+    den = [self.preampLC, self.preampRC, 1]
+    system = signal.TransferFunction(num, den)
+    t = np.arange(0, len(wf))
+    tout, wf, x = signal.lsim(system, wf, t)
+
+    wf = self.RcDifferentiate(wf, self.preampFalltimeLong)
+    
+    wf /= np.amax(wf)
+    
+
+    return wf
+  
+  def ProcessWaveformOpAmp(self, wf):
+  
+    #zero pad at start to allow for smearing
+    wf = np.pad(wf, (self.zeroPadding,0), 'constant', constant_values=(0, 0))
+    
+
+    num = [self.preampR2]
+    den = [self.preampR1*self.preampR2*self.preampC, self.preampR1]
+    system = signal.TransferFunction(num, den)
+    t = np.arange(0, len(wf))
+    tout, wf, x = signal.lsim(system, wf, t)
+
+    wf = self.RcDifferentiate(wf, self.preampFalltimeLong)
+    
+    wf /= np.amax(wf)
+    
+
+    return wf
+  
+  def ProcessWaveformFoldedCascode(self, wf):
+  
+    #zero pad at start to allow for smearing
+    wf = np.pad(wf, (self.zeroPadding,0), 'constant', constant_values=(0, 0))
+    
+    num = [self.preampR2]
+    den = [self.preampR1*self.preampR2*self.preampC, self.preampR1]
+    system = signal.TransferFunction(num, den)
+    t = np.arange(0, len(wf))
+    tout, wf, x = signal.lsim(system, wf, t)
+    
+    num2 = [self.fc_C1*self.fc_R,0]
+    den2 = [self.fc_C2*self.fc_R, 1]
+    system2 = signal.TransferFunction(num2, den2)
+    tout, wf, x = signal.lsim(system2, wf, t)
+
+#    wf = self.RcDifferentiate(wf, self.preampFalltimeLong)
+
+    wf /= np.amax(wf)
+    
+
+    return wf
+
 
 ########################################################################################################
   def GenerateLookupTable(self,fileName=None):

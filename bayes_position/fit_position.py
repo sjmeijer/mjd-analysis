@@ -263,8 +263,8 @@ def fitWaveform(wf, wfFig, zoomFig):
     # for slice
     one_minute = np.around(5820 / 21.3)
     one_hour = 60 * one_minute
-    trace = sample(1.5*one_hour, step)
-    burnin = 1*one_hour
+    trace = sample(10*one_hour, step)
+    burnin = 9*one_hour
 
 
     t0 = np.around( np.median(  trace['switchpoint'][burnin:]))
