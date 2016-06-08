@@ -1,7 +1,7 @@
 #!/usr/local/bin/python
 from ROOT import *
-TROOT.gApplication.ExecuteFile("$MGDODIR/Root/LoadMGDOClasses.C")
-TROOT.gApplication.ExecuteFile("$MGDODIR/Majorana/LoadMGDOMJClasses.C")
+#TROOT.gApplication.ExecuteFile("$MGDODIR/Root/LoadMGDOClasses.C")
+#TROOT.gApplication.ExecuteFile("$MGDODIR/Majorana/LoadMGDOMJClasses.C")
 import matplotlib
 #matplotlib.use('CocoaAgg')
 import sys, os
@@ -51,8 +51,13 @@ for (gradIdx,grad) in enumerate(gradList):
 
 
 def main(argv):
-  runRange = (13420,13420)
+  #runRange = (11970,12009)
+  #aeCutVal = 0.015
 
+  runRange = (13420,13429)
+  aeCutVal = 0.01425
+  numWaveforms = 10
+  
   plt.ion()
   fig = plt.figure(1)
   fig2=None
@@ -63,7 +68,7 @@ def main(argv):
   baseline.SetBaselineSamples(flatTimeSamples)
   
   waveformArray = []
-  numWaveforms = 25
+
 
   #i do this one run at a time, instead of in a chain, because it makes it easier when we want to run on large data sets and create skim files for each run
   for iRun in range( runRange[0],  runRange[1]+1):
@@ -82,13 +87,11 @@ def main(argv):
     
     builtTree.AddFriend(gatTree)
     
-    regAECut = 0.01425
-    highAeCut = 0.0177
     
     chanCut =  "channel == %d" % channelNumber
     energyCut = "trapECal>%f && trapECal<%f" % (1588,1594)
     #energyCut = "trapECal>%f" % 1500
-    aeCut = "TSCurrent100nsMax/trapECal > %f" % regAECut
+    aeCut = "TSCurrent100nsMax/trapECal > %f" % aeCutVal
 
     cut = energyCut + " && " + chanCut + " && " + aeCut
     
@@ -107,7 +110,7 @@ def main(argv):
       waveform = getWaveform(gatTree, builtTree, entryNumber, channelNumber)
 
       #there are goofy things that happen at the end of the waveform for mod 1 data because of the presumming.  Just kill the last 5 samples
-      waveform.SetLength(waveform.GetLength()-5)
+      waveform.SetLength(waveform.GetLength()-10)
       
       #for now, baseline subtract it here (should eventually be incorporated into the model.  won't be hard.  just lazy.)
       baseline.TransformInPlace(waveform)
@@ -123,8 +126,9 @@ def main(argv):
       np_data = np.multiply(np_data, 1.)
       waveformArray.append(np_data)
       if len(waveformArray) >= numWaveforms: break
+    if len(waveformArray) >= numWaveforms: break
 
-  fitWaveforms(waveformArray, fig, fig2, iRun, entryNumber, channelNumber)
+  fitWaveforms(waveformArray, fig, fig2, runRange[0], 0, 0)
 
 ####################################################################################################################################################################
 
@@ -148,6 +152,7 @@ def getWaveform(gatTree, builtTree, entryNumber, channelNumber):
 
 
 def fitWaveforms(wfs, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
+  print ">>> Going to fit %d waveforms" % len(wfs)
 
   #start by plotting all the wfs we're gonna use
 
@@ -164,12 +169,11 @@ def fitWaveforms(wfs, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
   
   wf_to_fit_arr = []
 
-  fitSamples = 150
+  fitSamples = 120
 
   for wf in wfs:
 #    np_data = wf.GetVectorData()
     np_data = wf
-    wfMax = np.amax(np_data)
 
   #  lastFitSampleIdx = findTimePoint(np_data, .95)
     startGuess = findTimePoint(np_data, 0.005)
@@ -179,7 +183,8 @@ def fitWaveforms(wfs, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     t0_guess = startGuess - firstFitSampleIdx
     
     np_data_early = np_data[firstFitSampleIdx:lastFitSampleIdx]
-    
+    wfMax = np.amax(np_data_early)
+
     wf_to_fit_arr.append(np_data_early)
 
     plt.plot( np_data_early  ,color="red" )
@@ -215,7 +220,7 @@ def fitWaveforms(wfs, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     one_minute = 100#np.around(16380 / 114.4)
     one_hour = 60 * one_minute
     
-    this_sample = 500
+    this_sample = 50000
     
 #    trace = sample(this_sample, step=[step1, step2], start=start)
     trace = sample(this_sample,  step = step)

@@ -1,12 +1,16 @@
 #!/usr/local/bin/python
 from ROOT import *
-TROOT.gApplication.ExecuteFile("$MGDODIR/Root/LoadMGDOClasses.C")
-TROOT.gApplication.ExecuteFile("$MGDODIR/Majorana/LoadMGDOMJClasses.C")
+#TROOT.gApplication.ExecuteFile("$MGDODIR/Root/LoadMGDOClasses.C")
+#TROOT.gApplication.ExecuteFile("$MGDODIR/Majorana/LoadMGDOMJClasses.C")
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage, signal
 
 #Does all the interfacing with siggen for you, stores/loads lookup tables, and does electronics shaping
+
+class CLHEP:
+  ns = 1.0
+  us = 1.0/1000
 
 class Detector:
   def __init__(self, siggen_config_file, detZ, detRad,  preampRisetime, preampFalltimeLong, preampFalltimeShort=0,  preampFalltimeShortFraction=0, zeroPadding=200, chargeTrappingTime = 0, gaussian_smoothing = 0, temperature=0, preampRC = 0, preampLC = 0):
