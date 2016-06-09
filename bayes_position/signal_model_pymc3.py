@@ -47,203 +47,6 @@ def CreateCheapDetectorModel(detector, data, t0_guess, energy_guess):
     baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
   return signal_model
 
-def CreateFullDetectorModelOpAmp(detectorList, data, t0_guess, energy_guess, r1_guess, r2_guess, c_guess, rcdiff_guess):
-  
-  detector = detectorList[0,0]
-  with Model() as signal_model:
-  
-    radEst = Uniform('radEst', lower=0,   upper=np.floor(detector.radius))
-    zEst = Uniform('zEst', lower=0,   upper=np.floor(detector.length))
-    phiEst = Uniform('phiEst', lower=0,   upper=np.pi/4)
-    
-    tempEst = Uniform('temp', lower=40,   upper=120, testval=80)
-    
-    gradIdx = DiscreteUniform('gradIdx', lower = 0, upper= detectorList.shape[0]-1, testval=detectorList.shape[0]/2)
-    pcRadIdx = DiscreteUniform('pcRadIdx', lower = 0, upper= detectorList.shape[1]-1, testval=detectorList.shape[1]/2)
-
-
-    t0 = DiscreteUniform('switchpoint', lower = t0_guess-10, upper=t0_guess+10, testval=t0_guess)
-    wfScale = Normal('wfScale', mu=energy_guess, sd=.01*energy_guess)
-
-    r1 = Wald('preampR1', mu=r1_guess)
-    r2 = Wald('preampR2', mu=r2_guess)
-    c = Wald('preampC', mu=c_guess)
-
-    rc_diff = Normal('rc_diff', mu=rcdiff_guess, sd=100.) #also in ns
-    
- 
-    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.lscalar, T.lscalar], otypes=[T.dvector])
-    def siggen_model(s, rad, phi, z, e, temp, r1, r2, c, fall_time, gradIdx, pcRadIdx):
-
-      if (gradIdx > detectorList.shape[0]-1) or (pcRadIdx > detectorList.shape[1]-1) :
-        return np.ones_like(data)*-1.
-
-      detector = detectorList[gradIdx, pcRadIdx]
-      
-      out = np.zeros_like(data)
-      
-      detector.preampR1 = r1
-      detector.preampR2 = r2
-      detector.preampC = c
-      
-      detector.preampFallTime = fall_time
-      detector.SetTemperature(temp)
-      
-      siggen_wf= detector.GetSiggenWaveform(rad, phi, z, energy=2600)
-  #    print siggen_wf
-      if siggen_wf is None:
-        return np.ones_like(data)*-1.
-      if np.amax(siggen_wf) == 0:
-        print "wtf is even happening here?"
-        return np.ones_like(data)*-1.
-      
-      siggen_data = detector.ProcessWaveformOpAmp(siggen_wf)
-      siggen_data = siggen_data[detector.zeroPadding::]
-      
-      siggen_data = siggen_data*e
-      
-      out[s:] = siggen_data[0:(len(data) - s)]
-
-      return out
-
-#    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff, rc_diff_short, fall_time_short_frac, detectorListIdx)
-    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, r1, r2, c, rc_diff, gradIdx, pcRadIdx)
-    baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
-  return signal_model
-
-def CreateFullDetectorModelFoldedCascode(detectorList, data, t0_guess, energy_guess, r1_guess, r2_guess, c_guess, rcdiff_guess):
-  
-  detector = detectorList[0,0]
-  with Model() as signal_model:
-  
-    radEst = Uniform('radEst', lower=0,   upper=np.floor(detector.radius))
-    zEst = Uniform('zEst', lower=0,   upper=np.floor(detector.length))
-    phiEst = Uniform('phiEst', lower=0,   upper=np.pi/4)
-    
-    tempEst = Uniform('temp', lower=40,   upper=120, testval=80)
-    
-    gradIdx = DiscreteUniform('gradIdx', lower = 0, upper= detectorList.shape[0]-1, testval=detectorList.shape[0]/2)
-    pcRadIdx = DiscreteUniform('pcRadIdx', lower = 0, upper= detectorList.shape[1]-1, testval=detectorList.shape[1]/2)
-
-
-    t0 = DiscreteUniform('switchpoint', lower = t0_guess-10, upper=t0_guess+10, testval=t0_guess)
-    wfScale = Normal('wfScale', mu=energy_guess, sd=.01*energy_guess)
-
-    r1 = Wald('preampR1', mu=r1_guess)
-    r2 = Wald('preampR2', mu=r2_guess)
-    c = Wald('preampC', mu=c_guess)
-    
-    fc_c1 = Wald('fcC1', mu=5.)
-    fc_c2 = Wald('fcC2', mu=5.)
-    fc_r = Wald('fcR', mu=1000.)
-
-    rc_diff = Normal('rc_diff', mu=rcdiff_guess, sd=100.) #also in ns
-    
- 
-    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.lscalar, T.lscalar], otypes=[T.dvector])
-    def siggen_model(s, rad, phi, z, e, temp, r1, r2, c, fc_c1, fc_c2, fc_r, gradIdx, pcRadIdx):
-
-      if (gradIdx > detectorList.shape[0]-1) or (pcRadIdx > detectorList.shape[1]-1) :
-        return np.ones_like(data)*-1.
-
-      detector = detectorList[gradIdx, pcRadIdx]
-      
-      out = np.zeros_like(data)
-      
-      detector.preampR1 = r1
-      detector.preampR2 = r2
-      detector.preampC = c
-      
-      detector.fc_C1 = fc_c1
-      detector.fc_C2 = fc_c2
-      detector.fc_R = fc_r
-      
-      detector.SetTemperature(temp)
-      
-      siggen_wf= detector.GetSiggenWaveform(rad, phi, z, energy=2600)
-  #    print siggen_wf
-      if siggen_wf is None:
-        return np.ones_like(data)*-1.
-      if np.amax(siggen_wf) == 0:
-        print "wtf is even happening here?"
-        return np.ones_like(data)*-1.
-      
-      siggen_data = detector.ProcessWaveformFoldedCascode(siggen_wf)
-      siggen_data = siggen_data[detector.zeroPadding::]
-      
-      siggen_data = siggen_data*e
-      
-      out[s:] = siggen_data[0:(len(data) - s)]
-
-      return out
-
-#    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff, rc_diff_short, fall_time_short_frac, detectorListIdx)
-    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, r1, r2, c, fc_c1, fc_c2, fc_r, gradIdx, pcRadIdx)
-    baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
-  return signal_model
-
-
-def CreateFullDetectorModelRLC(detectorList, data, t0_guess, energy_guess, rc_guess, lc_guess, rcdiff_guess):
-  
-  detector = detectorList[0,0]
-  with Model() as signal_model:
-  
-    radEst = Uniform('radEst', lower=0,   upper=np.floor(detector.radius))
-    zEst = Uniform('zEst', lower=0,   upper=np.floor(detector.length))
-    phiEst = Uniform('phiEst', lower=0,   upper=np.pi/4)
-    
-    tempEst = Uniform('temp', lower=40,   upper=120, testval=80)
-    
-    gradIdx = DiscreteUniform('gradIdx', lower = 0, upper= detectorList.shape[0]-1, testval=detectorList.shape[0]/2)
-    pcRadIdx = DiscreteUniform('pcRadIdx', lower = 0, upper= detectorList.shape[1]-1, testval=detectorList.shape[1]/2)
-
-
-    t0 = DiscreteUniform('switchpoint', lower = t0_guess-10, upper=t0_guess+10, testval=t0_guess)
-    wfScale = Normal('wfScale', mu=energy_guess, sd=.01*energy_guess)
-
-    rc = Wald('preampRC', mu=rc_guess)
-    lc = Wald('preampLC', mu=lc_guess)
-
-    rc_diff = Normal('rc_diff', mu=rcdiff_guess, sd=100.) #also in ns
-    
- 
-    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.lscalar, T.lscalar], otypes=[T.dvector])
-    def siggen_model(s, rad, phi, z, e, temp, rc, lc, fall_time, gradIdx, pcRadIdx):
-
-      if (gradIdx > detectorList.shape[0]-1) or (pcRadIdx > detectorList.shape[1]-1) :
-        return np.ones_like(data)*-1.
-
-      detector = detectorList[gradIdx, pcRadIdx]
-      
-      out = np.zeros_like(data)
-      
-      detector.preampRC = rc
-      detector.preampLC = lc
-      
-      detector.preampFallTime = fall_time
-      detector.SetTemperature(temp)
-      
-      siggen_wf= detector.GetSiggenWaveform(rad, phi, z, energy=2600)
-  #    print siggen_wf
-      if siggen_wf is None:
-        return np.ones_like(data)*-1.
-      if np.amax(siggen_wf) == 0:
-        print "wtf is even happening here?"
-        return np.ones_like(data)*-1.
-      
-      siggen_data = detector.ProcessWaveformRLC(siggen_wf)
-      siggen_data = siggen_data[detector.zeroPadding::]
-      
-      siggen_data = siggen_data*e
-      
-      out[s:] = siggen_data[0:(len(data) - s)]
-
-      return out
-
-#    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff, rc_diff_short, fall_time_short_frac, detectorListIdx)
-    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc, lc, rc_diff, gradIdx, pcRadIdx)
-    baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
-  return signal_model
 
 def CreateFullDetectorModel(detectorList, data, t0_guess, energy_guess, rcint_guess, rcdiff_guess):
   
@@ -325,6 +128,209 @@ def CreateFullDetectorModel(detectorList, data, t0_guess, energy_guess, rcint_gu
     baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff,  gaussSmooth, gradIdx, pcRadIdx)
     baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
   return signal_model
+
+def CreateFullDetectorModelWithTransferFunction(detectorList, data, t0_guess, energy_guess):
+  detector = detectorList[0,0]
+  with Model() as signal_model:
+  
+    radEst = Uniform('radEst', lower=0,   upper=np.floor(detector.radius))
+    zEst = Uniform('zEst', lower=5,   upper=np.floor(detector.length))
+    phiEst = Uniform('phiEst', lower=0,   upper=np.pi/4)
+    
+    tempEst = Uniform('temp', lower=40,   upper=120, testval=80)
+
+    t0 = DiscreteUniform('switchpoint', lower = t0_guess-10, upper=t0_guess+10, testval=t0_guess)
+    wfScale = Normal('wfScale', mu=energy_guess, sd=.01*energy_guess)
+
+    prior_num = [3.64e+09, 1.88e+17, 6.05e+15]
+    prior_den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+
+    num_1 = Normal('num_1', mu=prior_num[0], sd=.3*prior_num[0])
+    num_2 = Normal('num_2', mu=prior_num[1], sd=.3*prior_num[1])
+    num_3 = Normal('num_3', mu=prior_num[2], sd=.3*prior_num[2])
+    
+    den_1 = Normal('den_1', mu=prior_den[1], sd=.3*prior_den[1])
+    den_2 = Normal('den_2', mu=prior_den[2], sd=.3*prior_den[2])
+    den_3 = Normal('den_3', mu=prior_den[3], sd=.3*prior_den[3])
+    
+    gradIdx = DiscreteUniform('gradIdx', lower = 0, upper= detectorList.shape[0]-1, testval=detectorList.shape[0]/2)
+    pcRadIdx = DiscreteUniform('pcRadIdx', lower = 0, upper= detectorList.shape[1]-1, testval=detectorList.shape[1]/2)
+
+ 
+    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar, T.lscalar, T.lscalar], otypes=[T.dvector])
+#    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar], otypes=[T.dvector])
+    def siggen_model(s, rad, phi, z, e, temp, num_1, num_2, num_3, den_1, den_2, den_3, gradIdx, pcRadIdx):
+      out = np.zeros_like(data)
+      if (gradIdx > detectorList.shape[0]-1) or (pcRadIdx > detectorList.shape[1]-1) :
+        return np.ones_like(data)*-1.
+      detector = detectorList[gradIdx, pcRadIdx]
+      
+      detector.SetTemperature(temp)
+      siggen_wf= detector.GetSiggenWaveform(rad, phi, z, energy=2600)
+
+      if siggen_wf is None:
+        return np.ones_like(data)*-1.
+      if np.amax(siggen_wf) == 0:
+        print "wtf is even happening here?"
+        return np.ones_like(data)*-1.
+      siggen_wf = np.pad(siggen_wf, (detector.zeroPadding,0), 'constant', constant_values=(0, 0))
+
+      num = [num_1, num_2, num_3]
+      den = [1,   den_1, den_2, den_3]
+#      num = [-1.089e10,  5.863e17,  6.087e15]
+#      den = [1,  3.009e07, 3.743e14,5.21e18]
+      system = signal.lti(num, den)
+      t = np.arange(0, len(siggen_wf)*10E-9, 10E-9)
+      tout, siggen_wf, x = signal.lsim(system, siggen_wf, t)
+      siggen_wf /= np.amax(siggen_wf)
+      
+      siggen_data = siggen_wf[detector.zeroPadding::]
+      
+      siggen_data = siggen_data*e
+      
+      out[s:] = siggen_data[0:(len(data) - s)]
+
+      return out
+
+#    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff, rc_diff_short, fall_time_short_frac, detectorListIdx)
+    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, num_1, num_2, num_3, den_1, den_2, den_3, gradIdx, pcRadIdx)
+    baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
+  return signal_model
+####################################################################################################################################################################
+def CreateFullDetectorModelGivenTransferFunction(detectorList, data, t0_guess, energy_guess):
+  detector = detectorList[0,0]
+  with Model() as signal_model:
+  
+    radEst = Uniform('radEst', lower=0,   upper=np.floor(detector.radius))
+    zEst = Uniform('zEst', lower=5,   upper=np.floor(detector.length))
+    phiEst = Uniform('phiEst', lower=0,   upper=np.pi/4)
+    
+    tempEst = Uniform('temp', lower=40,   upper=120, testval=80)
+
+    t0 = DiscreteUniform('switchpoint', lower = t0_guess-10, upper=t0_guess+10, testval=t0_guess)
+    wfScale = Normal('wfScale', mu=energy_guess, sd=.01*energy_guess)
+
+    prior_num = [3.64e+09, 1.88e+17, 6.05e+15]
+    prior_den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+    system = signal.lti(prior_num, prior_den)
+    
+    siggen_len = 800 + detector.zeroPadding
+    t = np.arange(0, (siggen_len)*10E-9, 10E-9)
+
+    
+    gradIdx = DiscreteUniform('gradIdx', lower = 0, upper= detectorList.shape[0]-1, testval=detectorList.shape[0]/2)
+    pcRadIdx = DiscreteUniform('pcRadIdx', lower = 0, upper= detectorList.shape[1]-1, testval=detectorList.shape[1]/2)
+
+ 
+    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar,  T.lscalar, T.lscalar], otypes=[T.dvector])
+#    @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar], otypes=[T.dvector])
+    def siggen_model(s, rad, phi, z, e, temp, gradIdx, pcRadIdx):
+      out = np.zeros_like(data)
+      if (gradIdx > detectorList.shape[0]-1) or (pcRadIdx > detectorList.shape[1]-1) :
+        return np.ones_like(data)*-1.
+      detector = detectorList[gradIdx, pcRadIdx]
+      
+      detector.SetTemperature(temp)
+      siggen_wf= detector.GetSiggenWaveform(rad, phi, z, energy=2600)
+
+#      print "len of siggen wf is %d" % len(siggen_wf)
+
+
+      if siggen_wf is None:
+        return np.ones_like(data)*-1.
+      if np.amax(siggen_wf) == 0:
+        print "wtf is even happening here?"
+        return np.ones_like(data)*-1.
+      siggen_wf = np.pad(siggen_wf, (detector.zeroPadding,0), 'constant', constant_values=(0, 0))
+
+
+      tout, siggen_wf, x = signal.lsim(system, siggen_wf, t)
+      siggen_wf /= np.amax(siggen_wf)
+      
+      siggen_data = siggen_wf[detector.zeroPadding::]
+      
+      siggen_data = siggen_data*e
+      
+      out[s:] = siggen_data[0:(len(data) - s)]
+
+      return out
+
+#    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff, rc_diff_short, fall_time_short_frac, detectorListIdx)
+    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, gradIdx, pcRadIdx)
+    baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
+  return signal_model
+####################################################################################################################################################################
+def CreateCheapDetectorModelGivenTransferFunction(detector, data, t0_guess, energy_guess):
+
+  with Model() as signal_model:
+  
+    radEst = Uniform('radEst', lower=0,   upper=np.floor(detector.radius))
+    zEst = Uniform('zEst', lower=5,   upper=np.floor(detector.length))
+    phiEst = Uniform('phiEst', lower=0,   upper=np.pi/4)
+    
+    #might have to try making this normal?
+    tempEst = Uniform('temp', lower=40,   upper=120, testval=80)
+
+    #try out modeling this as something normally distributed
+    t0 = Normal('switchpoint', mu=t0_guess, sd=5,)
+    #still gonna leave this in sample number i guess
+    
+    wfScale = Normal('wfScale', mu=energy_guess, sd=.01*energy_guess)
+
+    prior_num = [3.64e+09, 1.88e+17, 6.05e+15]
+    prior_den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+    system = signal.lti(prior_num, prior_den)
+    
+    siggen_len = detector.num_steps + detector.zeroPadding
+    siggen_step_size = detector.time_step_size
+    
+    data_to_siggen_size_ratio = np.int(10 / siggen_step_size)
+    
+    siggen_step_size_ns = siggen_step_size * 1E-9
+    
+    t = np.arange(0, (siggen_len)*siggen_step_size_ns, siggen_step_size_ns)
+
+ 
+    @as_op(itypes=[T.dscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar], otypes=[T.dvector])
+    def siggen_model(s, rad, phi, z, e, temp):
+      out = np.zeros_like(data)
+      
+      detector.SetTemperature(temp)
+      siggen_wf= detector.GetSiggenWaveform(rad, phi, z, energy=2600)
+
+      if siggen_wf is None:
+        return np.ones_like(data)*-1.
+      if np.amax(siggen_wf) == 0:
+        print "wtf is even happening here?"
+        return np.ones_like(data)*-1.
+      siggen_wf = np.pad(siggen_wf, (detector.zeroPadding,0), 'constant', constant_values=(0, 0))
+
+
+      tout, siggen_wf, x = signal.lsim(system, siggen_wf, t)
+      siggen_wf /= np.amax(siggen_wf)
+      
+      siggen_data = siggen_wf[detector.zeroPadding::]
+      
+      siggen_data = siggen_data*e
+      
+      
+      #ok, so the siggen step size is 1 ns and the
+      #WARNING: only works for 1 ns step size for now
+    
+      switchpoint_idx = np.int( np.modf(np.around(s, decimals=1))[0] * 10 ) 
+      
+      switchpoint_ceil = np.int( np.ceil(s) )
+      
+      out[switchpoint_ceil:] = siggen_data[switchpoint_idx:10:(len(data) - switchpoint_ceil)*10]
+
+      return out
+
+#    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff, rc_diff_short, fall_time_short_frac, detectorListIdx)
+    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst)
+    baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
+  return signal_model
+
+####################################################################################################################################################################
 
 def CreateFullDetectorModelLookup(detectorList, data, t0_guess, energy_guess, rcint_guess, rcdiff_guess):
   
@@ -420,13 +426,13 @@ def CreateTransferFunctionModel(detector, data, t0_guess, energy_guess):
     prior_num = [3.64e+09, 1.88e+17, 6.05e+15]
     prior_den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
 
-    num_1 = Normal('num_1', mu=prior_num[0], sd=.3prior_num[0])
-    num_2 = Normal('num_2', mu=prior_num[1], sd=.3prior_num[1])
-    num_3 = Normal('num_3', mu=prior_num[2], sd=.3prior_num[2])
+    num_1 = Normal('num_1', mu=prior_num[0], sd=.3*prior_num[0])
+    num_2 = Normal('num_2', mu=prior_num[1], sd=.3*prior_num[1])
+    num_3 = Normal('num_3', mu=prior_num[2], sd=.3*prior_num[2])
     
-    den_1 = Normal('den_1', mu=prior_den[1], sd=.3prior_den[1])
-    den_2 = Normal('den_2', mu=prior_den[2], sd=.3prior_den[2])
-    den_3 = Normal('den_3', mu=prior_den[3], sd=.3prior_den[3])
+    den_1 = Normal('den_1', mu=prior_den[1], sd=.3*prior_den[1])
+    den_2 = Normal('den_2', mu=prior_den[2], sd=.3*prior_den[2])
+    den_3 = Normal('den_3', mu=prior_den[3], sd=.3*prior_den[3])
 
  
     @as_op(itypes=[T.lscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar], otypes=[T.dvector])
