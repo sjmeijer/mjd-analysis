@@ -36,8 +36,9 @@ pcRadList = np.arange(1.65, 2.95, 0.1)
 grad = 0.05
 pcRad = 2.55#this is the actual starret value ish
 
+fitSamples = 150
 detName = "P42574A_grad%0.2f_pcrad%0.2f.conf" % (grad,pcRad)
-det =  Detector(detName, 39.3, 33.8, zeroPadding=500, temperature=80., timeStep=1., numSteps=8000)
+det =  Detector(detName, 39.3, 33.8, zeroPadding=500, temperature=80., timeStep=1., numSteps=fitSamples*10)
 
 
 ####################################################################################################################################################################
@@ -162,13 +163,9 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
   np_data = wf.GetVectorData()
   wfMax = np.amax(np_data)
 
-  #perform the fit up to this index.  Currently set by 99% timepoint (no real point in fitting on the falling edge)
-  lastFitSampleIdx = np.argmax(np_data)+10
-
-#  lastFitSampleIdx = findTimePoint(np_data, .95)
   startGuess = findTimePoint(np_data, 0.005)
   firstFitSampleIdx = startGuess-20
-  fitSamples = lastFitSampleIdx-firstFitSampleIdx # 1 microsecond
+  lastFitSampleIdx = firstFitSampleIdx + fitSamples
   t0_guess = startGuess - firstFitSampleIdx
   
   np_data_early = np_data[firstFitSampleIdx:lastFitSampleIdx]
