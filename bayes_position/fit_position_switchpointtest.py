@@ -38,7 +38,7 @@ pcRad = 2.55#this is the actual starret value ish
 
 fitSamples = 150
 detName = "P42574A_grad%0.2f_pcrad%0.2f.conf" % (grad,pcRad)
-det =  Detector(detName, 39.3, 33.8, zeroPadding=500, temperature=80., timeStep=1., numSteps=fitSamples*10)
+det =  Detector(detName, 39.3, 33.8, zeroPadding=10, temperature=80., timeStep=1., numSteps=fitSamples*10)
 
 
 ####################################################################################################################################################################
@@ -132,21 +132,21 @@ def getWaveform(gatTree, builtTree, entryNumber, channelNumber):
 
 
 
-def plotWaveform(wfFig, np_data_early, wfScale, offset):
+def plotWaveform(wfFig, np_data_early, wfScale, offset, r=10, phi=0, z=10, temp=70):
 
   plt.figure(wfFig.number)
   plt.clf()
-  plt.title("Charge waveform")
-  plt.xlabel("Sample number [10s of ns]")
+  plt.xlabel("Time [ns]")
   plt.ylabel("Raw ADC Value [Arb]")
   
   
-  t_data = np.arange(0, len(np_data_early)*10, 10)
+  t_data = np.arange(0, len(np_data_early)) * 10
+  
   plt.plot(t_data, np_data_early  ,color="red" )
   
-  siggen_wf= findSiggenWaveform(20,0,20,70, wfScale)
-
-  plt.plot(np.arange(offset, len(siggen_wf)+offset), siggen_wf  ,color="blue" )
+  siggen_wf= findSiggenWaveform(r,phi,z,temp, wfScale, np_data_early, offset)
+  
+  plt.plot(t_data, siggen_wf  ,color="blue" )
   plt.xlim(0, len(np_data_early)*10)
 
   value = raw_input('  --> Press s to skip,  q to quit, any other key to continue with fit\n')
@@ -190,7 +190,7 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     one_minute = 100#np.around(16380 / 114.4)
     one_hour = 60 * one_minute
     
-    this_sample = 5000#1*one_hour
+    this_sample = 10000#1*one_hour
     
 #    trace = sample(this_sample, step=[step1, step2], start=start)
     trace = sample(this_sample,  step = step)
@@ -207,26 +207,20 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
 
     startVal = t0 + firstFitSampleIdx
     
-    print "<<<startVal is %d" % startVal
+    print "<<<startVal is %0.1f (guess was %0.1f)" % (startVal, firstFitSampleIdx+t0_guess)
     print "<<<r is %0.2f" % r
     print "<<<z is %0.2f" % z
     print "<<<phi is %0.2f" % phi
     print "<<<scale is %0.2f" % scale
     print "<<<temp is %0.2f" % (temp)
-
+    
     plt.ioff()
     traceplot(trace)
     plt.savefig("chan%d_run%d_entry%d_chain_notffit.png" % (channelNumber, runNumber, entryNumber))
     plt.ion()
-  
 
-  
-  print ">>> t0guess was %d" % (firstFitSampleIdx+t0_guess)
-  print ">>> fit t0 was %d" % (firstFitSampleIdx + t0)
+  plotWaveform(wfFig, np_data_early, scale, t0, r=1, phi=phi, z=z, temp=temp)
 
-
-  if value == 'q':
-    exit(1)
 
 def getParameterMedian(trace, paramName, burnin):
   return np.median(  trace[paramName][burnin:])
@@ -238,7 +232,7 @@ def findTimePoint(data, percent):
   int_data /= np.amax(int_data)
   return np.where(np.greater(int_data, percent))[0][0]
 
-def findSiggenWaveform(r,phi,z,temp, scale):
+def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint):
   detector = det
 
   prior_num = [3.64e+09, 1.88e+17, 6.05e+15]
@@ -249,12 +243,13 @@ def findSiggenWaveform(r,phi,z,temp, scale):
   siggen_step_size = detector.time_step_size
   data_to_siggen_size_ratio = np.int(10 / siggen_step_size)
   siggen_step_size_ns = siggen_step_size * 1E-9
-  t = np.arange(0, (siggen_len)*siggen_step_size_ns, siggen_step_size_ns)
-
+  
+  t = np.arange(0, siggen_len) * siggen_step_size_ns
 
   detector.SetTemperature(temp)
   siggen_wf= detector.GetSiggenWaveform(r, phi, z, energy=2600)
   siggen_wf = np.pad(siggen_wf, (detector.zeroPadding,0), 'constant', constant_values=(0, 0))
+
 
   tout, siggen_wf, x = signal.lsim(system, siggen_wf, t)
   siggen_wf /= np.amax(siggen_wf)
@@ -262,8 +257,31 @@ def findSiggenWaveform(r,phi,z,temp, scale):
   siggen_data = siggen_wf[detector.zeroPadding::]
   
   siggen_data = siggen_data*scale
+  
+  siggen_start_idx = np.int( np.modf(np.around(switchpoint, decimals=1))[0] * 10 )
+  
+  switchpoint_ceil = np.int( np.ceil(switchpoint) )
+  
+  out = np.zeros_like(data)
+  
+#  print "switchpoint: %d" % switchpoint
+#  print "siggen start idx: %d" % siggen_start_idx
+#  print "switchpoint ceil: %d" % switchpoint_ceil
+#  print "final idx: %d" % ((len(data) - switchpoint_ceil)*10)
 
-  return siggen_data
+  samples_to_fill = (len(data) - switchpoint_ceil)
+  
+#  print "samples to fill: %d" % samples_to_fill
+
+  sampled_idxs = (np.arange(samples_to_fill, dtype=np.int)+siggen_start_idx)*10
+  
+#  print sampled_idxs
+#  
+#  print siggen_data[sampled_idxs]
+
+  out[switchpoint_ceil:] = siggen_data[sampled_idxs]
+
+  return out
 
 
 
