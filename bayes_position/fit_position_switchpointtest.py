@@ -187,7 +187,7 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     step = Metropolis()
 
     # for slice
-    one_minute = 100#np.around(16380 / 114.4)
+    one_minute = 10000#np.around(16380 / 114.4)
     one_hour = 60 * one_minute
     
     this_sample = 10000#1*one_hour
@@ -216,11 +216,11 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     
     plt.ioff()
     traceplot(trace)
-    plt.savefig("chan%d_run%d_entry%d_chain_notffit.png" % (channelNumber, runNumber, entryNumber))
+    plt.savefig("chan%d_run%d_entry%d_chain_switchpoint.png" % (channelNumber, runNumber, entryNumber))
     plt.ion()
 
   plotWaveform(wfFig, np_data_early, scale, t0, r=1, phi=phi, z=z, temp=temp)
-
+  plt.savefig("chan%d_run%d_entry%d_wf_switchpoint.png" % (channelNumber, runNumber, entryNumber))
 
 def getParameterMedian(trace, paramName, burnin):
   return np.median(  trace[paramName][burnin:])
