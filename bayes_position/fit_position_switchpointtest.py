@@ -132,13 +132,12 @@ def getWaveform(gatTree, builtTree, entryNumber, channelNumber):
 
 
 
-def plotWaveform(wfFig, np_data_early, wfScale, offset, r=10, phi=0, z=10, temp=70):
+def plotWaveform(wfFig, np_data_early, wfScale, offset, r=19.46, phi=0.12, z=25.57, temp=79.3):
 
   plt.figure(wfFig.number)
   plt.clf()
   plt.xlabel("Time [ns]")
   plt.ylabel("Raw ADC Value [Arb]")
-  
   
   t_data = np.arange(0, len(np_data_early)) * 10
   
@@ -190,7 +189,7 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     one_minute = 10000#np.around(16380 / 114.4)
     one_hour = 60 * one_minute
     
-    this_sample = 10000#1*one_hour
+    this_sample = 1000#1*one_hour
     
 #    trace = sample(this_sample, step=[step1, step2], start=start)
     trace = sample(this_sample,  step = step)
@@ -207,7 +206,7 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
 
     startVal = t0 + firstFitSampleIdx
     
-    print "<<<startVal is %0.1f (guess was %0.1f)" % (startVal, firstFitSampleIdx+t0_guess)
+    print "<<<t0 is %0.1f (startVal %0.1f, guess was %0.1f)" % (t0, startVal, firstFitSampleIdx+t0_guess)
     print "<<<r is %0.2f" % r
     print "<<<z is %0.2f" % z
     print "<<<phi is %0.2f" % phi
@@ -219,7 +218,7 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     plt.savefig("chan%d_run%d_entry%d_chain_switchpoint.png" % (channelNumber, runNumber, entryNumber))
     plt.ion()
 
-  plotWaveform(wfFig, np_data_early, scale, t0, r=1, phi=phi, z=z, temp=temp)
+  plotWaveform(wfFig, np_data_early, scale, t0, r=r, phi=phi, z=z, temp=temp)
   plt.savefig("chan%d_run%d_entry%d_wf_switchpoint.png" % (channelNumber, runNumber, entryNumber))
 
 def getParameterMedian(trace, paramName, burnin):
@@ -258,13 +257,15 @@ def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint):
   
   siggen_data = siggen_data*scale
   
-  siggen_start_idx = np.int( np.modf(np.around(switchpoint, decimals=1))[0] * 10 )
+  siggen_start_idx = np.int(np.around(switchpoint, decimals=1) * 10 % 10)
   
-  switchpoint_ceil = np.int( np.ceil(switchpoint) )
+  switchpoint_ceil= np.int( np.ceil(switchpoint) )
+  
+  #need to decide whether we rounded up or down?
   
   out = np.zeros_like(data)
   
-#  print "switchpoint: %d" % switchpoint
+#  print "switchpoint: %f" % switchpoint
 #  print "siggen start idx: %d" % siggen_start_idx
 #  print "switchpoint ceil: %d" % switchpoint_ceil
 #  print "final idx: %d" % ((len(data) - switchpoint_ceil)*10)
@@ -273,10 +274,10 @@ def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint):
   
 #  print "samples to fill: %d" % samples_to_fill
 
-  sampled_idxs = (np.arange(samples_to_fill, dtype=np.int)+siggen_start_idx)*10
+  sampled_idxs = np.arange(samples_to_fill, dtype=np.int)*10 + siggen_start_idx
   
 #  print sampled_idxs
-#  
+#
 #  print siggen_data[sampled_idxs]
 
   out[switchpoint_ceil:] = siggen_data[sampled_idxs]

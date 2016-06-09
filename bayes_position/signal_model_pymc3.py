@@ -318,12 +318,12 @@ def CreateCheapDetectorModelGivenTransferFunction(detector, data, t0_guess, ener
       #WARNING: only works for 1 ns step size for now
       #TODO: might be worth downsampling BEFORE applying transfer function
     
-      siggen_start_idx = np.int( np.modf(np.around(s, decimals=1))[0] * 10 )
+      siggen_start_idx = np.int(np.around(s, decimals=1) * 10 % 10)
       
       switchpoint_ceil = np.int( np.ceil(s) )
       
       samples_to_fill = (len(data) - switchpoint_ceil)
-      sampled_idxs = (np.arange(samples_to_fill, dtype=np.int)+siggen_start_idx)*10
+      sampled_idxs = np.arange(samples_to_fill, dtype=np.int)*10+siggen_start_idx
       
       out[switchpoint_ceil:] = siggen_data[sampled_idxs]
 
