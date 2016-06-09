@@ -13,14 +13,9 @@ class CLHEP:
   us = 1.0/1000
 
 class Detector:
-  def __init__(self, siggen_config_file, detZ, detRad,  zeroPadding=200, temperature=0, timeStep=0, numSteps=0):
+  def __init__(self, siggen_config_file, detZ, detRad,  zeroPadding=200, temperature=0, timeStep=None, numSteps=None):
     #self.siggenConfigFile = siggen_config_file
-    
-    
-    
 
-
-    
     # in mm
     self.length = detZ
     self.radius = detRad
@@ -28,29 +23,25 @@ class Detector:
     self.siggenSignalLength = 800
     self.zeroPadding = zeroPadding
     
-    self.lookup_steps_r = 1. #mm
-    self.lookup_steps_z = 1. #mm
-    self.lookup_number_theta = 5
-    self.lookupTable = None
+
     
+    if timeStep is None or numSteps is None:
+      self.siggenInst = GATSiggenInstance(siggen_config_file)
+    else:
+      self.siggenInst =  GATSiggenInstance(siggen_config_file, timeStep, numSteps)
 
-
-#    self.lookup_steps_r = 0.1
-#    self.lookup_steps_z = 0.1
-#    self.lookup_number_theta = 25
-
-    self.siggenInst = GATSiggenInstance(siggen_config_file)
-    
-    if timeStep > 0:
-      self.siggenInst.SetTimeStepLength(timeStep);
-      self.time_step_size = timeStep
-    if numSteps > 0:
-       self.siggenInst.SetSiggenWaveformLength(numSteps);
-       self.num_steps = numSteps
+    self.time_step_size = self.siggenInst.GetTimeStepLength()
+    self.num_steps = self.siggenInst.GetTimeStepNumber()
   
   
     if temperature > 0:
       self.siggenInst.SetTemperature(temperature)
+
+
+    self.lookup_steps_r = 1. #mm
+    self.lookup_steps_z = 1. #mm
+    self.lookup_number_theta = 5
+    self.lookupTable = None
 
 
 ########################################################################################################

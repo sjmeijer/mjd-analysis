@@ -39,11 +39,10 @@ pcRad = 2.55#this is the actual starret value ish
 
 fitSamples = 150
 detName = "P42574A_grad%0.2f_pcrad%0.2f.conf" % (grad,pcRad)
-det =  Detector(detName, 39.3, 33.8, zeroPadding=10, temperature=80., timeStep=1., numSteps=fitSamples*10)
+det =  Detector(detName, 39.3, 33.8, zeroPadding=10, temperature=80., timeStep=0.1, numSteps=fitSamples*100)
 
 
 ####################################################################################################################################################################
-
 
 def main(argv):
   runRange = (13420,13420)
@@ -189,16 +188,12 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
   if value == 's':
     return 0
   
-  siggen_model = sm3.CreateCheapDetectorModelFindTransferFunction(det, np_data_early, t0_guess, wfMax)
+  siggen_model = sm3.CreateCheapDetectorModelGivenTransferFunction(det, np_data_early, t0_guess, wfMax)
   with siggen_model:
-
-
-    prior_num = [3.64e+09, 1.88e+17, 6.05e+15]
-    prior_den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
     
     step = Metropolis()
     
-    this_sample = 1000#1*one_hour
+    this_sample = 100#1*one_hour
     
     trace = sample(this_sample,  step = step)
     burnin = np.int(.75 * this_sample)
@@ -221,19 +216,22 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     print "<<<scale is %0.2f" % scale
     print "<<<temp is %0.2f" % (temp)
     
-    num_1 =     np.median(  trace['num_1'][burnin:])
-    num_2 =     np.median(  trace['num_2'][burnin:])
-    num_3 =     np.median(  trace['num_3'][burnin:])
-    den_1 =     np.median(  trace['den_1'][burnin:])
-    den_2 =     np.median(  trace['den_2'][burnin:])
-    den_3 =     np.median(  trace['den_3'][burnin:])
+    num = [3.64e+09, 1.88e+17, 6.05e+15]
+    den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+    
+#    num_1 =     np.median(  trace['num_1'][burnin:])
+#    num_2 =     np.median(  trace['num_2'][burnin:])
+#    num_3 =     np.median(  trace['num_3'][burnin:])
+#    den_1 =     np.median(  trace['den_1'][burnin:])
+#    den_2 =     np.median(  trace['den_2'][burnin:])
+#    den_3 =     np.median(  trace['den_3'][burnin:])
+#
+#    print "<<<tf NUM is [%0.2e, %0.2e, %0.2e]" % (num_1, num_2, num_3)
+#    print "<<<tf DEN is [1, %0.2e, %0.2e, %0.2e]" % (den_1, den_2, den_3)
+#    
+#    num = [num_1, num_2, num_3]
+#    den = [1, den_1, den_2, den_3]
 
-    print "<<<tf NUM is [%0.2e, %0.2e, %0.2e]" % (num_1, num_2, num_3)
-    print "<<<tf DEN is [1, %0.2e, %0.2e, %0.2e]" % (den_1, den_2, den_3)
-    
-    num = [num_1, num_2, num_3]
-    den = [1, den_1, den_2, den_3]
-    
     plt.ioff()
     traceplot(trace)
     plt.savefig("chan%d_run%d_entry%d_chain_switchpoint.png" % (channelNumber, runNumber, entryNumber))
@@ -255,12 +253,31 @@ def findTimePoint(data, percent):
 
 def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint, num, den):
   detector = det
-
+  
   system = signal.lti(num, den)
 
   siggen_len = detector.num_steps + detector.zeroPadding
   siggen_step_size = detector.time_step_size
-  data_to_siggen_size_ratio = np.int(10 / siggen_step_size)
+  
+  #round here to fix floating point accuracy problem
+  data_to_siggen_size_ratio = np.around(10. / siggen_step_size,3)
+  
+  if not data_to_siggen_size_ratio.is_integer():
+    print "Error: siggen step size must evenly divide into 10 ns digitization period (ratio is %f)" % data_to_siggen_size_ratio
+    exit(0)
+  elif data_to_siggen_size_ratio < 10:
+    round_places = 0
+  elif data_to_siggen_size_ratio < 100:
+    round_places = 1
+  elif data_to_siggen_size_ratio < 1000:
+    round_places = 2
+  else:
+    print "Error: Ben was too lazy to code in support for resolution this high"
+    exit(0)
+  
+  data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
+
+  
   siggen_step_size_ns = siggen_step_size * 1E-9
   
   t = np.arange(0, siggen_len) * siggen_step_size_ns
@@ -277,28 +294,27 @@ def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint, num, den):
   
   siggen_data = siggen_data*scale
   
-  siggen_start_idx = np.int(np.around(switchpoint, decimals=1) * 10 % 10)
+  siggen_start_idx = np.int(np.around(switchpoint, decimals=round_places) * data_to_siggen_size_ratio % data_to_siggen_size_ratio)
   
   switchpoint_ceil= np.int( np.ceil(switchpoint) )
-  
-  #need to decide whether we rounded up or down?
-  
+
   out = np.zeros_like(data)
-  
-#  print "switchpoint: %f" % switchpoint
-#  print "siggen start idx: %d" % siggen_start_idx
-#  print "switchpoint ceil: %d" % switchpoint_ceil
-#  print "final idx: %d" % ((len(data) - switchpoint_ceil)*10)
-
   samples_to_fill = (len(data) - switchpoint_ceil)
-  
-#  print "samples to fill: %d" % samples_to_fill
 
-  sampled_idxs = np.arange(samples_to_fill, dtype=np.int)*10 + siggen_start_idx
+
+  sampled_idxs = np.arange(samples_to_fill, dtype=np.int)*data_to_siggen_size_ratio + siggen_start_idx
   
-#  print sampled_idxs
-#
-#  print siggen_data[sampled_idxs]
+  verbose = 0
+  if verbose:
+    print "siggen step size: %f" % siggen_step_size
+    print "data to siggen ratio: %f" % data_to_siggen_size_ratio
+    print "switchpoint: %f" % switchpoint
+    print "siggen start idx: %d" % siggen_start_idx
+    print "switchpoint ceil: %d" % switchpoint_ceil
+    print "final idx: %d" % ((len(data) - switchpoint_ceil)*10)
+    print "samples to fill: %d" % samples_to_fill
+    print sampled_idxs
+    print siggen_data[sampled_idxs]
 
   out[switchpoint_ceil:] = siggen_data[sampled_idxs]
 

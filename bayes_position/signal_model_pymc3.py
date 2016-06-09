@@ -287,7 +287,22 @@ def CreateCheapDetectorModelGivenTransferFunction(detector, data, t0_guess, ener
     siggen_len = detector.num_steps + detector.zeroPadding
     siggen_step_size = detector.time_step_size
     
-    data_to_siggen_size_ratio = np.int(10 / siggen_step_size)
+    #round here to fix floating point accuracy problem
+    data_to_siggen_size_ratio = np.around(10. / siggen_step_size,3)
+  
+    if not data_to_siggen_size_ratio.is_integer():
+      print "Error: siggen step size must evenly divide into 10 ns digitization period"
+      exit(0)
+    elif data_to_siggen_size_ratio < 10:
+      round_places = 0
+    elif data_to_siggen_size_ratio < 100:
+      round_places = 1
+    elif data_to_siggen_size_ratio < 1000:
+      round_places = 2
+    else:
+      print "Error: Ben was too lazy to code in support for resolution this high"
+      exit(0)
+    data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
     
     siggen_step_size_ns = siggen_step_size * 1E-9
     
@@ -321,12 +336,11 @@ def CreateCheapDetectorModelGivenTransferFunction(detector, data, t0_guess, ener
       #WARNING: only works for 1 ns step size for now
       #TODO: might be worth downsampling BEFORE applying transfer function
     
-      siggen_start_idx = np.int(np.around(s, decimals=1) * 10 % 10)
-      
+      siggen_start_idx = np.int(np.around(s, decimals=1) * data_to_siggen_size_ratio % data_to_siggen_size_ratio)
       switchpoint_ceil = np.int( np.ceil(s) )
       
       samples_to_fill = (len(data) - switchpoint_ceil)
-      sampled_idxs = np.arange(samples_to_fill, dtype=np.int)*10+siggen_start_idx
+      sampled_idxs = np.arange(samples_to_fill, dtype=np.int)*data_to_siggen_size_ratio+siggen_start_idx
       
       out[switchpoint_ceil:] = siggen_data[sampled_idxs]
 
