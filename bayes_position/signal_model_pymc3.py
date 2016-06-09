@@ -16,6 +16,7 @@ if doPlots:
   plt.ion()
   fig = plt.figure(11)
 
+####################################################################################################################################################################
 
 def CreateCheapDetectorModel(detector, data, t0_guess, energy_guess):
   with Model() as signal_model:
@@ -47,6 +48,7 @@ def CreateCheapDetectorModel(detector, data, t0_guess, energy_guess):
     baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
   return signal_model
 
+####################################################################################################################################################################
 
 def CreateFullDetectorModel(detectorList, data, t0_guess, energy_guess, rcint_guess, rcdiff_guess):
   
@@ -128,6 +130,7 @@ def CreateFullDetectorModel(detectorList, data, t0_guess, energy_guess, rcint_gu
     baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff,  gaussSmooth, gradIdx, pcRadIdx)
     baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
   return signal_model
+####################################################################################################################################################################
 
 def CreateFullDetectorModelWithTransferFunction(detectorList, data, t0_guess, energy_guess):
   detector = detectorList[0,0]
@@ -335,6 +338,84 @@ def CreateCheapDetectorModelGivenTransferFunction(detector, data, t0_guess, ener
   return signal_model
 
 ####################################################################################################################################################################
+def CreateCheapDetectorModelFindTransferFunction(detector, data, t0_guess, energy_guess):
+
+  with Model() as signal_model:
+  
+    radEst = Uniform('radEst', lower=0,   upper=np.floor(detector.radius))
+    zEst = Uniform('zEst', lower=5,   upper=np.floor(detector.length))
+    phiEst = Uniform('phiEst', lower=0,   upper=np.pi/4)
+    
+    #might have to try making this normal?
+    tempEst = Uniform('temp', lower=40,   upper=120, testval=80)
+
+    #try out modeling this as something normally distributed
+    t0 = Normal('switchpoint', mu=t0_guess, sd=5,)
+    #still gonna leave this in sample number i guess
+    
+    wfScale = Normal('wfScale', mu=energy_guess, sd=.01*energy_guess)
+
+    prior_num = [3.64e+09, 1.88e+17, 6.05e+15]
+    prior_den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+    num_1 = Normal('num_1', mu=prior_num[0], sd=.3*prior_num[0])
+    num_2 = Normal('num_2', mu=prior_num[1], sd=.3*prior_num[1])
+    num_3 = Normal('num_3', mu=prior_num[2], sd=.3*prior_num[2])
+    den_1 = Normal('den_1', mu=prior_den[1], sd=.3*prior_den[1])
+    den_2 = Normal('den_2', mu=prior_den[2], sd=.3*prior_den[2])
+    den_3 = Normal('den_3', mu=prior_den[3], sd=.3*prior_den[3])
+    
+    siggen_len = detector.num_steps + detector.zeroPadding
+    siggen_step_size = detector.time_step_size
+    data_to_siggen_size_ratio = np.int(10 / siggen_step_size)
+    siggen_step_size_ns = siggen_step_size * 1E-9
+    t = np.arange(0, (siggen_len)*siggen_step_size_ns, siggen_step_size_ns)
+
+ 
+    @as_op(itypes=[T.dscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar], otypes=[T.dvector])
+    def siggen_model(s, rad, phi, z, e, temp, num_1, num_2, num_3, den_1, den_2, den_3):
+      out = np.zeros_like(data)
+      
+      detector.SetTemperature(temp)
+      siggen_wf= detector.GetSiggenWaveform(rad, phi, z, energy=2600)
+
+      if siggen_wf is None:
+        return np.ones_like(data)*-1.
+      if np.amax(siggen_wf) == 0:
+        print "wtf is even happening here?"
+        return np.ones_like(data)*-1.
+      siggen_wf = np.pad(siggen_wf, (detector.zeroPadding,0), 'constant', constant_values=(0, 0))
+
+      system = signal.lti(prior_num, prior_den)
+      tout, siggen_wf, x = signal.lsim(system, siggen_wf, t)
+      siggen_wf /= np.amax(siggen_wf)
+      
+      siggen_data = siggen_wf[detector.zeroPadding::]
+      
+      siggen_data = siggen_data*e
+      
+      
+      #ok, so the siggen step size is 1 ns and the
+      #WARNING: only works for 1 ns step size for now
+      #TODO: might be worth downsampling BEFORE applying transfer function
+    
+      siggen_start_idx = np.int(np.around(s, decimals=1) * 10 % 10)
+      
+      switchpoint_ceil = np.int( np.ceil(s) )
+      
+      samples_to_fill = (len(data) - switchpoint_ceil)
+      sampled_idxs = np.arange(samples_to_fill, dtype=np.int)*10+siggen_start_idx
+      
+      out[switchpoint_ceil:] = siggen_data[sampled_idxs]
+
+      return out
+
+#    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, rc_int, rc_diff, rc_diff_short, fall_time_short_frac, detectorListIdx)
+    baseline_model = siggen_model(t0, radEst, phiEst, zEst, wfScale, tempEst, num_1, num_2, num_3, den_1, den_2, den_3)
+    baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
+  return signal_model
+
+
+####################################################################################################################################################################
 
 def CreateFullDetectorModelLookup(detectorList, data, t0_guess, energy_guess, rcint_guess, rcdiff_guess):
   
@@ -412,6 +493,7 @@ def CreateFullDetectorModelLookup(detectorList, data, t0_guess, energy_guess, rc
     baseline_model = siggen_model(t0, radIdx, phiIdx, zIdx, wfScale, rc_int, rc_diff,  detectorListIdx)
     baseline_observed = Normal("baseline_observed", mu=baseline_model, sd=10., observed= data )
   return signal_model
+####################################################################################################################################################################
 
 
 def CreateTransferFunctionModel(detector, data, t0_guess, energy_guess):

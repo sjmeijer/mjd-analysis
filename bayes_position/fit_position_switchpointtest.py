@@ -5,6 +5,7 @@ import matplotlib
 #matplotlib.use('CocoaAgg')
 import sys, os
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 
 import numpy as np
 
@@ -48,7 +49,7 @@ def main(argv):
   runRange = (13420,13420)
 
   plt.ion()
-  fig = plt.figure(1)
+  fig = plt.figure(1, figsize=(16, 12))
   fig2=None
 #  fig2 = plt.figure(2)
 
@@ -132,29 +133,38 @@ def getWaveform(gatTree, builtTree, entryNumber, channelNumber):
 
 
 
-def plotWaveform(wfFig, np_data_early, wfScale, offset, r=19.46, phi=0.12, z=25.57, temp=79.3):
+def plotWaveform(wfFig, np_data_early, wfScale, offset, r=19.46, phi=0.12, z=25.57, temp=79.3, num=None, den=None):
+
+  if num is None:
+    num = [3.64e+09, 1.88e+17, 6.05e+15]
+  if den is None:
+    den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+
+  siggen_wf= findSiggenWaveform(r,phi,z,temp, wfScale, np_data_early, offset, num, den)
 
   plt.figure(wfFig.number)
   plt.clf()
-  plt.xlabel("Time [ns]")
-  plt.ylabel("Raw ADC Value [Arb]")
+  
+  gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
+  ax0 = plt.subplot(gs[0])
+  ax1 = plt.subplot(gs[1], sharex=ax0)
+  ax1.set_xlabel("Digitizer Time [ns]")
+  ax0.set_ylabel("Voltage [Arb.]")
+  ax1.set_ylabel("Residual")
+  
+  diff = siggen_wf - np_data_early
   
   t_data = np.arange(0, len(np_data_early)) * 10
   
-  plt.plot(t_data, np_data_early  ,color="red" )
+  ax0.plot(t_data, np_data_early  ,color="red", label="Data (unfiltered)" )
   
-  siggen_wf= findSiggenWaveform(r,phi,z,temp, wfScale, np_data_early, offset)
+  ax0.plot(t_data, siggen_wf  ,color="blue", label="Fit waveform"  )
+  ax1.plot(np.arange(0, 10*len(diff), 10), diff  ,color="#7BAFD4" )
+  first_legend = ax0.legend(loc=2)
   
-  plt.plot(t_data, siggen_wf  ,color="blue" )
-  plt.xlim(0, len(np_data_early)*10)
+  ax0.set_xlim(0, len(np_data_early)*10)
 
-  value = raw_input('  --> Press s to skip,  q to quit, any other key to continue with fit\n')
-  if value == 'q':
-    exit(0)
-  if value == 's':
-    return 0
-  return 1
-
+  #TODO: smarter margins?
 
 
 def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
@@ -172,11 +182,14 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
   plt.ion()
 
   doFit = plotWaveform(wfFig, np_data_early, wfMax, t0_guess)
-
-  if not doFit:
+  
+  value = raw_input('  --> Press s to skip,  q to quit, any other key to continue with fit\n')
+  if value == 'q':
+    exit(0)
+  if value == 's':
     return 0
   
-  siggen_model = sm3.CreateCheapDetectorModelGivenTransferFunction(det, np_data_early, t0_guess, wfMax)
+  siggen_model = sm3.CreateCheapDetectorModelFindTransferFunction(det, np_data_early, t0_guess, wfMax)
   with siggen_model:
 
 
@@ -184,14 +197,9 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     prior_den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
     
     step = Metropolis()
-
-    # for slice
-    one_minute = 10000#np.around(16380 / 114.4)
-    one_hour = 60 * one_minute
     
     this_sample = 1000#1*one_hour
     
-#    trace = sample(this_sample, step=[step1, step2], start=start)
     trace = sample(this_sample,  step = step)
     burnin = np.int(.75 * this_sample)
 
@@ -213,16 +221,30 @@ def fitWaveform(wf, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     print "<<<scale is %0.2f" % scale
     print "<<<temp is %0.2f" % (temp)
     
+    num_1 =     np.median(  trace['num_1'][burnin:])
+    num_2 =     np.median(  trace['num_2'][burnin:])
+    num_3 =     np.median(  trace['num_3'][burnin:])
+    den_1 =     np.median(  trace['den_1'][burnin:])
+    den_2 =     np.median(  trace['den_2'][burnin:])
+    den_3 =     np.median(  trace['den_3'][burnin:])
+
+    print "<<<tf NUM is [%0.2e, %0.2e, %0.2e]" % (num_1, num_2, num_3)
+    print "<<<tf DEN is [1, %0.2e, %0.2e, %0.2e]" % (den_1, den_2, den_3)
+    
+    num = [num_1, num_2, num_3]
+    den = [1, den_1, den_2, den_3]
+    
     plt.ioff()
     traceplot(trace)
     plt.savefig("chan%d_run%d_entry%d_chain_switchpoint.png" % (channelNumber, runNumber, entryNumber))
     plt.ion()
 
-  plotWaveform(wfFig, np_data_early, scale, t0, r=r, phi=phi, z=z, temp=temp)
+  plotWaveform(wfFig, np_data_early, scale, t0, r=r, phi=phi, z=z, temp=temp, num=num, den=den)
   plt.savefig("chan%d_run%d_entry%d_wf_switchpoint.png" % (channelNumber, runNumber, entryNumber))
-
-def getParameterMedian(trace, paramName, burnin):
-  return np.median(  trace[paramName][burnin:])
+  
+  value = raw_input('  --> Press s to skip,  q to quit, any other key to continue with fit\n')
+  if value == 'q':
+    exit(0)
 
 
 def findTimePoint(data, percent):
@@ -231,12 +253,10 @@ def findTimePoint(data, percent):
   int_data /= np.amax(int_data)
   return np.where(np.greater(int_data, percent))[0][0]
 
-def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint):
+def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint, num, den):
   detector = det
 
-  prior_num = [3.64e+09, 1.88e+17, 6.05e+15]
-  prior_den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
-  system = signal.lti(prior_num, prior_den)
+  system = signal.lti(num, den)
 
   siggen_len = detector.num_steps + detector.zeroPadding
   siggen_step_size = detector.time_step_size
