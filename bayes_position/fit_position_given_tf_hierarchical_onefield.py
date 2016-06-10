@@ -32,23 +32,14 @@ flatTimeSamples = 800
 
 fitSamples = 120
 
-gradList = np.arange(0.01, 0.09, 0.01)
-pcRadList = np.arange(1.65, 2.95, 0.1)
 
-#shorter just to make it load faster
-#gradList = np.arange(0.01, 0.03, 0.01)
-#pcRadList = np.arange(1.65, 1.95, 0.1)
+#use the measured rad and grad
+pcRad = 2.45
+grad = 0.05
 
 
-detArray  = np.empty( (len(gradList),len(pcRadList)), dtype=object)
-
-for (gradIdx,grad) in enumerate(gradList):
-#  grad /= 10000.
-  for (radIdx, pcRad) in enumerate(pcRadList):
-#    detName = "P42574A_grad%0.3f_pcrad%0.4f.conf" % (grad,pcRad)
-    detName = "P42574A_grad%0.2f_pcrad%0.2f.conf" % (grad,pcRad)
-    det =  Detector(detName, 39.3, 33.8, zeroPadding=10, temperature=80., timeStep=1., numSteps=fitSamples*10)
-    detArray[gradIdx, radIdx] = det
+detName = "P42574A_grad%0.2f_pcrad%0.2f.conf" % (grad,pcRad)
+det =  Detector(detName, 39.3, 33.8, zeroPadding=10, temperature=73., timeStep=1., numSteps=fitSamples*10)
 
 ####################################################################################################################################################################
 
@@ -192,7 +183,7 @@ def fitWaveforms(wfs, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     plt.plot( np_data_early  ,color="red" )
 
   #make a simulated wf to plot for reference
-  siggen_wf= findSiggenWaveform(10.,0,10.,80., wfMax, np_data_early, t0_guess, prior_num, prior_den, 0, 0)
+  siggen_wf= findSiggenWaveform(10.,0,10.,80., wfMax, np_data_early, t0_guess, prior_num, prior_den)
   plt.plot( siggen_wf  ,color="blue" )
   
   
@@ -205,7 +196,7 @@ def fitWaveforms(wfs, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
   if value == 's':
     doFit = 0
 
-  siggen_model = sm3.CreateFullDetectorModelGivenTransferFunction(detArray, wf_to_fit_arr, t0_guess, wfMax)
+  siggen_model = sm3.CreateFullDetectorModelGivenTransferFunctionOneField(det, wf_to_fit_arr, t0_guess, wfMax)
   with siggen_model:
     
     step = Metropolis()
@@ -214,45 +205,54 @@ def fitWaveforms(wfs, wfFig, zoomFig, runNumber, entryNumber, channelNumber):
     one_minute = 100#np.around(16380 / 114.4)
     one_hour = 60 * one_minute
     
-    this_sample = 3600 * 5#50000
+    this_sample = 3600#50000
     
 #    trace = sample(this_sample, step=[step1, step2], start=start)
     trace = sample(this_sample,  step = step)
     burnin = np.int(.75 * this_sample)
-    
-
-    temp =          np.median(  trace['temp'][burnin:])
-    gradIdx =       np.int(np.median(  trace['gradIdx'][burnin:]))
-    pcRadIdx =      np.int(np.median(  trace['pcRadIdx'][burnin:]))
-    
+  
+    temp =  np.median(  trace['temp'][burnin:])
     print "<<<detector temperature is %f" % temp
-    print "<<<detector gradient is %0.2f (idx is %d)" % (gradList[gradIdx], gradIdx)
-    print "<<<PC Radius is %0.2f (idx is %d)" % (pcRadList[pcRadIdx], pcRadIdx)
     
     num = [3.64e+09, 1.88e+17, 6.05e+15]
     den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
-    
-    plt.ioff()
-    traceplot(trace)
-    plt.savefig("hierarchical_%dwaveforms.png" % len(wfs))
-    plt.ion()
-    
+
+#    print trace['switchpoint']
+
     plt.figure(wfFig.number)
     plt.clf()
     plt.title("Charge waveform")
     plt.xlabel("Sample number [10s of ns]")
     plt.ylabel("Raw ADC Value [Arb]")
-
+    
     for ( wf_idx, wf) in enumerate(wf_to_fit_arr):
-      t0 = np.around( np.median(  trace['switchpoint'][wf_idx][burnin:]), 1)
-      r =             np.median(  trace['radEst'][wf_idx][burnin:])
-      z =             np.median(  trace['zEst'][wf_idx][burnin:])
-      phi =           np.median(  trace['phiEst'][wf_idx][burnin:])
-      scale =         np.median(  trace['wfScale'][wf_idx][burnin:])
-      fit_wf = findSiggenWaveform(r, phi, z, temp, scale, wf, t0, num, den, gradIdx, pcRadIdx)
-
+      t0 = np.around( np.median(  trace['switchpoint'][burnin:,wf_idx]), 1)
+      r =             np.median(  trace['radEst'][burnin:,wf_idx])
+      z =             np.median(  trace['zEst'][burnin:,wf_idx])
+      phi =           np.median(  trace['phiEst'][burnin:,wf_idx])
+      scale =         np.median(  trace['wfScale'][burnin:,wf_idx])
+      
+      print "wf number %d" % wf_idx
+      print "  >> r:   %0.2f" % r
+      print "  >> z:   %0.2f" % z
+      print "  >> phi: %0.2f" % phi
+      print "  >> e:   %0.2f" % scale
+      print "  >> t0:  %0.2f" % t0
+      
+      fit_wf = findSiggenWaveform(r, phi, z, temp, scale, wf, t0, num, den)
       plt.plot(wf, color="r")
       plt.plot(fit_wf, color="b")
+
+      
+    plt.savefig("hierarchical_%dwaveforms.png" % len(wfs))
+    plt.ioff()
+    traceplot(trace)
+    plt.savefig("hierarchical_%dchain.png" % len(wfs))
+    plt.ion()
+
+
+
+
 
 
   value = raw_input('  --> Press q to quit, any other key to continue\n')
@@ -267,8 +267,8 @@ def findTimePoint(data, percent):
   int_data /= np.amax(int_data)
   return np.where(np.greater(int_data, percent))[0][0]
 
-def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint, num, den, gradIdx, pcIdx):
-  detector = detArray[gradIdx, pcIdx]
+def findSiggenWaveform(r,phi,z,temp, scale, data, switchpoint, num, den):
+  detector = det
   
   system = signal.lti(num, den)
   

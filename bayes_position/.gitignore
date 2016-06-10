@@ -1,4 +1,4 @@
 *.conf
-*.py
+*.pyc
 *.png
 *.npyc
