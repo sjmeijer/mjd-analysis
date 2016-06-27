@@ -56,7 +56,7 @@ def main(argv):
   nll = lambda *args: -lnlike(*args)
   
   for (idx,wf) in enumerate(wfs):
-    if idx == 0: continue
+#    if idx == 0: continue
     plt.figure(1)
   
     wf.WindowWaveformTimepoint()
