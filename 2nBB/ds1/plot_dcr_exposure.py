@@ -14,18 +14,20 @@ def main(argv):
 
 
   #Load the Skim files
-  skimFileDir = "/Users/bshanks/Data/skim/P3KJR/"
+  skimFileDir = os.path.expandvars("$MJDDATADIR/surfmjd/analysis/skim/")
   ch = TChain("skimTree", "skimTree")
-#  ch.Add(skimFileDir + "skimDS1_*.root")
-  ch.Add("/Users/bshanks/Data/skim/DS0/" + "skimDS0_*.root")
-  
+  ch.Add(skimFileDir + "DS1/skimDS1_*.root")
+  ch.Add(skimFileDir + "DS0/skimDS0_*.root")
+
   #rebin to 4 keV
   binWidth = 40
 
   canvas = TCanvas("canvas")
   gStyle.SetOptStat(0)
   
-  timeHist = TH1F("hTime","",105,15,120);
+#  ch.Draw("time_s/86400", "trapENFCal > 100 && gain==0 && channel != 594 && isGood && isEnr && aenorm > 1 && mH==1 && dcrSlope90>0 && !isLNFill && (dtmu_s < -0.2e-3 || dtmu_s > 1) && " + burstCutStr)
+#  
+  timeHist = TH1F("hTime","",300,-180,120);
   ch.Project("hTime","time_s/86400", "trapENFCal > 100 && gain==0 && channel != 594 && isGood && isEnr && aenorm > 1 && mH==1 && dcrSlope90>0 && !isLNFill && (dtmu_s < -0.2e-3 || dtmu_s > 1) && " + burstCutStr)
   cumTimeHist = timeHist.GetCumulative()
   cumTimeHist.SetYTitle("Cumulative Counts")
@@ -33,7 +35,7 @@ def main(argv):
   cumTimeHist.Draw()
   canvas.Update()
   
-  timeHistAll = TH1F("hTimeAll","",105,15,120);
+  timeHistAll = TH1F("hTimeAll","",300,-180,120);
   ch.Project("hTimeAll","time_s/86400", "trapENFCal > 100 && gain==0 && channel != 594 && isGood && isEnr && aenorm > 1 && mH==1 && !isLNFill && (dtmu_s < -0.2e-3 || dtmu_s > 1) && " + burstCutStr)
   cumTimeHistAll = timeHistAll.GetCumulative()
 
@@ -50,11 +52,11 @@ def main(argv):
   axis.SetLabelColor(kRed);
   axis.Draw();
   
-  leg = TLegend(0.15,0.6,0.4,0.8)
+  leg = TLegend(0.5,0.2,0.75,0.4)
   leg.AddEntry(cumTimeHist,"DCR Cut Events","l")
   leg.AddEntry(cumTimeHistAll,"All background events","l")
   leg.Draw();
-  
+
    
   canvas.Update()
   value = raw_input('  --> Make sure the hist is as you expect ')

@@ -4,10 +4,16 @@ from ROOT import *
 import numpy as np
 from scipy import  signal, interpolate
 
+#don't tell me you don't know what a float** is
+import warnings
+warnings.filterwarnings( action='ignore', category=RuntimeWarning, message='creating converter.*' )
+
 #Does all the interfacing with siggen for you, stores/loads lookup tables, and does electronics shaping
 
 class Detector:
   def __init__(self, siggen_config_file, temperature=0, timeStep=None, numSteps=None, tfSystem = None, zeroPadding=0):
+  
+    self.conf_file = siggen_config_file
 
     #TODO: GOTTA decide what to do about this
     self.zeroPadding = zeroPadding
@@ -18,7 +24,7 @@ class Detector:
       self.siggenInst =  GATSiggenInstance(siggen_config_file, timeStep, numSteps)
 
     self.time_step_size = self.siggenInst.GetTimeStepLength()
-    self.num_steps = self.siggenInst.GetTimeStepNumber()
+    self.num_steps = np.int( self.siggenInst.GetTimeStepNumber() )
     self.detector_radius = self.siggenInst.GetDetectorRadius()
     self.detector_length = self.siggenInst.GetDetectorLength()
     
@@ -28,6 +34,65 @@ class Detector:
   
     if temperature > 0:
       self.siggenInst.SetTemperature(temperature)
+
+    #stuff for field interp
+    self.wp_function = None
+    self.efld_r_function = None
+    self.efld_z_function = None
+    self.rr = None
+    self.zz = None
+    self.wp_pp = None
+
+      
+  def LoadFields(self, fieldFileName):
+  
+    with np.load(fieldFileName) as data:
+      data = np.load(fieldFileName)
+      wpArray  = data['wpArray']
+      efld_rArray = data['efld_rArray']
+      efld_zArray = data['efld_zArray']
+      gradList = data['gradList']
+      pcRadList = data['pcRadList']
+    
+    self.gradList = gradList
+    self.pcRadList = pcRadList
+
+    r_space = np.arange(0, wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4'))
+    z_space = np.arange(0, wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4'))
+
+    self.wp_function = interpolate.RegularGridInterpolator((r_space, z_space, pcRadList), wpArray)
+    self.efld_r_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList), efld_rArray)
+    self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList), efld_zArray)
+    
+    (self.rr, self.zz) = np.meshgrid(r_space, z_space)
+
+
+  def SetFields(self, pcSize, impurityGrad):
+#    print "setting pc radius to %0.4f, grad to %0.4f" % (pcSize, impurityGrad)
+
+    rr = self.rr
+    zz = self.zz
+    wp_function = self.wp_function
+    efld_r_function = self.efld_r_function
+    efld_z_function = self.efld_z_function
+    
+    pcpc = np.ones_like(rr) * pcSize
+    gradgrad = np.ones_like(rr) * impurityGrad
+    
+    points_wp =  np.array([rr.flatten() , zz.flatten(), pcpc.flatten()], dtype=np.dtype('f4') ).T
+    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), pcpc.flatten()], dtype=np.dtype('f4') ).T
+    
+    
+    new_wp = np.array(wp_function( points_wp ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+    new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+    new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+  
+    self.wp_pp = getPointer(new_wp)
+    efr_pp = getPointer(new_ef_r)
+    efz_pp = getPointer(new_ef_z)
+  
+    self.siggenInst.SetWeightingPotential( self.wp_pp )
+    self.siggenInst.SetElectricField( efr_pp, efz_pp )
 
   def IsInDetector(self, r, phi, z):
     if r > self.detector_radius or z > self.detector_length:
@@ -39,7 +104,6 @@ class Detector:
     else:
       return 1
 
-
   def GetSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, temp=None, num=None, den=None):
   
     if num is not None and den is not None:
@@ -47,7 +111,6 @@ class Detector:
     
     if temp is not None:
       self.siggenInst.SetTemperature(temp)
-    
   
     sig_wf = self.GetRawSiggenWaveform(r, phi, z)
     
@@ -143,67 +206,72 @@ class Detector:
     return out
 
 
-#  def ProcessWaveform(self, siggen_wf, outputLength, scale, switchpoint):
-#  
-#    siggen_len = self.num_steps + self.zeroPadding
-#
-#    #actual wf gen
-#    tout, siggen_wf, x = signal.lsim(self.tfSystem, siggen_wf, self.time_steps)
-#    siggen_wf /= np.amax(siggen_wf)
-#    
-#    #TODO: by doing this, I have no idea what I'm trying to accomplish with zero padding
-#    siggen_data = siggen_wf[self.zeroPadding::]
-#    siggen_data = siggen_data*scale
-#    
-#
-#    #I think most this stuff could be shoved to init to avoid having to redo it on the fly
-#    
-#    #round here to fix floating point accuracy problem
-#    data_to_siggen_size_ratio = np.around(10. / self.time_step_size,3)
-#    
-#    if not data_to_siggen_size_ratio.is_integer():
-#      print "Error: siggen step size must evenly divide into 10 ns digitization period (ratio is %f)" % data_to_siggen_size_ratio
-#      exit(0)
-#    elif data_to_siggen_size_ratio < 10:
-#      round_places = 0
-#    elif data_to_siggen_size_ratio < 100:
-#      round_places = 1
-#    elif data_to_siggen_size_ratio < 1000:
-#      round_places = 2
-#    else:
-#      print "Error: Ben was too lazy to code in support for resolution this high"
-#      exit(0)
-#    
-#    data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
-#
-#
-#    #resample the siggen wf to the 10ns digitized data frequency
-#    siggen_start_idx = np.int(np.around(switchpoint, decimals=round_places) * data_to_siggen_size_ratio % data_to_siggen_size_ratio)
-#    switchpoint_ceil= np.int( np.ceil(switchpoint) )
-#    samples_to_fill = (outputLength - switchpoint_ceil)
-#    sampled_idxs = np.arange(samples_to_fill, dtype=np.int)*data_to_siggen_size_ratio + siggen_start_idx
-#
-#    if 0:
-#      print "siggen step size: %f" % self.time_step_size
-#      print "data to siggen ratio: %f" % data_to_siggen_size_ratio
-#      print "switchpoint: %f" % switchpoint
-#      print "siggen start idx: %d" % siggen_start_idx
-#      print "switchpoint ceil: %d" % switchpoint_ceil
-#      print "final idx: %d" % ((len(data) - switchpoint_ceil)*10)
-#      print "samples to fill: %d" % samples_to_fill
-#      print sampled_idxs
-#      print siggen_data[sampled_idxs]
-#    
-#    out = np.zeros(outputLength)
-#    out[switchpoint_ceil:] = siggen_data[sampled_idxs]
-#    return out
-
 
   def SetTemperature(self, temp):
     self.siggenInst.SetTemperature(temp)
 
+  def plotFields(self):
+    import matplotlib.pyplot as plt
+  
+    det = self
+
+    wp = np.array(det.siggenInst.GetWeightingPotential(), dtype=np.dtype('f4'), order='C')
+
+    plt.figure()
+    
+  #  wp[np.where(wp==0)] = 1
+
+    plt.imshow(wp.T, origin='lower',  interpolation='nearest', cmap=plt.cm.RdYlBu_r)
+    
+    plt.title("WP from siggen memory")
+    plt.xlabel("radial (mm)")
+    plt.ylabel("axial (mm)")
+    
+  #  plt.xlim(0,5)
+  #  plt.ylim(0,5)
+
+    det.siggenInst.ReadElectricField()
+    efld_r = np.array(det.siggenInst.GetElectricFieldR(), dtype=np.dtype('f4'), order='C')
+    efld_phi = np.array(det.siggenInst.GetElectricFieldPhi(), dtype=np.dtype('f4'), order='C')
+    
+    if not np.array_equal(efld_phi, np.zeros_like(efld_phi)):
+        print "WARNING: PHI NOT ALL ZERO!"
+    
+    efld_z = np.array(det.siggenInst.GetElectricFieldZ(), dtype=np.dtype('f4'), order='C')
+
+    plt.figure()
+    mag = np.sqrt( np.add(np.add(np.square(efld_r), np.square(efld_phi)), np.square(efld_z))  )
+
+  #  mag[np.where(mag==0)] = np.nan
+
+    plt.imshow(mag.T, origin='lower',  interpolation='nearest', cmap=plt.cm.RdYlBu_r)
+    
+    plt.title("E field from siggen memory")
+    plt.xlabel("radial (mm)")
+    plt.ylabel("axial (mm)")
 
 
+  #For pickling a detector object
+  def __getstate__(self):
+    # Copy the object's state from self.__dict__ which contains
+    # all our instance attributes. Always use the dict.copy()
+    # method to avoid modifying the original state.
+    state = self.__dict__.copy()
+    # Remove the unpicklable entries.
+    del state['siggenInst']
+    del state['wp_pp']
+    return state
+
+  def __setstate__(self, state):
+    # Restore instance attributes (i.e., filename and lineno).
+    self.__dict__.update(state)
+    # Restore the previously opened file's state. To do so, we need to
+    # reopen it and read from it until the line count is restored.
+    
+    self.siggenInst =  GATSiggenInstance(self.conf_file, self.time_step_size, self.num_steps)
+
+def getPointer(floatfloat):
+  return (floatfloat.__array_interface__['data'][0] + np.arange(floatfloat.shape[0])*floatfloat.strides[0]).astype(np.intp)
 
 
 
