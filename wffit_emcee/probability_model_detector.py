@@ -6,6 +6,7 @@ import scipy.stats as stats
 
 
 def lnprob(theta, wf_arr, detector):
+
   '''Bayes theorem'''
   lp = lnprior(theta, wf_arr, detector)
   if not np.isfinite(lp):
@@ -43,7 +44,7 @@ def lnlike_detector(theta, wf_arr, detector):
       return -np.inf
 
     totalLike += wf_like
-
+  
   return totalLike
 
 def lnlike_waveform(theta, wf, detector):
@@ -58,7 +59,13 @@ def lnlike_waveform(theta, wf, detector):
   model_err = wf.baselineRMS
 
   model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data))
+  
+  if model is None:
+    return -np.inf
+
   inv_sigma2 = 1.0/(model_err**2)
+
+
   return -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
 
 #################################################################
@@ -78,12 +85,15 @@ def lnprior(theta, wf_arr, detector):
   
   #All flat priors
   if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
+#    print "bad prior pc rad %f" % pcRad
     return -np.inf
   if impGrad < gradList[0] or impGrad > gradList[-1]:
+#    print "bad prior imp grad %f" % impGrad
     return -np.inf
 
   #except for temp.
   if temp <40 or temp > 120:
+#    print "bad prior temp %f" % temp
     return -np.inf
   else:
     temp_prior = stats.norm.pdf(temp, loc=81., scale=5. )
@@ -93,6 +103,7 @@ def lnprior(theta, wf_arr, detector):
     wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], wf_arr[wf_idx], detector)
 
     if not np.isfinite(wf_like):
+#      print "bad prior wf"
       return -np.inf
 
     totalPrior += wf_like
@@ -101,6 +112,7 @@ def lnprior(theta, wf_arr, detector):
 
 def lnprior_waveform(r, phi, z, scale, t0, wf, detector):
   if not detector.IsInDetector(r, phi, z):
+#    print "bad prior: position (%f, %f, %f)" % (r, phi, z)
     return -np.inf
   else:
     location_prior = 1.

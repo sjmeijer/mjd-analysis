@@ -25,7 +25,7 @@ def main(argv):
   
   tempGuess = 81
   fitSamples = 150
-  numWaveforms = 3
+  numWaveforms = 30
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
@@ -106,17 +106,45 @@ def main(argv):
 #    plt.plot(ml_wf, color="b")
 #    plt.plot(wf.windowedWf, color="r")
 
+
+#  np.clip(phi_arr, 0, np.pi/4)
+  np.clip(r_arr, 0, det.detector_radius)
+  np.clip(z_arr, 0, det.detector_length)
+  np.clip(t0_arr, 0, fitSamples)
+
   #Do the MCMC
-  ndim, nwalkers = 5*numWaveforms + 3, 50
+  ndim = 5*numWaveforms + 3
+  nwalkers = ndim * 4
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess))
 
   pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim) for i in range(nwalkers)]
+
+  for pos in pos0:
+#    print "radius is %f" % det.detector_radius
+#    print "length is %f" % det.detector_length
+#  
+    pos[:numWaveforms] = np.clip( pos[:numWaveforms], 0, np.floor(det.detector_radius))
+    pos[numWaveforms:2*numWaveforms] = np.clip(pos[numWaveforms:2*numWaveforms], 0, np.pi/4)
+    pos[2*numWaveforms:3*numWaveforms] = np.clip(pos[2*numWaveforms:3*numWaveforms], 0, det.detector_length)
+    pos[4*numWaveforms:5*numWaveforms] = np.clip(pos[4*numWaveforms:5*numWaveforms], 0, fitSamples)
+    
+    pos[-3] = np.clip(pos[-3], 40, 120)
+    pos[-2] = np.clip(pos[-2], det.gradList[0], det.gradList[-1])
+    pos[-1] = np.clip(pos[-1], det.pcRadList[0], det.pcRadList[-1])
+  
+#    print pos[0:30]
+
+    prior = lnprior(pos, wfs, det)
+    if not np.isfinite(prior) :
+      print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
+      exit(0)
+
   sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wfs, det), threads=8)
 #    f = open("chain.dat", "w")
 #    f.close()
 
-  iter, burnIn = 10, 5
-  wfPlotNumber = 2
+  iter, burnIn = 1000, 800
+  wfPlotNumber = 10
   
   start = timer()
   
@@ -129,11 +157,14 @@ def main(argv):
   bar.finish()
   
   print "Elapsed time: " + str(end-start)
-  
-  #samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
 
+  print "Dumpimng chain to file..."
+  np.save("sampler.npy", sampler.chain)
+  
+#
+  print "Making MCMC steps figure..."
   #########  Plots for MC Steps
-  stepsFig = plt.figure(2)
+  stepsFig = plt.figure(2, figsize=(20, 15))
   plt.clf()
   ax0 = stepsFig.add_subplot(811)
   ax1 = stepsFig.add_subplot(812, sharex=ax0)
@@ -164,23 +195,40 @@ def main(argv):
     ax6.plot(sampler.chain[i,:,-2], "b", alpha=0.3) #grad
     ax7.plot(sampler.chain[i,:,-1], "b", alpha=0.3) #pcrad
 
+
+  plt.savefig("emcee_chain.png")
+
+
+  print "making waveforms figure..."
+  det2 =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
+  det2.LoadFields("P42574A_fields.npz")
+
   #pull the samples after burn-in
 
   samples = sampler.chain[:, burnIn:, :].reshape((-1, ndim))
-  simWfs = np.empty((wfPlotNumber, numWaveforms), dtype=object)
-  
+  simWfs = np.empty((wfPlotNumber, numWaveforms, fitSamples))
+
+  print "temp is %f" % np.median(samples[:,-3])
+  print "grad is %f" % np.median(samples[:,-2])
+  print "pcrad is %f" % np.median(samples[:,-1])
 
   for idx, (theta) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
     temp, impGrad, pcRad = theta[-3:]
     r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-3].reshape((5, numWaveforms))
-    
-    det.SetTemperature(temp)
-    det.SetFields(pcRad, impGrad)
+#    print "temp is %f, impGrad is %f, pcRad is %f" % (temp, impGrad, pcRad)
+    det2.SetTemperature(temp)
+    det2.SetFields(pcRad, impGrad)
     for wf_idx in range(wfs.size):
-      simWfs[idx, wf_idx] = det.GetSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples)
+      wf_i = det2.GetSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples)
+      simWfs[idx, wf_idx, :] = wf_i
+      if wf_i is None:
+        print "Waveform %d, %d is None" % (idx, wf_idx)
+
 
   residFig = plt.figure(3)
   helpers.plotManyResidual(simWfs, wfs, figure=residFig)
+
+  plt.savefig("emcee_waveforms.png")
 
   plt.show()
   value = raw_input('  --> Press q to quit, any other key to continue\n')

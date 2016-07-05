@@ -180,6 +180,45 @@ def plotResidual(simWFArray, dataWF, figure=None):
 
 ########################################################################
 
+def plotManyResidual(simWFArray, dataWFArray, figure=None):
+  '''I'd be willing to hear the argument this shouldn't be in here so that i don't need to load matplotlib to run this module,
+     but for now, i don't think it matters
+  '''
+  if figure is None:
+    figure = plt.figure()
+  else:
+    plt.figure(figure.number)
+    plt.clf()
+  
+  gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
+  ax0 = plt.subplot(gs[0])
+  ax1 = plt.subplot(gs[1], sharex=ax0)
+  ax1.set_xlabel("Digitizer Time [ns]")
+  ax0.set_ylabel("Voltage [Arb.]")
+  ax1.set_ylabel("Residual")
+
+  simwfnum = simWFArray.shape[0]
+
+  for (dataIdx, dataWFObj) in enumerate(dataWFArray):
+    
+    dataLen = dataWFObj.wfLength
+    t_data = np.arange(dataLen) * 10
+    ax0.plot(t_data, dataWFObj.windowedWf  ,color="red", lw=2, alpha=0.8)
+
+    for simWFIdx in range(simwfnum):
+      simWF = simWFArray[simWFIdx, dataIdx, :dataLen]
+      diff = simWF - dataWFObj.windowedWf
+
+      ax0.plot(t_data, simWF  ,color="black", alpha = 0.1  )
+      ax1.plot(t_data, diff  ,color="#7BAFD4",  alpha = 0.1 )
+
+  legend_line_1 = ax0.plot( np.NaN, np.NaN, color='r', label='Data (unfiltered)' )
+  legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveform' )
+
+  first_legend = ax0.legend(loc=2)
+
+########################################################################
+
 
 def findTimePoint(data, percent, timePointIdx=0):
 
@@ -202,3 +241,6 @@ def findTimePoint(data, percent, timePointIdx=0):
   else:
     print "timepointidx %d is not supported" % timePointIdx
     exit(0)
+
+
+

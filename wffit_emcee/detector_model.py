@@ -58,6 +58,10 @@ class Detector:
     
     self.gradList = gradList
     self.pcRadList = pcRadList
+    
+#    print "gradList is " + str(gradList)
+#    print "pcRadList is " + str(pcRadList)
+
 
     r_space = np.arange(0, wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4'))
     z_space = np.arange(0, wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4'))
@@ -101,8 +105,8 @@ class Detector:
       return 0
     elif r <0 or z <0:
       return 0
-    elif phi <0 or phi > np.pi/4:
-      return 0
+#    elif phi <0 or phi > np.pi/4:
+#      return 0
     else:
       return 1
 
