@@ -2,11 +2,13 @@
 from ROOT import *
 
 import numpy as np
+import copy
 from scipy import  signal, interpolate
 
 #don't tell me you don't know what a float** is
 import warnings
 warnings.filterwarnings( action='ignore', category=RuntimeWarning, message='creating converter.*' )
+
 
 #Does all the interfacing with siggen for you, stores/loads lookup tables, and does electronics shaping
 
@@ -210,7 +212,7 @@ class Detector:
   def SetTemperature(self, temp):
     self.siggenInst.SetTemperature(temp)
 
-  def plotFields(self):
+  def PlotFields(self):
     import matplotlib.pyplot as plt
   
     det = self
@@ -256,10 +258,16 @@ class Detector:
     # Copy the object's state from self.__dict__ which contains
     # all our instance attributes. Always use the dict.copy()
     # method to avoid modifying the original state.
+    
+    self.siggenSetup = self.siggenInst.GetSafeSiggenSetup()
+
+    #should probably actually free these things?
+  
     state = self.__dict__.copy()
     # Remove the unpicklable entries.
-    del state['siggenInst']
     del state['wp_pp']
+    del state['siggenInst']
+    
     return state
 
   def __setstate__(self, state):
@@ -267,8 +275,7 @@ class Detector:
     self.__dict__.update(state)
     # Restore the previously opened file's state. To do so, we need to
     # reopen it and read from it until the line count is restored.
-    
-    self.siggenInst =  GATSiggenInstance(self.conf_file, self.time_step_size, self.num_steps)
+    self.siggenInst =  GATSiggenInstance(self.siggenSetup)
 
 def getPointer(floatfloat):
   return (floatfloat.__array_interface__['data'][0] + np.arange(floatfloat.shape[0])*floatfloat.strides[0]).astype(np.intp)
