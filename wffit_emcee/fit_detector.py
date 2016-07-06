@@ -25,14 +25,14 @@ def main(argv):
   
   tempGuess = 81
   fitSamples = 150
-  numWaveforms = 30
+  numWaveforms = 3
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
   den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
   system = signal.lti(num, den)
   
-  gradGuess = 0.05
+  gradGuess = 0.04
   pcRadGuess = 2.75
   
   #Create a detector model
@@ -88,29 +88,26 @@ def main(argv):
     value = raw_input('  --> Press q to quit, any other key to continue\n')
 
 
-#  nll_det = lambda *args: -lnlike_detector(*args)
-#  detector_startguess =  np.array([r_arr, phi_arr, z_arr, scale_arr, t0_arr, tempGuess, gradGuess,pcRadGuess])
-#  result = op.minimize(nll_det, detector_startguess, args=(wfs, det, gradList, pcRadList),  method="Powell")
-#  r_arr, phi_arr, z_arr, scale_arr, t0_arr, temp, grad, pcRad = result["x"]
-#
-#  print "temp is %f" % temp
-#  print "grad is %f" % grad
-#  print "pc rad is %f" % pcRad
-#  
-#  fig = plt.figure()
-#  det.SetTemperature(temp)
-#  det.SetFields(pcRad, grad)
-#  for (idx,wf) in enumerate(wfs):
-#    ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
-#  
-#    plt.plot(ml_wf, color="b")
-#    plt.plot(wf.windowedWf, color="r")
-
-
-#  np.clip(phi_arr, 0, np.pi/4)
-  np.clip(r_arr, 0, det.detector_radius)
-  np.clip(z_arr, 0, det.detector_length)
-  np.clip(t0_arr, 0, fitSamples)
+  nll_det = lambda *args: -lnlike_detector(*args)
+  detector_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess))
+  result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Powell")
+  temp, impGrad, pcRad = result["x"][-3:]
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr = result["x"][:-3].reshape((5, numWaveforms))
+  
+  print "MLE temp is %f" % temp
+  print "MLE grad is %f" % impGrad
+  print "MLE pc rad is %f" % pcRad
+  
+  fig = plt.figure()
+  det.SetTemperature(temp)
+  det.SetFields(pcRad, grad)
+  for (idx,wf) in enumerate(wfs):
+    ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
+  
+    plt.plot(ml_wf, color="b")
+    plt.plot(wf.windowedWf, color="r")
+  plt.show()
+  exit(0)
 
   #Do the MCMC
   ndim = 5*numWaveforms + 3
