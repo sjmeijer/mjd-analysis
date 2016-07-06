@@ -44,6 +44,28 @@ class Detector:
     self.rr = None
     self.zz = None
     self.wp_pp = None
+    
+    #stuff for waveform interpolation
+    #round here to fix floating point accuracy problem
+    data_to_siggen_size_ratio = np.around(10. / self.time_step_size,3)
+    if not data_to_siggen_size_ratio.is_integer():
+      print "Error: siggen step size must evenly divide into 10 ns digitization period (ratio is %f)" % data_to_siggen_size_ratio
+      exit(0)
+    elif data_to_siggen_size_ratio < 10:
+      round_places = 0
+    elif data_to_siggen_size_ratio < 100:
+      round_places = 1
+    elif data_to_siggen_size_ratio < 1000:
+      round_places = 2
+    else:
+      print "Error: Ben was too lazy to code in support for resolution this high"
+      exit(0)
+    self.data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
+    
+    #Holders for wf simulation
+    self.sigWf = MGTWaveform();
+    self.raw_siggen_data = np.empty( self.num_steps )
+#    self.processed_sim_data = np.empty()
 
       
   def LoadFields(self, fieldFileName):
@@ -135,75 +157,46 @@ class Detector:
 
     hitPosition = TVector3(x, y, z);
     
-    sigWf = MGTWaveform();
-    calcFlag = self.siggenInst.CalculateWaveform(hitPosition, sigWf, energy);
+    calcFlag = self.siggenInst.CalculateWaveform(hitPosition, self.sigWf, energy);
     if calcFlag == 0:
       print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
       return None
-    siggen_data = np.multiply(sigWf.GetVectorData(),1)
+    self.raw_siggen_data = np.array(self.sigWf.GetVectorData(),copy=False)
 
-    return siggen_data
+    return self.raw_siggen_data
 
 ########################################################################################################
 
   def ProcessWaveform(self, siggen_wf, outputLength, scale, switchpoint):
     '''Use interpolation instead of rounding'''
   
-    siggen_len = self.num_steps + self.zeroPadding
+    siggen_len = self.num_steps #+ self.zeroPadding
 
+#    #TODO: i don't think zero padding actually does anything anyway
+#    if self.zeroPadding == 0:
+#      zeroPaddingIdx = 0
+#    else:
+#      siggen_wf = np.pad(siggen_wf, (self.zeroPadding,0), 'constant', constant_values=(0, 0))
+#      zeroPaddingIdx = self.zeroPadding
 
-    #TODO: i don't think zero padding actually does anything anyway
-    if self.zeroPadding == 0:
-      zeroPaddingIdx = 0
-    else:
-      siggen_wf = np.pad(siggen_wf, (self.zeroPadding,0), 'constant', constant_values=(0, 0))
-      zeroPaddingIdx = self.zeroPadding
-    
     #actual wf gen
-    tout, siggen_wf, x = signal.lsim(self.tfSystem, siggen_wf, self.time_steps)
+    tout, siggen_data, x = signal.lsim(self.tfSystem, siggen_wf, self.time_steps)
     siggen_wf /= np.amax(siggen_wf)
     
-    siggen_data = siggen_wf[zeroPaddingIdx::]
-    siggen_data = siggen_data*scale
-    
-
-    #I think most this stuff could be shoved to init to avoid having to redo it on the fly
-    
-    #round here to fix floating point accuracy problem
-    data_to_siggen_size_ratio = np.around(10. / self.time_step_size,3)
-    
-    if not data_to_siggen_size_ratio.is_integer():
-      print "Error: siggen step size must evenly divide into 10 ns digitization period (ratio is %f)" % data_to_siggen_size_ratio
-      exit(0)
-    elif data_to_siggen_size_ratio < 10:
-      round_places = 0
-    elif data_to_siggen_size_ratio < 100:
-      round_places = 1
-    elif data_to_siggen_size_ratio < 1000:
-      round_places = 2
-    else:
-      print "Error: Ben was too lazy to code in support for resolution this high"
-      exit(0)
-    
-    data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
-
+#    siggen_data = siggen_wf[zeroPaddingIdx::]
+    siggen_data *= scale
 
     #resample the siggen wf to the 10ns digitized data frequency w/ interpolaiton
     switchpoint_ceil= np.int( np.ceil(switchpoint) )
-    
-    
     samples_to_fill = (outputLength - switchpoint_ceil)
-    
-#    print "num steps %d" % self.num_steps
-#    print "len siggen data %d" % len(siggen_data)
 
-    siggen_interp_fn = interpolate.interp1d(np.arange(self.num_steps ), siggen_data, kind="linear")
+
+    siggen_interp_fn = interpolate.interp1d(np.arange(self.num_steps ), siggen_data, kind="linear", copy="False", assume_sorted="True")
 
     siggen_start_idx = switchpoint_ceil - switchpoint
     
-#    print "siggen start idx is %f" % siggen_start_idx
 
-    sampled_idxs = np.arange(samples_to_fill)*data_to_siggen_size_ratio + siggen_start_idx
+    sampled_idxs = np.arange(samples_to_fill)*self.data_to_siggen_size_ratio + siggen_start_idx
     
 #    print sampled_idxs
 
