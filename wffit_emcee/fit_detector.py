@@ -88,6 +88,7 @@ def main(argv):
     value = raw_input('  --> Press q to quit, any other key to continue\n')
 
 
+  print "Starting detector MLE..."
   nll_det = lambda *args: -lnlike_detector(*args)
   detector_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess))
   result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Powell")
@@ -100,7 +101,7 @@ def main(argv):
   
   fig = plt.figure()
   det.SetTemperature(temp)
-  det.SetFields(pcRad, grad)
+  det.SetFields(pcRad, impGrad)
   for (idx,wf) in enumerate(wfs):
     ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
   
