@@ -181,7 +181,7 @@ class Detector:
 
     #actual wf gen
     tout, siggen_data, x = signal.lsim(self.tfSystem, siggen_wf, self.time_steps)
-    siggen_wf /= np.amax(siggen_wf)
+    siggen_data /= np.amax(siggen_data)
     
 #    siggen_data = siggen_wf[zeroPaddingIdx::]
     siggen_data *= scale
@@ -273,6 +273,10 @@ class Detector:
     # Restore the previously opened file's state. To do so, we need to
     # reopen it and read from it until the line count is restored.
     self.siggenInst =  GATSiggenInstance(self.siggenSetup)
+
+  def __del__(self):
+    del self.wp_pp
+    del self.siggenInst
 
 def getPointer(floatfloat):
   return (floatfloat.__array_interface__['data'][0] + np.arange(floatfloat.shape[0])*floatfloat.strides[0]).astype(np.intp)
