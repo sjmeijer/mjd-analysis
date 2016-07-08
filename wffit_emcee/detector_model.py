@@ -264,7 +264,7 @@ class Detector:
     # Remove the unpicklable entries.
     del state['wp_pp']
     del state['siggenInst']
-    
+    state['wp_pp'] = None
     return state
 
   def __setstate__(self, state):
