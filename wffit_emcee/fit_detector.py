@@ -25,15 +25,15 @@ def main(argv):
   
   tempGuess = 81
   fitSamples = 150
-  numWaveforms = 3
+  numWaveforms = 20
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
   den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
   system = signal.lti(num, den)
   
-  gradGuess = 0.04
-  pcRadGuess = 2.75
+  gradGuess = 0.05
+  pcRadGuess = 2.55
   
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f.conf" % (gradGuess,pcRadGuess)
@@ -87,32 +87,36 @@ def main(argv):
       plt.plot(wf.windowedWf, color="r")
     value = raw_input('  --> Press q to quit, any other key to continue\n')
 
-
-  print "Starting detector MLE..."
-  nll_det = lambda *args: -lnlike_detector(*args)
-  detector_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess))
-  result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Powell")
-  temp, impGrad, pcRad = result["x"][-3:]
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr = result["x"][:-3].reshape((5, numWaveforms))
-  
-  print "MLE temp is %f" % temp
-  print "MLE grad is %f" % impGrad
-  print "MLE pc rad is %f" % pcRad
-  
-  fig = plt.figure()
-  det.SetTemperature(temp)
-  det.SetFields(pcRad, impGrad)
-  for (idx,wf) in enumerate(wfs):
-    ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
-  
-    plt.plot(ml_wf, color="b")
-    plt.plot(wf.windowedWf, color="r")
-  plt.show()
-  exit(0)
+  if False:
+    print "Starting detector MLE..."
+    detmleFileName = "P42574A_%dwaveforms_detectormle.npz" % numWaveforms
+    nll_det = lambda *args: -lnlike_detector(*args)
+    detector_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess))
+    result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Powell")
+    temp, impGrad, pcRad = result["x"][-3:]
+    r_arr, phi_arr, z_arr, scale_arr, t0_arr = result["x"][:-3].reshape((5, numWaveforms))
+    
+    print "MLE temp is %f" % temp
+    print "MLE grad is %f" % impGrad
+    print "MLE pc rad is %f" % pcRad
+    
+    fig = plt.figure()
+    det.SetTemperature(temp)
+    det.SetFields(pcRad, impGrad)
+    for (idx,wf) in enumerate(wfs):
+      ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
+    
+      plt.plot(ml_wf, color="b")
+      plt.plot(wf.windowedWf, color="r")
+    
+    np.savez(detmleFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  temp=temp, impGrad=impGrad, pcRad=pcRad)
+    plt.show()
+    value = raw_input('  --> Press q to quit, any other key to continue\n')
+    exit(0)
 
   #Do the MCMC
   ndim = 5*numWaveforms + 3
-  nwalkers = ndim * 4
+  nwalkers = ndim * 3+1
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess))
 
   pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim) for i in range(nwalkers)]
@@ -194,7 +198,7 @@ def main(argv):
     ax7.plot(sampler.chain[i,:,-1], "b", alpha=0.3) #pcrad
 
 
-  plt.savefig("emcee_chain.png")
+  plt.savefig("emcee_chain_%dwfs.png" % numWaveforms)
 
 
   print "making waveforms figure..."
@@ -226,7 +230,7 @@ def main(argv):
   residFig = plt.figure(3)
   helpers.plotManyResidual(simWfs, wfs, figure=residFig)
 
-  plt.savefig("emcee_waveforms.png")
+  plt.savefig("emcee_waveforms_%dwfs.png" % numWaveforms)
 
   plt.show()
   value = raw_input('  --> Press q to quit, any other key to continue\n')
