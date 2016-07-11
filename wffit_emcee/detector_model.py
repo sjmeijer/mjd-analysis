@@ -256,9 +256,12 @@ class Detector:
     # all our instance attributes. Always use the dict.copy()
     # method to avoid modifying the original state.
     
-    self.siggenSetup = self.siggenInst.GetSafeSiggenSetup()
+#    self.siggenSetup = Safe_Siggen_Setup()
+#    self.siggenInst.SaveSiggenSetup(self.siggenSetup)
 
-    #should probably actually free these things?
+    #manually do a deep copy of the velo data
+    self.siggenSetup = self.siggenInst.GetSafeSiggenSetup()
+    self.siggenVelo = v_lookup(self.siggenSetup.velo_data)
   
     state = self.__dict__.copy()
     # Remove the unpicklable entries.
@@ -272,6 +275,8 @@ class Detector:
     self.__dict__.update(state)
     # Restore the previously opened file's state. To do so, we need to
     # reopen it and read from it until the line count is restored.
+
+    self.siggenSetup.velo_data = self.siggenVelo.v_lookup_obj
     self.siggenInst =  GATSiggenInstance(self.siggenSetup)
 
   def __del__(self):
@@ -282,5 +287,58 @@ def getPointer(floatfloat):
   return (floatfloat.__array_interface__['data'][0] + np.arange(floatfloat.shape[0])*floatfloat.strides[0]).astype(np.intp)
 
 
+#wrap the safe_siggen_setup for pickling
+class v_lookup:
+  def __init__(self, v_lookup_obj):
+    self.v_lookup_obj = v_lookup_obj
+    self.e = v_lookup_obj.e
+    self.e100 = v_lookup_obj.e100
+    self.e110 = v_lookup_obj.e110
+    self.e111 = v_lookup_obj.e111
+    self.h100 = v_lookup_obj.h100
+    self.h110 = v_lookup_obj.h110
+    self.h111 = v_lookup_obj.h111
+    self.ea = v_lookup_obj.ea
+    self.eb = v_lookup_obj.eb
+    self.ec = v_lookup_obj.ec
+    self.ebp = v_lookup_obj.ebp
+    self.ecp = v_lookup_obj.ecp
+    self.ha = v_lookup_obj.ha
+    self.hb = v_lookup_obj.hb
+    self.hc = v_lookup_obj.hc
+    self.hbp = v_lookup_obj.hbp
+    self.hcp = v_lookup_obj.hcp
+    self.hcorr = v_lookup_obj.hcorr
+    self.ecorr = v_lookup_obj.ecorr
+  
+  def __getstate__(self):
+    state = self.__dict__.copy()
+    # Remove the unpicklable entries.
+    del state['v_lookup_obj']
+    return state
+
+  def __setstate__(self, state):
+    self.__dict__.update(state)
+    self.v_lookup_obj = GATSiggenVelocityLookup()
+    
+    self.v_lookup_obj.e = self.e
+    self.v_lookup_obj.e100 = self.e100
+    self.v_lookup_obj.e110 = self.e110
+    self.v_lookup_obj.e111 = self.e111
+    self.v_lookup_obj.h100 = self.h100
+    self.v_lookup_obj.h110 = self.h110
+    self.v_lookup_obj.h111 = self.h111
+    self.v_lookup_obj.ea = self.ea
+    self.v_lookup_obj.eb = self.eb
+    self.v_lookup_obj.ec = self.ec
+    self.v_lookup_obj.ebp = self.ebp
+    self.v_lookup_obj.ecp = self.ecp
+    self.v_lookup_obj.ha = self.ha
+    self.v_lookup_obj.hb = self.hb
+    self.v_lookup_obj.hc = self.hc
+    self.v_lookup_obj.hbp = self.hbp
+    self.v_lookup_obj.hcp = self.hcp
+    self.v_lookup_obj.hcorr = self.hcorr
+    self.v_lookup_obj.ecorr = self.ecorr
 
 
