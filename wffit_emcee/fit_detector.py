@@ -25,15 +25,15 @@ def main(argv):
   
   tempGuess = 81
   fitSamples = 150
-  numWaveforms = 20
+  numWaveforms = 30
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
   den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
   system = signal.lti(num, den)
   
-  gradGuess = 0.05
-  pcRadGuess = 2.55
+  gradGuess = 0.04
+  pcRadGuess = 2.25
   
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f.conf" % (gradGuess,pcRadGuess)
@@ -116,7 +116,7 @@ def main(argv):
 
   #Do the MCMC
   ndim = 5*numWaveforms + 3
-  nwalkers = ndim * 3+1
+  nwalkers = ndim * 2
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess))
 
   pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim) for i in range(nwalkers)]
@@ -141,7 +141,7 @@ def main(argv):
       print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
       exit(0)
 
-  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wfs, det), threads=8)
+  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wfs, det), threads=1)
 #    f = open("chain.dat", "w")
 #    f.close()
 
