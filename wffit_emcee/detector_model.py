@@ -1,6 +1,7 @@
 #!/usr/local/bin/python
 from ROOT import *
 
+#import sys
 import numpy as np
 import copy
 from scipy import  signal, interpolate
@@ -69,6 +70,7 @@ class Detector:
 
       
   def LoadFields(self, fieldFileName):
+    self.fieldFileName = fieldFileName
   
     with np.load(fieldFileName) as data:
       data = np.load(fieldFileName)
@@ -266,8 +268,22 @@ class Detector:
     state = self.__dict__.copy()
     # Remove the unpicklable entries.
     del state['wp_pp']
+    del state['rr']
+    del state['zz']
+    del state['raw_siggen_data']
+    del state['time_steps']
+    del state['efld_r_function']
+    del state['efld_z_function']
+    del state['wp_function']
+    del state['pcRadList']
+    del state['gradList']
     del state['siggenInst']
+    
     state['wp_pp'] = None
+    
+#    for key in state:
+#      print key + ": " + str(sys.getsizeof(state[key]))
+
     return state
 
   def __setstate__(self, state):
@@ -278,6 +294,11 @@ class Detector:
 
     self.siggenSetup.velo_data = self.siggenVelo.v_lookup_obj
     self.siggenInst =  GATSiggenInstance(self.siggenSetup)
+  
+    self.time_steps = np.arange(0, self.num_steps+ self.zeroPadding) * self.time_step_size*1E-9 #this is in ns
+    self.raw_siggen_data = np.empty( self.num_steps )
+    self.LoadFields(self.fieldFileName)
+  
 
   def __del__(self):
     del self.wp_pp
