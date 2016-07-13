@@ -205,6 +205,8 @@ class Detector:
     return out
 
 
+  def SetTransferFunction(self, num, den):
+    self.tfSystem = signal.lti(num, den)
 
   def SetTemperature(self, temp):
     self.siggenInst.SetTemperature(temp)
