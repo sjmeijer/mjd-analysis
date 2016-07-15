@@ -3,6 +3,7 @@ from ROOT import *
 
 #import sys
 import numpy as np
+import ctypes
 import copy
 from scipy import  signal, interpolate
 
@@ -64,8 +65,9 @@ class Detector:
     self.data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
     
     #Holders for wf simulation
-    self.sigWf = MGTWaveform();
-    self.raw_siggen_data = np.empty( self.num_steps )
+#    self.sigWf = MGTWaveform();
+#    self.raw_siggen_data =   np.array(self.siggenInst.fSignal,copy=False)  #
+    self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
 #    self.processed_sim_data = np.empty()
 
       
@@ -95,6 +97,21 @@ class Detector:
     self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList), efld_zArray)
     
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
+    
+    
+#  def LoadFieldsSplint(self,fieldFileName):
+#    self.fieldFileName = fieldFileName
+#  
+#    with np.load(fieldFileName) as data:
+#      data = np.load(fieldFileName)
+#      wpArray  = data['wpArray']
+#      efld_rArray = data['efld_rArray']
+#      efld_zArray = data['efld_zArray']
+#      gradList = data['gradList']
+#      pcRadList = data['pcRadList']
+#    
+#    self.gradList = gradList
+#    self.pcRadList = pcRadList
 
 
   def SetFields(self, pcSize, impurityGrad):
@@ -156,14 +173,13 @@ class Detector:
 
     x = r * np.sin(phi)
     y = r * np.cos(phi)
-
-    hitPosition = TVector3(x, y, z);
     
-    calcFlag = self.siggenInst.CalculateWaveform(hitPosition, self.sigWf, energy);
+    self.raw_siggen_data.fill(0.)
+
+    calcFlag = self.siggenInst.GetWaveform(x, y, z, self.raw_siggen_data.ctypes.data_as(ctypes.POINTER(ctypes.c_float)).contents, energy);
     if calcFlag == 0:
       print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
       return None
-    self.raw_siggen_data = np.array(self.sigWf.GetVectorData(),copy=False)
 
     return self.raw_siggen_data
 
@@ -298,7 +314,7 @@ class Detector:
     self.siggenInst =  GATSiggenInstance(self.siggenSetup)
   
     self.time_steps = np.arange(0, self.num_steps+ self.zeroPadding) * self.time_step_size*1E-9 #this is in ns
-    self.raw_siggen_data = np.empty( self.num_steps )
+    self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
   
 
@@ -308,6 +324,9 @@ class Detector:
 
 def getPointer(floatfloat):
   return (floatfloat.__array_interface__['data'][0] + np.arange(floatfloat.shape[0])*floatfloat.strides[0]).astype(np.intp)
+
+def getArrayPointer(float):
+  return (float.__array_interface__['data'][0])
 
 
 #wrap the safe_siggen_setup for pickling
