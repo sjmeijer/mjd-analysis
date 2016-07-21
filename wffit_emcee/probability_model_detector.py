@@ -19,8 +19,8 @@ def lnprob(theta, wf_arr, detector):
 def lnlike_detector(theta, wf_arr, detector):
   '''assumes the data comes in w/ 10ns sampling period'''
 
-  temp, impGrad, pcRad = theta[-3:]
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-3].reshape((5, len(wf_arr)))
+  temp, impGrad, pcRad, num1, num2, num3, den1, den2, den3 = theta[-9:]
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-9].reshape((5, len(wf_arr)))
   
   gradList  = detector.gradList
   pcRadList =  detector.pcRadList
@@ -33,6 +33,9 @@ def lnlike_detector(theta, wf_arr, detector):
   if temp < 40 or temp > 120:
     return -np.inf
   
+  num = [num1, num2, num3]
+  den = [1, den1, den2, den3]
+  detector.SetTransferFunction(num, den)
   detector.SetTemperature(temp)
   detector.SetFields(pcRad, impGrad)
 
@@ -77,8 +80,8 @@ def lnprior(theta, wf_arr, detector):
      Normal prior on energy scale with sigma = 0.1 * wfMax
   '''
   
-  temp, impGrad, pcRad = theta[-3:]
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-3].reshape((5, len(wf_arr)))
+  temp, impGrad, pcRad, num1, num2, num3, den1, den2, den3 = theta[-9:]
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-9].reshape((5, len(wf_arr)))
   
   gradList  = detector.gradList
   pcRadList =  detector.pcRadList
@@ -90,6 +93,8 @@ def lnprior(theta, wf_arr, detector):
   if impGrad < gradList[0] or impGrad > gradList[-1]:
 #    print "bad prior imp grad %f" % impGrad
     return -np.inf
+
+  #flat prior also on transfer function
 
   #except for temp.
   if temp <40 or temp > 120:

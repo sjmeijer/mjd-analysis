@@ -25,15 +25,15 @@ def main(argv):
   
   tempGuess = 81
   fitSamples = 200
-  numWaveforms = 10
+  numWaveforms = 20
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
   den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
   system = signal.lti(num, den)
   
-  gradGuess = 0.04
-  pcRadGuess = 2.25
+  gradGuess = 0.05
+  pcRadGuess = 2.55
   
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f.conf" % (gradGuess,pcRadGuess)
@@ -145,11 +145,11 @@ def main(argv):
       print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
       exit(0)
 
-  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wfs, det), threads=1)
+  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wfs, det), threads=8)
 #    f = open("chain.dat", "w")
 #    f.close()
 
-  iter, burnIn = 1000, 800
+  iter, burnIn = 5000, 4800
   wfPlotNumber = 10
   
   start = timer()
