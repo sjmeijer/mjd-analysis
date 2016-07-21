@@ -25,7 +25,7 @@ def main(argv):
   
   tempGuess = 81
   fitSamples = 200
-  numWaveforms = 20
+  numWaveforms = 30
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
@@ -40,6 +40,9 @@ def main(argv):
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
   det.LoadFields("P42574A_fields.npz")
   
+  tempIdx = -9
+  gradIdx = -8
+  pcRadIdx = -7
   
   wfFileName = "P42574A_%dwaveforms.npz" % numWaveforms
   if os.path.isfile(wfFileName):
@@ -87,41 +90,40 @@ def main(argv):
       plt.plot(wf.windowedWf, color="r")
     value = raw_input('  --> Press q to quit, any other key to continue\n')
 
-#  if False:
-#    print "Starting detector MLE..."
-#    detmleFileName = "P42574A_%dwaveforms_detectormle.npz" % numWaveforms
-#    nll_det = lambda *args: -lnlike_detector(*args)
-#    detector_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess))
-#    result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Powell")
-#    temp, impGrad, pcRad = result["x"][-3:]
-#    r_arr, phi_arr, z_arr, scale_arr, t0_arr = result["x"][:-3].reshape((5, numWaveforms))
-#    
-#    print "MLE temp is %f" % temp
-#    print "MLE grad is %f" % impGrad
-#    print "MLE pc rad is %f" % pcRad
-#    
-#    fig = plt.figure()
-#    det.SetTemperature(temp)
-#    det.SetFields(pcRad, impGrad)
-#    for (idx,wf) in enumerate(wfs):
-#      ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
-#    
-#      plt.plot(ml_wf, color="b")
-#      plt.plot(wf.windowedWf, color="r")
-#    
-#    np.savez(detmleFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  temp=temp, impGrad=impGrad, pcRad=pcRad)
-#    plt.show()
-#    value = raw_input('  --> Press q to quit, any other key to continue\n')
-#    exit(0)
+  if True:
+    print "Starting detector MLE..."
+    detmleFileName = "P42574A_%dwaveforms_detectormle.npz" % numWaveforms
+    nll_det = lambda *args: -lnlike_detector(*args)
+    detector_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
+    result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Powell", options={"disp":True, "return_all": True})
+    temp, impGrad, pcRad = result[tempIdx], result[gradIdx], result[pcRadIdx]
+    r_arr, phi_arr, z_arr, scale_arr, t0_arr = result[:-9].reshape((5, numWaveforms))
+    num = [result[-6], result[-5], result[-4]]
+    den = [1, result[-3], result[-2], result[-1]]
+    
+    print "MLE temp is %f" % temp
+    print "MLE grad is %f" % impGrad
+    print "MLE pc rad is %f" % pcRad
+    
+    fig = plt.figure()
+    det.SetTemperature(temp)
+    det.SetFields(pcRad, impGrad)
+    det.SetTransferFunction(num, den)
+    for (idx,wf) in enumerate(wfs):
+      ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
+    
+      plt.plot(ml_wf, color="b")
+      plt.plot(wf.windowedWf, color="r")
+    
+    np.savez(detmleFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  temp=temp, impGrad=impGrad, pcRad=pcRad)
+    plt.show()
+    value = raw_input('  --> Press q to quit, any other key to continue\n')
+    exit(0)
 
   #Do the MCMC
   ndim = 5*numWaveforms + 3 + 6
   nwalkers = ndim * 2
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
-
-  tempIdx = -9
-  gradIdx = -8
-  pcRadIdx = -7
 
   pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
 
