@@ -25,18 +25,20 @@ def main(argv):
   
   tempGuess = 81
   fitSamples = 200
-  numWaveforms = 30
+  numWaveforms = 10
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
   den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
   system = signal.lti(num, den)
   
-  gradGuess = 0.05
-  pcRadGuess = 2.55
+#  gradGuess = 0.05
+#  pcRadGuess = 2.55
+  gradGuess = 0.04
+  pcRadGuess = 2.3
   
   #Create a detector model
-  detName = "conf/P42574A_grad%0.2f_pcrad%0.2f.conf" % (gradGuess,pcRadGuess)
+  detName = "conf/P42574A_grad%0.3f_pcrad%0.4f.conf" % (gradGuess,pcRadGuess)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
   det.LoadFields("P42574A_fields.npz")
   
@@ -95,11 +97,12 @@ def main(argv):
     detmleFileName = "P42574A_%dwaveforms_detectormle.npz" % numWaveforms
     nll_det = lambda *args: -lnlike_detector(*args)
     detector_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
-    result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Powell", options={"disp":True, "return_all": True})
-    temp, impGrad, pcRad = result[tempIdx], result[gradIdx], result[pcRadIdx]
-    r_arr, phi_arr, z_arr, scale_arr, t0_arr = result[:-9].reshape((5, numWaveforms))
-    num = [result[-6], result[-5], result[-4]]
-    den = [1, result[-3], result[-2], result[-1]]
+    result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Nelder-Mead", options={"disp":True, "return_all": True}, tol=10.)
+    
+    temp, impGrad, pcRad = result["x"][tempIdx], result["x"][gradIdx], result["x"][pcRadIdx]
+    r_arr, phi_arr, z_arr, scale_arr, t0_arr = result["x"][:-9].reshape((5, numWaveforms))
+    num = [result["x"][-6], result["x"][-5], result["x"][-4]]
+    den = [1, result["x"][-3], result["x"][-2], result["x"][-1]]
     
     print "MLE temp is %f" % temp
     print "MLE grad is %f" % impGrad

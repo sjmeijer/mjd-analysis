@@ -48,6 +48,9 @@ def lnlike_detector(theta, wf_arr, detector):
 
     totalLike += wf_like
   
+  print "likelihood: %0.3f" % totalLike
+  print ">>> temp: %0.2f, pcrad %0.6f, impgrad = %0.4f" % (temp, pcRad, impGrad)
+  print ">>> num: " + str(num) + ", den: " + str(den)
   return totalLike
 
 def lnlike_waveform(theta, wf, detector):
