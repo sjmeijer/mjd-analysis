@@ -15,6 +15,8 @@ from probability_model_detector import *
 from progressbar import ProgressBar, Percentage, Bar
 from timeit import default_timer as timer
 
+
+
 def main(argv):
 
   plt.ion()
@@ -23,7 +25,8 @@ def main(argv):
   channel = 626
   aeCutVal = 0.01425
   
-  tempGuess = 81
+  numThreads=8
+  tempGuess = 118
   fitSamples = 200
   numWaveforms = 10
   
@@ -32,11 +35,20 @@ def main(argv):
   den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
   system = signal.lti(num, den)
   
-#  gradGuess = 0.05
-#  pcRadGuess = 2.55
   gradGuess = 0.04
-  pcRadGuess = 2.3
-  
+  pcRadGuess = 2.4
+#10 wfs
+#MLE temp is 118.688837
+#MLE grad is 0.042946
+#MLE pc rad is 2.380447
+
+
+#  gradGuess = 0.05
+#  pcRadGuess = 2.6
+#  MLE temp is 119.349995
+#MLE grad is 0.058667
+#MLE pc rad is 2.700000
+
   #Create a detector model
   detName = "conf/P42574A_grad%0.3f_pcrad%0.4f.conf" % (gradGuess,pcRadGuess)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
@@ -83,49 +95,54 @@ def main(argv):
     np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  )
 
 
-  if True:
-    fig = plt.figure()
-    for (idx,wf) in enumerate(wfs):
-      print "r: %f\nphi %f\nz %f\n e %f\nt0 %f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx])
-      ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
-      plt.plot(ml_wf, color="b")
-      plt.plot(wf.windowedWf, color="r")
-    value = raw_input('  --> Press q to quit, any other key to continue\n')
 
   if True:
+    fig = plt.figure()
+    simWfArr = np.empty((1,numWaveforms, fitSamples))
+    for (idx,wf) in enumerate(wfs):
+      print "r: %f\nphi %f\nz %f\n e %f\nt0 %f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx])
+      simWfArr[0,idx,:] = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
+    helpers.plotManyResidual(simWfArr, wfs, fig, residAlpha=1)
+    value = raw_input('  --> Press q to quit, any other key to continue\n')
+
+  if False:
     print "Starting detector MLE..."
     detmleFileName = "P42574A_%dwaveforms_detectormle.npz" % numWaveforms
-    nll_det = lambda *args: -lnlike_detector(*args)
-    detector_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
-    result = op.minimize(nll_det, detector_startguess, args=(wfs, det),  method="Nelder-Mead", options={"disp":True, "return_all": True}, tol=10.)
+    nll_det = lambda *args: -lnlike_detector_holdwf(*args)
+    detector_startguess = np.hstack((tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
+    wfParams = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],) )
     
-    temp, impGrad, pcRad = result["x"][tempIdx], result["x"][gradIdx], result["x"][pcRadIdx]
-    r_arr, phi_arr, z_arr, scale_arr, t0_arr = result["x"][:-9].reshape((5, numWaveforms))
-    num = [result["x"][-6], result["x"][-5], result["x"][-4]]
-    den = [1, result["x"][-3], result["x"][-2], result["x"][-1]]
-    
+    result = op.basinhopping(nll_det, detector_startguess, minimizer_kwargs={"args":(wfs, det, wfParams),  "method":"Powell"})
+
+    temp, impGrad, pcRad, num1, num2, num3, den1, den2, den3 = result["x"]
+#    temp, impGrad, pcRad = result["x"][1], result["x"][gradIdx], result["x"][pcRadIdx]
+##    r_arr, phi_arr, z_arr, scale_arr, t0_arr = result["x"][:-9].reshape((5, numWaveforms))
+#    num = [result["x"][-6], result["x"][-5], result["x"][-4]]
+#    den = [1, result["x"][-3], result["x"][-2], result["x"][-1]]
+
+    num = [num1, num2, num3]
+    den = [1, den1, den2, den3]
+
     print "MLE temp is %f" % temp
     print "MLE grad is %f" % impGrad
     print "MLE pc rad is %f" % pcRad
     
-    fig = plt.figure()
+    fig2 = plt.figure()
     det.SetTemperature(temp)
     det.SetFields(pcRad, impGrad)
     det.SetTransferFunction(num, den)
+    simWfArr = np.empty((1,numWaveforms, fitSamples))
     for (idx,wf) in enumerate(wfs):
-      ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
-    
-      plt.plot(ml_wf, color="b")
-      plt.plot(wf.windowedWf, color="r")
-    
+      simWfArr[0,idx,:]   = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
+    helpers.plotManyResidual(simWfArr, wfs, fig2, residAlpha=1)
+
     np.savez(detmleFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  temp=temp, impGrad=impGrad, pcRad=pcRad)
-    plt.show()
     value = raw_input('  --> Press q to quit, any other key to continue\n')
     exit(0)
 
   #Do the MCMC
   ndim = 5*numWaveforms + 3 + 6
-  nwalkers = ndim * 2
+  nwalkers = ndim * 3
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
 
   pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
@@ -150,11 +167,11 @@ def main(argv):
       print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
       exit(0)
 
-  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wfs, det), threads=8)
+  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wfs, det), threads=numThreads)
 #    f = open("chain.dat", "w")
 #    f.close()
 
-  iter, burnIn = 5000, 4800
+  iter, burnIn = 1000, 800
   wfPlotNumber = 10
   
   start = timer()

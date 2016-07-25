@@ -46,12 +46,51 @@ def lnlike_detector(theta, wf_arr, detector):
     if not np.isfinite(wf_like):
       return -np.inf
 
-    totalLike += wf_like
+    #NORMALIZE FOR WF LENGTH
+    totalLike += wf_like / wf_arr[wf_idx].wfLength
+  
+#  print "likelihood: %0.3f" % totalLike
+#  print ">>> temp: %0.2f, pcrad %0.6f, impgrad = %0.4f" % (temp, pcRad, impGrad)
+#  print ">>> num: " + str(num) + ", den: " + str(den)
+  return totalLike
+
+def lnlike_detector_holdwf(theta, wf_arr, detector, wfParams):
+  '''assumes the data comes in w/ 10ns sampling period'''
+
+  temp, impGrad, pcRad, num1, num2, num3, den1, den2, den3 = theta
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr = wfParams.reshape((5, len(wf_arr)))
+  
+  gradList  = detector.gradList
+  pcRadList =  detector.pcRadList
+  
+  #Take care of detector business
+  if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
+    return -np.inf
+  if impGrad < gradList[0] or impGrad > gradList[-1]:
+    return -np.inf
+  if temp < 40 or temp > 120:
+    return -np.inf
+  
+  num = [num1, num2, num3]
+  den = [1, den1, den2, den3]
+  detector.SetTransferFunction(num, den)
+  detector.SetTemperature(temp)
+  detector.SetFields(pcRad, impGrad)
+
+  totalLike = 0
+  for (wf_idx) in np.arange(r_arr.size):
+    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx]], wf_arr[wf_idx], detector)
+
+    if not np.isfinite(wf_like):
+      return -np.inf
+    #NORMALIZE FOR WF LENGTH
+    totalLike += wf_like / wf_arr[wf_idx].wfLength
   
   print "likelihood: %0.3f" % totalLike
   print ">>> temp: %0.2f, pcrad %0.6f, impgrad = %0.4f" % (temp, pcRad, impGrad)
   print ">>> num: " + str(num) + ", den: " + str(den)
   return totalLike
+
 
 def lnlike_waveform(theta, wf, detector):
   r, phi, z, scale, t0 = theta
