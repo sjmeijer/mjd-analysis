@@ -28,13 +28,15 @@ def main(argv):
   numThreads=4
   tempGuess = 118
   fitSamples = 200
-  numWaveforms = 5
+  numWaveforms = 3
   
   #MCMC params
   iter, burnIn = 10, 8
   wfPlotNumber = 1
   ndim = 5*numWaveforms + 3 + 6
   nwalkers = ndim * 2
+  ntemps = 5
+
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
@@ -97,7 +99,7 @@ def main(argv):
       wf.WindowWaveformTimepoint(fallPercentage=.99)
       startGuess = [15., np.pi/8, 15., wf.wfMax, wf.t0Guess]
       
-      result = op.minimize(nll_wf, startGuess,  method="Powell")
+      result = op.minimize(nll_wf, startGuess, args=(wf) ,method="Powell")
       r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx] = result["x"]
 
     np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  )
@@ -111,7 +113,7 @@ def main(argv):
       print "r: %f\nphi %f\nz %f\n e %f\nt0 %f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx])
       simWfArr[0,idx,:] = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
     helpers.plotManyResidual(simWfArr, wfs, fig, residAlpha=1)
-    value = raw_input('  --> Press q to quit, any other key to continue\n')
+#    value = raw_input('  --> Press q to quit, any other key to continue\n')
 
   if False:
     print "Starting detector MLE..."
@@ -152,31 +154,34 @@ def main(argv):
 
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
 
-  pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
+#  pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
 
-  for pos in pos0:
-#    print "radius is %f" % det.detector_radius
-#    print "length is %f" % det.detector_length
-#  
-    pos[:numWaveforms] = np.clip( pos[:numWaveforms], 0, np.floor(det.detector_radius))
-    pos[numWaveforms:2*numWaveforms] = np.clip(pos[numWaveforms:2*numWaveforms], 0, np.pi/4)
-    pos[2*numWaveforms:3*numWaveforms] = np.clip(pos[2*numWaveforms:3*numWaveforms], 0, det.detector_length)
-    pos[4*numWaveforms:5*numWaveforms] = np.clip(pos[4*numWaveforms:5*numWaveforms], 0, fitSamples)
+  pos0 = np.random.uniform(low=0.9, high=1.1, size=(ntemps, nwalkers, ndim))
+
+  for tidx in range(ntemps):
+    for widx in range(nwalkers):
+      pos0[tidx, widx, :] = pos0[tidx, widx, :] * mcmc_startguess
+
+      pos = pos0[tidx, widx, :]
+
+      pos[:numWaveforms] = np.clip( pos[:numWaveforms], 0, np.floor(det.detector_radius))
+      pos[numWaveforms:2*numWaveforms] = np.clip(pos[numWaveforms:2*numWaveforms], 0, np.pi/4)
+      pos[2*numWaveforms:3*numWaveforms] = np.clip(pos[2*numWaveforms:3*numWaveforms], 0, det.detector_length)
+      pos[4*numWaveforms:5*numWaveforms] = np.clip(pos[4*numWaveforms:5*numWaveforms], 0, fitSamples)
     
-    pos[tempIdx] = np.clip(pos[tempIdx], 40, 120)
-    pos[gradIdx] = np.clip(pos[gradIdx], det.gradList[0], det.gradList[-1])
-    pos[pcRadIdx] = np.clip(pos[pcRadIdx], det.pcRadList[0], det.pcRadList[-1])
+      pos[tempIdx] = np.clip(pos[tempIdx], 40, 120)
+      pos[gradIdx] = np.clip(pos[gradIdx], det.gradList[0], det.gradList[-1])
+      pos[pcRadIdx] = np.clip(pos[pcRadIdx], det.pcRadList[0], det.pcRadList[-1])
   
-#    print pos[0:30]
+      prior = lnprior(pos,)
+      if not np.isfinite(prior) :
+        print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
+        exit(0)
 
-    prior = lnprior(pos,)
-    if not np.isfinite(prior) :
-      print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
-      exit(0)
 
-  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob,  threads=numThreads)
-#    f = open("chain.dat", "w")
-#    f.close()
+  #sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob,  threads=numThreads)
+  
+  sampler = emcee.PTSampler(ntemps, nwalkers, ndim, lnlike_detector, lnprob,  threads=numThreads)
   
   start = timer()
   
@@ -210,13 +215,14 @@ def main(argv):
   ax3.set_ylabel('scale')
   ax4.set_ylabel('t0')
 
-  for i in range(nwalkers):
-    for j in range(wfs.size):
-      ax0.plot(sampler.chain[i,:,0+j], alpha=0.3)                 # r
-      ax1.plot(sampler.chain[i,:,numWaveforms + j], alpha=0.3)    # phi
-      ax2.plot(sampler.chain[i,:,2*numWaveforms + j], alpha=0.3)  #z
-      ax3.plot(sampler.chain[i,:,3*numWaveforms + j],  alpha=0.3) #energy
-      ax4.plot(sampler.chain[i,:,4*numWaveforms + j],  alpha=0.3) #t0
+  for k in range(ntemps):
+    for i in range(nwalkers):
+      for j in range(wfs.size):
+        ax0.plot(sampler.chain[k, i,:,0+j], alpha=0.3)                 # r
+        ax1.plot(sampler.chain[k, i,:,numWaveforms + j], alpha=0.3)    # phi
+        ax2.plot(sampler.chain[k, i,:,2*numWaveforms + j], alpha=0.3)  #z
+        ax3.plot(sampler.chain[k, i,:,3*numWaveforms + j],  alpha=0.3) #energy
+        ax4.plot(sampler.chain[k, i,:,4*numWaveforms + j],  alpha=0.3) #t0
 
   plt.savefig("emcee_wfchain_%dwfs.png" % numWaveforms)
 
@@ -242,16 +248,17 @@ def main(argv):
   ax7.set_ylabel('den2')
   ax8.set_ylabel('den3')
 
-  for i in range(nwalkers):
-    ax0.plot(sampler.chain[i,:,tempIdx], "b", alpha=0.3) #temp
-    ax1.plot(sampler.chain[i,:,gradIdx], "b", alpha=0.3) #grad
-    ax2.plot(sampler.chain[i,:,pcRadIdx], "b", alpha=0.3) #pcrad
-    ax3.plot(sampler.chain[i,:,-6], "b", alpha=0.3) #temp
-    ax4.plot(sampler.chain[i,:,-5], "b", alpha=0.3) #grad
-    ax5.plot(sampler.chain[i,:,-4], "b", alpha=0.3) #pcrad
-    ax6.plot(sampler.chain[i,:,-3], "b", alpha=0.3) #temp
-    ax7.plot(sampler.chain[i,:,-2], "b", alpha=0.3) #grad
-    ax8.plot(sampler.chain[i,:,-1], "b", alpha=0.3) #pcrad
+  for j in range(ntemps):
+    for i in range(nwalkers):
+      ax0.plot(sampler.chain[j, i,:,tempIdx], "b", alpha=0.3) #temp
+      ax1.plot(sampler.chain[j, i,:,gradIdx], "b", alpha=0.3) #grad
+      ax2.plot(sampler.chain[j, i,:,pcRadIdx], "b", alpha=0.3) #pcrad
+      ax3.plot(sampler.chain[j, i,:,-6], "b", alpha=0.3) #temp
+      ax4.plot(sampler.chain[j, i,:,-5], "b", alpha=0.3) #grad
+      ax5.plot(sampler.chain[j, i,:,-4], "b", alpha=0.3) #pcrad
+      ax6.plot(sampler.chain[j, i,:,-3], "b", alpha=0.3) #temp
+      ax7.plot(sampler.chain[j, i,:,-2], "b", alpha=0.3) #grad
+      ax8.plot(sampler.chain[j, i,:,-1], "b", alpha=0.3) #pcrad
 
 
   plt.savefig("emcee_detchain_%dwfs.png" % numWaveforms)
@@ -263,7 +270,7 @@ def main(argv):
 
   #pull the samples after burn-in
 
-  samples = sampler.chain[:, burnIn:, :].reshape((-1, ndim))
+  samples = sampler.chain[:, :, burnIn:, :].reshape((-1, ndim))
   simWfs = np.empty((wfPlotNumber, numWaveforms, fitSamples))
 
   print "temp is %f" % np.median(samples[:,tempIdx])
