@@ -180,7 +180,7 @@ def plotResidual(simWFArray, dataWF, figure=None):
 
 ########################################################################
 
-def plotManyResidual(simWFArray, dataWFArray, figure=None):
+def plotManyResidual(simWFArray, dataWFArray, figure=None, residAlpha=0.1):
   '''I'd be willing to hear the argument this shouldn't be in here so that i don't need to load matplotlib to run this module,
      but for now, i don't think it matters
   '''
@@ -209,8 +209,8 @@ def plotManyResidual(simWFArray, dataWFArray, figure=None):
       simWF = simWFArray[simWFIdx, dataIdx, :dataLen]
       diff = simWF - dataWFObj.windowedWf
 
-      ax0.plot(t_data, simWF  ,color="black", alpha = 0.1  )
-      ax1.plot(t_data, diff  ,color="#7BAFD4",  alpha = 0.1 )
+      ax0.plot(t_data, simWF  ,color="black", alpha = residAlpha  )
+      ax1.plot(t_data, diff  ,color="#7BAFD4",  alpha = residAlpha )
 
   legend_line_1 = ax0.plot( np.NaN, np.NaN, color='r', label='Data (unfiltered)' )
   legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveform' )
