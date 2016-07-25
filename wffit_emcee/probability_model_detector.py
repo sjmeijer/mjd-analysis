@@ -5,18 +5,26 @@ import scipy.stats as stats
 '''Fit detector properties given an array of waveforms'''
 
 
-def lnprob(theta, wf_arr, detector):
+def init_detector( det):
+  global detector
+  detector = det
+  
+def init_wfs(wf_Arr):
+  global wf_arr
+  wf_arr = wf_Arr
+
+def lnprob(theta):
 
   '''Bayes theorem'''
-  lp = lnprior(theta, wf_arr, detector)
+  lp = lnprior(theta)
   if not np.isfinite(lp):
     return -np.inf
-  return lp + lnlike_detector(theta, wf_arr, detector)
+  return lp + lnlike_detector(theta)
 
 #################################################################
 '''Likelihood functions'''
 #################################################################
-def lnlike_detector(theta, wf_arr, detector):
+def lnlike_detector(theta):
   '''assumes the data comes in w/ 10ns sampling period'''
 
   temp, impGrad, pcRad, num1, num2, num3, den1, den2, den3 = theta[-9:]
@@ -41,7 +49,7 @@ def lnlike_detector(theta, wf_arr, detector):
 
   totalLike = 0
   for (wf_idx) in np.arange(r_arr.size):
-    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx]], wf_arr[wf_idx], detector)
+    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx]], wf_arr[wf_idx], )
 
     if not np.isfinite(wf_like):
       return -np.inf
@@ -54,7 +62,7 @@ def lnlike_detector(theta, wf_arr, detector):
 #  print ">>> num: " + str(num) + ", den: " + str(den)
   return totalLike
 
-def lnlike_detector_holdwf(theta, wf_arr, detector, wfParams):
+def lnlike_detector_holdwf(theta,  wfParams):
   '''assumes the data comes in w/ 10ns sampling period'''
 
   temp, impGrad, pcRad, num1, num2, num3, den1, den2, den3 = theta
@@ -92,7 +100,7 @@ def lnlike_detector_holdwf(theta, wf_arr, detector, wfParams):
   return totalLike
 
 
-def lnlike_waveform(theta, wf, detector):
+def lnlike_waveform(theta, wf):
   r, phi, z, scale, t0 = theta
   if scale < 0 or t0 < 0:
     return -np.inf
@@ -116,7 +124,7 @@ def lnlike_waveform(theta, wf, detector):
 #################################################################
 '''Priors'''
 #################################################################
-def lnprior(theta, wf_arr, detector):
+def lnprior(theta):
   '''Uniform prior on position
      Normal prior on t0 with sigma=5
      Normal prior on energy scale with sigma = 0.1 * wfMax
@@ -147,7 +155,7 @@ def lnprior(theta, wf_arr, detector):
 
   totalPrior = 0
   for (wf_idx) in np.arange(r_arr.size):
-    wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], wf_arr[wf_idx], detector)
+    wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], wf_arr[wf_idx])
 
     if not np.isfinite(wf_like):
 #      print "bad prior wf"
@@ -157,7 +165,7 @@ def lnprior(theta, wf_arr, detector):
 
   return totalPrior + np.log(temp_prior)
 
-def lnprior_waveform(r, phi, z, scale, t0, wf, detector):
+def lnprior_waveform(r, phi, z, scale, t0, wf):
   if not detector.IsInDetector(r, phi, z):
 #    print "bad prior: position (%f, %f, %f)" % (r, phi, z)
     return -np.inf

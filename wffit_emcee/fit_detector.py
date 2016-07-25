@@ -25,10 +25,16 @@ def main(argv):
   channel = 626
   aeCutVal = 0.01425
   
-  numThreads=8
+  numThreads=4
   tempGuess = 118
   fitSamples = 200
-  numWaveforms = 10
+  numWaveforms = 5
+  
+  #MCMC params
+  iter, burnIn = 10, 8
+  wfPlotNumber = 1
+  ndim = 5*numWaveforms + 3 + 6
+  nwalkers = ndim * 2
   
   #Prepare detector
   num = [3.64e+09, 1.88e+17, 6.05e+15]
@@ -45,7 +51,7 @@ def main(argv):
 
 #  gradGuess = 0.05
 #  pcRadGuess = 2.6
-#  MLE temp is 119.349995
+#  MLE temp is 119.349995args
 #MLE grad is 0.058667
 #MLE pc rad is 2.700000
 
@@ -53,6 +59,8 @@ def main(argv):
   detName = "conf/P42574A_grad%0.3f_pcrad%0.4f.conf" % (gradGuess,pcRadGuess)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
   det.LoadFields("P42574A_fields.npz")
+  init_detector(det)
+  
   
   tempIdx = -9
   gradIdx = -8
@@ -89,13 +97,13 @@ def main(argv):
       wf.WindowWaveformTimepoint(fallPercentage=.99)
       startGuess = [15., np.pi/8, 15., wf.wfMax, wf.t0Guess]
       
-      result = op.minimize(nll_wf, startGuess, args=(wf, det),  method="Powell")
+      result = op.minimize(nll_wf, startGuess,  method="Powell")
       r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx] = result["x"]
 
     np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  )
 
 
-
+  init_wfs(wfs)
   if True:
     fig = plt.figure()
     simWfArr = np.empty((1,numWaveforms, fitSamples))
@@ -141,8 +149,7 @@ def main(argv):
     exit(0)
 
   #Do the MCMC
-  ndim = 5*numWaveforms + 3 + 6
-  nwalkers = ndim * 3
+
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
 
   pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
@@ -162,17 +169,14 @@ def main(argv):
   
 #    print pos[0:30]
 
-    prior = lnprior(pos, wfs, det)
+    prior = lnprior(pos,)
     if not np.isfinite(prior) :
       print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
       exit(0)
 
-  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wfs, det), threads=numThreads)
+  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob,  threads=numThreads)
 #    f = open("chain.dat", "w")
 #    f.close()
-
-  iter, burnIn = 1000, 800
-  wfPlotNumber = 10
   
   start = timer()
   
