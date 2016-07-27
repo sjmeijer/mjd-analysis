@@ -23,26 +23,28 @@ def main(argv):
   aeCutVal = 0.01425
   
   numThreads=1
-  tempGuess = 100
+  tempGuess = 80
   fitSamples = 200
   numWaveforms = 5
   
 
   #Prepare detector
-#  num = [3.64e+09, 1.88e+17, 6.05e+15]
-#  den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
-  num = [1977053898.8128378, 1.88e+17, 6050000000000461.0]
-  den = [1, 39709003.905781068, 514546561393036.69, 7.15e+18]
+  num = [3.64e+09, 1.88e+17, 6.05e+15]
+  den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+  
+#  num = [1977053898.8128378, 1.88e+17, 6050000000000461.0]
+#  den = [1, 39709003.905781068, 514546561393036.69, 7.15e+18]
 
   system = signal.lti(num, den)
   
-  gradGuess = 0.05
-  pcRadGuess = 2.4
+  gradGuess = 0.04
+  pcRadGuess = 2.3
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.3f_pcrad%0.4f.conf" % (gradGuess,pcRadGuess)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
   det.LoadFields("P42574A_fields.npz")
+#  det.SetFields(2.28, 0.043)
   init_detector(det)
   
   
@@ -109,9 +111,14 @@ def main(argv):
     print "Starting detector MLE..."
     detmleFileName = "P42574A_%dwaveforms_detectormle.npz" % numWaveforms
 
-    nll_det = lambda *args: -lnlike_detector_holdtf(*args)
+    nll_det = lambda *args: -lnlike_detector_holdpos(*args)
     
-    mcmc_startguess = np.hstack((tempGuess/100, gradGuess*10,pcRadGuess))
+#    num = [3.64e+09, 1.88e+17, 6.05e+15]
+#    den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+    num = [3.64, 1.88, 6.05]
+    den = [1, 4.03, 5.14, 7.15]
+
+    mcmc_startguess = np.hstack((tempGuess/100, gradGuess*10,pcRadGuess, num[:], den[1:]))
     wfParams = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],) )
 
     #fitting only the 3 detector params
@@ -119,15 +126,17 @@ def main(argv):
     #result = op.basinhopping(nll_det, mcmc_startguess, minimizer_kwargs={  "method":"Nelder-Mead", "tol":0.5, "args": (wfParams)})
     #result = op.minimize(nll_det, mcmc_startguess, method="Nelder-Mead", tol=10, args=(wfParams))#options={"fatol":0.5, "xatol":5})
     
-    bounds = [ (.40, 1.20), (det.gradList[0]*10, det.gradList[-1]*19), (det.pcRadList[0], det.pcRadList[-1])   ]
+    bounds = [ (.70, 1.00), (det.gradList[0]*10, det.gradList[-1]*10), (det.pcRadList[0], det.pcRadList[-1]),
+                (0.1, 10),(0.1, 10),(0.1, 10),(0.1, 10),(0.1, 10),(0.1, 10) ]
     result = op.differential_evolution(nll_det, bounds, args=(wfParams), polish=False)
     end = timer()
     print "Elapsed time: " + str(end-start)
     temp, impGrad, pcRad = result["x"][0], result["x"][1], result["x"][2]
+
     temp *= 100
     impGrad /= 10
-
-
+    num = [result["x"][3] *1E9 , result["x"][4] *1E17, result["x"][5]*1E15 ]
+    den = [1, result["x"][6] *1E7 , result["x"][7] *1E14, result["x"][8]*1E18 ]
 
     print "MLE temp is %f" % temp
     print "MLE grad is %f" % impGrad
@@ -139,7 +148,7 @@ def main(argv):
     det.SetTransferFunction(num, den)
     simWfArr = np.empty((1,numWaveforms, fitSamples))
     for (idx,wf) in enumerate(wfs):
-      simWfArr[0,idx,:]   = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples)
+      simWfArr[0,idx,:]   = det.GetSimWaveform(r_arr[idx]*10, phi_arr[idx], z_arr[idx]*10, scale_arr[idx]*1000, t0_arr[idx], fitSamples)
     helpers.plotManyResidual(simWfArr, wfs, fig2, residAlpha=1)
 
     np.savez(detmleFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  temp=temp, impGrad=impGrad, pcRad=pcRad)

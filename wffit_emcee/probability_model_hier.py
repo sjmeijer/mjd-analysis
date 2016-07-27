@@ -67,6 +67,56 @@ def lnlike_detector_holdtf(theta, *wfParams):
 
   return totalLike
 
+def lnlike_detector_holdpos(theta, *wfParams):
+  '''assumes the data comes in w/ 10ns sampling period'''
+
+  temp, impGrad, pcRad = np.copy(theta[:3])
+  num = [np.copy(theta[3]) *1E9 , np.copy(theta[4]) *1E17, np.copy(theta[5])*1E15 ]
+  den = [1, np.copy(theta[6]) *1E7 , np.copy(theta[7]) *1E14, np.copy(theta[8])*1E18 ]
+  
+  wfParams = np.array(wfParams)
+  
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr = wfParams[:].reshape((5, len(wf_arr)))
+  
+  temp *= 100
+  impGrad /= 10
+  
+  print ">>>> temp: %0.2f, pcrad %0.6f, impgrad = %0.4f" % (temp, pcRad, impGrad)
+  print ">>>>              num: " + str(num)
+  print ">>>>              den: " + str(den)
+
+  
+  gradList  = detector.gradList
+  pcRadList =  detector.pcRadList
+  
+  #Take care of detector business
+  if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
+    return -np.inf
+  if impGrad < gradList[0] or impGrad > gradList[-1]:
+    return -np.inf
+  if temp < 40 or temp > 120:
+    return -np.inf
+  
+  detector.SetTemperature(temp)
+  detector.SetFields(pcRad, impGrad)
+  detector.SetTransferFunction(num, den)
+
+  totalLike = 0
+  for (wf_idx) in np.arange(r_arr.size):
+  
+    #find a decent minimization of the wf at this position
+    nll_wf = lambda *args: -lnlike_waveform(*args)
+    
+    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx]], wf_arr[wf_idx])
+
+    if not np.isfinite(wf_like):
+      return -np.inf
+    #NORMALIZE FOR WF LENGTH
+    totalLike += wf_like / wf_arr[wf_idx].wfLength
+  
+  print "  >>total likelihood: %0.3f" % totalLike
+
+  return totalLike
 
 
 def lnlike_waveform(theta, wf):
