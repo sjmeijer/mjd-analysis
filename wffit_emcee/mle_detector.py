@@ -13,6 +13,7 @@ from detector_model import *
 from probability_model_hier import *
 
 from timeit import default_timer as timer
+from multiprocessing import Pool
 
 def main(argv):
 
@@ -23,15 +24,16 @@ def main(argv):
   aeCutVal = 0.01425
   
   numThreads=1
-  tempGuess = 80
+  tempGuess = 79.6
   fitSamples = 200
-  numWaveforms = 5
+  numWaveforms = 8
+  numThreads = 4
   
 
   #Prepare detector
-  num = [3.64e+09, 1.88e+17, 6.05e+15]
-  den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
-  
+  num = [9408524745.7817078, 5.6758925068323565e+17, 6777338901216805.0]
+  den =[1, 39965413.750954814, 512281874713567.94, 6.4912776034190459e+18]
+
 #  num = [1977053898.8128378, 1.88e+17, 6050000000000461.0]
 #  den = [1, 39709003.905781068, 514546561393036.69, 7.15e+18]
 
@@ -81,10 +83,10 @@ def main(argv):
     start = timer()
     for (idx,wf) in enumerate(wfs):
       print "Doing MLE for waveform %d" % idx
-      wf.WindowWaveformTimepoint(fallPercentage=.99)
+      wf.WindowWaveformTimepoint(fallPercentage=.995)
       
       
-      startGuess = [15./10, np.pi/8, 15./10, wf.wfMax/1000, wf.t0Guess]
+      startGuess = [15./10, np.pi/8, 15./10, wf.wfMax/1000., wf.t0Guess]
       
       
       result = op.minimize(nll_wf, startGuess, args=(wf) ,method="Nelder-Mead")
@@ -111,30 +113,39 @@ def main(argv):
     print "Starting detector MLE..."
     detmleFileName = "P42574A_%dwaveforms_detectormle.npz" % numWaveforms
 
-    nll_det = lambda *args: -lnlike_detector_holdpos(*args)
+    nll_det = lambda *args: -lnlike_detector(*args)
     
 #    num = [3.64e+09, 1.88e+17, 6.05e+15]
 #    den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
-    num = [3.64, 1.88, 6.05]
-    den = [1, 4.03, 5.14, 7.15]
+#    num = [3.64, 1.88, 6.05]
+#    den = [1, 4.03, 5.14, 7.15]
+    num = [9.408524745, 5.6758925068323565, 6.777]
+    den = [ 1., 4., 5.12, 6.49]
 
-    mcmc_startguess = np.hstack((tempGuess/100, gradGuess*10,pcRadGuess, num[:], den[1:]))
+    tf_bound = 2.
+    tempMult = 10.
+    gradMult = 100.
+
+    mcmc_startguess = np.hstack((79.6/tempMult, .0388*gradMult,2.37, num[:], den[1:]))
     wfParams = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],) )
+    bounds = [ (70./tempMult, 100./tempMult), (det.gradList[0]*gradMult, det.gradList[-1]*gradMult), (det.pcRadList[0], det.pcRadList[-1]),
+                (num[0]/tf_bound, num[0]*tf_bound),(num[1]/tf_bound, num[1]*tf_bound),(num[2]/tf_bound, num[2]*tf_bound),
+                (den[1]/tf_bound, den[1]*tf_bound),(den[2]/tf_bound, den[2]*tf_bound),(den[3]/tf_bound, den[3]*tf_bound) ]
+
+    p = Pool(numThreads)
 
     #fitting only the 3 detector params
     start = timer()
-    #result = op.basinhopping(nll_det, mcmc_startguess, minimizer_kwargs={  "method":"Nelder-Mead", "tol":0.5, "args": (wfParams)})
-    #result = op.minimize(nll_det, mcmc_startguess, method="Nelder-Mead", tol=10, args=(wfParams))#options={"fatol":0.5, "xatol":5})
-    
-    bounds = [ (.70, 1.00), (det.gradList[0]*10, det.gradList[-1]*10), (det.pcRadList[0], det.pcRadList[-1]),
-                (0.1, 10),(0.1, 10),(0.1, 10),(0.1, 10),(0.1, 10),(0.1, 10) ]
-    result = op.differential_evolution(nll_det, bounds, args=(wfParams), polish=False)
+    #result = op.basinhopping(nll_det, mcmc_startguess, minimizer_kwargs={  "method":"Nelder-Mead", "tol":50, "args": (p, wfParams)})
+    result = op.minimize(nll_det, mcmc_startguess, method="Nelder-Mead", tol=0.5, args=(p, wfParams))
+    #result = op.minimize(nll_det, mcmc_startguess, method="L-BFGS-B", tol=5, bounds=bounds, args=(p, wfParams))
+    #result = op.differential_evolution(nll_det, bounds, args=(p, wfParams), polish=False)
     end = timer()
     print "Elapsed time: " + str(end-start)
     temp, impGrad, pcRad = result["x"][0], result["x"][1], result["x"][2]
 
-    temp *= 100
-    impGrad /= 10
+    temp *= tempMult
+    impGrad /= 100.
     num = [result["x"][3] *1E9 , result["x"][4] *1E17, result["x"][5]*1E15 ]
     den = [1, result["x"][6] *1E7 , result["x"][7] *1E14, result["x"][8]*1E18 ]
 
@@ -151,6 +162,7 @@ def main(argv):
       simWfArr[0,idx,:]   = det.GetSimWaveform(r_arr[idx]*10, phi_arr[idx], z_arr[idx]*10, scale_arr[idx]*1000, t0_arr[idx], fitSamples)
     helpers.plotManyResidual(simWfArr, wfs, fig2, residAlpha=1)
 
+    plt.savefig("mle_waveforms.pdf")
     np.savez(detmleFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  temp=temp, impGrad=impGrad, pcRad=pcRad)
     value = raw_input('  --> Press q to quit, any other key to continue\n')
     exit(0)
