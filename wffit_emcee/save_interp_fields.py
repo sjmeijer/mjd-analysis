@@ -21,8 +21,8 @@ def main(argv):
   den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
   system = signal.lti(num, den)
 
-  gradList = np.linspace(0.01, 0.08, num=8)
-  pcRadList = np.linspace(1.65, 2.95, num=14)
+  gradList = np.linspace(0.01, 0.16, num=16)
+  pcRadList = np.linspace(1.5, 2.9, num=15)
   detArray  = np.empty( (len(gradList),len(pcRadList)), dtype=object)
   
   wpArray  = None
@@ -31,7 +31,7 @@ def main(argv):
   
   for (radIdx, pcRad) in enumerate(pcRadList):
     for (gradIdx,grad) in enumerate(gradList):
-      detName = "conf/P42574A_grad%0.2f_pcrad%0.2f.conf" % (grad,pcRad)
+      detName = "conf/P42574A_grad%0.3f_pcrad%0.4f.conf" % (grad,pcRad)
       det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
       detArray[gradIdx, radIdx] = det
 
