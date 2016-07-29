@@ -31,7 +31,7 @@ def lnlike_detector(theta, *wfParams):
   
   pool = wfParams[0]
   wfParams = np.array(wfParams[1:])
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr = wfParams[:].reshape((5, len(wf_arr)))
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = wfParams[:].reshape((6, len(wf_arr)))
 
   gradList  = detector.gradList
   pcRadList =  detector.pcRadList
@@ -54,17 +54,17 @@ def lnlike_detector(theta, *wfParams):
   args = []
 
   for idx in a_args:
-    args.append( [r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], temp, pcRad, pcLen, impGrad, num, den, wf_arr[idx] ]  )
+    args.append( [r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx], temp, pcRad, pcLen, impGrad, num, den, wf_arr[idx] ]  )
 
   results = pool.map(minimize_wf_star, args)
 
   for (idx, result) in enumerate(results):
   
-    r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx] = result["x"]
+    r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx] = result["x"]
     wf_like = -1*result['fun']
     
     print "  >> wf %d (normalized likelihood %0.2f):" % (idx, wf_like/wf_arr[idx].wfLength)
-    print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx])
+    print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f, smooth: %0.2f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx])
     
     if not np.isfinite(wf_like):
       return -np.inf
@@ -76,14 +76,20 @@ def lnlike_detector(theta, *wfParams):
   return totalLike
 
 
+def minimize_waveform_only(r, phi, z, scale, t0, smooth, wf):
+  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=wf ,method="Nelder-Mead", tol=1.)
+  return result
+def minimize_waveform_only_star(a_b):
+  return minimize_waveform_only(*a_b)
+
 def lnlike_waveform(theta, wf):
-  r, phi, z, scale, t0 = np.copy(theta)
+  r, phi, z, scale, t0, smooth = np.copy(theta)
   
   r *= 10.
   z *= 10.
   scale *= 1000.
   
-  if scale < 0 or t0 < 0:
+  if scale < 0 or t0 < 0 or smooth<0:
     return -np.inf
 
   if not detector.IsInDetector(r, phi, z):
@@ -92,7 +98,7 @@ def lnlike_waveform(theta, wf):
   data = wf.windowedWf
   model_err = wf.baselineRMS
 
-  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data))
+  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data), smoothing=smooth)
   
   if model is None:
     return -np.inf
@@ -104,13 +110,13 @@ def lnlike_waveform(theta, wf):
 def neg_lnlike_wf(theta, wf):
   return -1*lnlike_waveform(theta, wf)
 
-def minimize_wf(r, phi, z, scale, t0, temp, pcRad, pcLen, impGrad, num, den, wf):
+def minimize_wf(r, phi, z, scale, t0, smooth, temp, pcRad, pcLen, impGrad, num, den, wf):
 
   detector.SetTemperature(temp)
   detector.SetFields(pcRad, pcLen, impGrad)
   detector.SetTransferFunction(num, den)
   
-  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0], args=wf ,method="Nelder-Mead", tol=5.)
+  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=wf ,method="Nelder-Mead", tol=1.)
 
   return result
 

@@ -5,7 +5,7 @@ from ROOT import *#GATSiggenInstance, GATSiggenVelocityLookup
 import numpy as np
 import ctypes
 import copy
-from scipy import  signal, interpolate
+from scipy import  signal, interpolate, ndimage
 
 #don't tell me you don't know what a float** is
 import warnings
@@ -33,7 +33,6 @@ class Detector:
     self.detector_length = self.siggenInst.GetDetectorLength()
     
     self.time_steps = np.arange(0, self.num_steps+ self.zeroPadding) * self.time_step_size*1E-9 #this is in ns
-    
     self.tfSystem = tfSystem
   
     if temperature > 0:
@@ -65,12 +64,8 @@ class Detector:
     self.data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
     
     #Holders for wf simulation
-#    self.sigWf = MGTWaveform();
-#    self.raw_siggen_data =   np.array(self.siggenInst.fSignal,copy=False)  #
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
-#    self.processed_sim_data = np.empty()
 
-      
   def LoadFields(self, fieldFileName):
     self.fieldFileName = fieldFileName
   
@@ -89,7 +84,6 @@ class Detector:
     
 #    print "gradList is " + str(gradList)
 #    print "pcRadList is " + str(pcRadList)
-
 
     r_space = np.arange(0, wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4'))
     z_space = np.arange(0, wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4'))
@@ -117,16 +111,19 @@ class Detector:
     points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
     
     
-    new_wp = np.array(wp_function( points_wp ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+    self.wp = np.array(wp_function( points_wp ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
     new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
     new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
   
-    self.wp_pp = getPointer(new_wp)
+    self.wp_pp = getPointer(self.wp)
     efr_pp = getPointer(new_ef_r)
     efz_pp = getPointer(new_ef_z)
   
     self.siggenInst.SetWeightingPotential( self.wp_pp )
     self.siggenInst.SetElectricField( efr_pp, efz_pp )
+
+#    self.PlotFields()
+#    value = raw_input('  --> Press q to quit, any other key to continue\n')
 
   def IsInDetector(self, r, phi, z):
     if r > self.detector_radius or z > self.detector_length:
@@ -138,7 +135,7 @@ class Detector:
     else:
       return 1
 
-  def GetSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, temp=None, num=None, den=None):
+  def GetSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, temp=None, num=None, den=None, smoothing=None):
   
     if num is not None and den is not None:
       self.tfSystem = signal.lti(num, den)
@@ -150,8 +147,15 @@ class Detector:
     
     if sig_wf is None:
       return None
+      
+    #smoothing for charge cloud size effects
+    if smoothing is not None:
+      ndimage.filters.gaussian_filter1d(sig_wf, smoothing, output=sig_wf)
     
     sim_wf = self.ProcessWaveform(sig_wf, numSamples, scale, switchpoint)
+    
+    
+    
     
     return sim_wf
 
@@ -255,7 +259,21 @@ class Detector:
     plt.title("E field from siggen memory")
     plt.xlabel("radial (mm)")
     plt.ylabel("axial (mm)")
-
+        
+    
+  def InitializeSiggen(self, fieldFileName):
+  
+    self.fieldFileName = fieldFileName
+  
+    self.siggenSetup = self.siggenInst.GetSafeSiggenSetup()
+    self.siggenVelo = v_lookup(self.siggenSetup.velo_data)
+    self.siggenSetup.velo_data = self.siggenVelo.v_lookup_obj
+    
+    del self.siggenInst
+    self.siggenInst =  GATSiggenInstance(self.siggenSetup)
+    
+    self.LoadFields(self.fieldFileName)
+    self.wp_pp = None
 
   #For pickling a detector object
   def __getstate__(self):
@@ -268,10 +286,12 @@ class Detector:
 
     #manually do a deep copy of the velo data
     self.siggenSetup = self.siggenInst.GetSafeSiggenSetup()
+    
     self.siggenVelo = v_lookup(self.siggenSetup.velo_data)
   
     state = self.__dict__.copy()
     # Remove the unpicklable entries.
+    del state['wp']
     del state['wp_pp']
     del state['rr']
     del state['zz']
