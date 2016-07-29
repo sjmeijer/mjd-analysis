@@ -46,7 +46,7 @@ def main(argv):
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (gradGuess,pcRadGuess, pcLenGuess)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
-  det.LoadFields("P42574A_fields.npz")
+  det.LoadFields("P42574A_fields_len.npz")
 #  det.SetFields(2.28, 0.043)
   init_detector(det)
   
@@ -133,7 +133,7 @@ def main(argv):
     #result = op.differential_evolution(nll_det, bounds, args=(p, wfParams), polish=False)
     end = timer()
     print "Elapsed time: " + str(end-start)
-    temp, impGrad, pcRad, pcLen = result["x"][0], result["x"][1], result["x"][2], , result["x"][3]
+    temp, impGrad, pcRad, pcLen = result["x"][0], result["x"][1], result["x"][2],  result["x"][3]
 
     temp *= tempMult
     impGrad /= 100.
