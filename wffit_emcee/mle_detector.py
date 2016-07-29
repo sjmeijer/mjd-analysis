@@ -40,19 +40,15 @@ def main(argv):
   system = signal.lti(num, den)
   
   gradGuess = 0.04
-  pcRadGuess = 2.3
+  pcRadGuess = 2.5
+  pcLenGuess = 1.6
 
   #Create a detector model
-  detName = "conf/P42574A_grad%0.3f_pcrad%0.4f.conf" % (gradGuess,pcRadGuess)
+  detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (gradGuess,pcRadGuess, pcLenGuess)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
   det.LoadFields("P42574A_fields.npz")
 #  det.SetFields(2.28, 0.043)
   init_detector(det)
-  
-  
-  tempIdx = -9
-  gradIdx = -8
-  pcRadIdx = -7
   
   wfFileName = "P42574A_%dwaveforms.npz" % numWaveforms
   if os.path.isfile(wfFileName):
@@ -85,16 +81,12 @@ def main(argv):
       print "Doing MLE for waveform %d" % idx
       wf.WindowWaveformTimepoint(fallPercentage=.995)
       
-      
       startGuess = [15./10, np.pi/8, 15./10, wf.wfMax/1000., wf.t0Guess]
-      
-      
       result = op.minimize(nll_wf, startGuess, args=(wf) ,method="Nelder-Mead")
       r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx] = result["x"]
     end = timer()
     print "Elapsed time: " + str(end-start)
     np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr,  )
-
 
   init_wfs(wfs)
 
@@ -115,18 +107,17 @@ def main(argv):
 
     nll_det = lambda *args: -lnlike_detector(*args)
     
-#    num = [3.64e+09, 1.88e+17, 6.05e+15]
-#    den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
-#    num = [3.64, 1.88, 6.05]
-#    den = [1, 4.03, 5.14, 7.15]
     num = [9.408524745, 5.6758925068323565, 6.777]
     den = [ 1., 4., 5.12, 6.49]
 
     tf_bound = 2.
     tempMult = 10.
     gradMult = 100.
+    
+    radStart = 2.5
+    lenStart = 1.6
 
-    mcmc_startguess = np.hstack((79.6/tempMult, .0388*gradMult,2.37, num[:], den[1:]))
+    mcmc_startguess = np.hstack((79.6/tempMult, .0388*gradMult, radStart, lenStart, num[:], den[1:]))
     wfParams = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],) )
     bounds = [ (70./tempMult, 100./tempMult), (det.gradList[0]*gradMult, det.gradList[-1]*gradMult), (det.pcRadList[0], det.pcRadList[-1]),
                 (num[0]/tf_bound, num[0]*tf_bound),(num[1]/tf_bound, num[1]*tf_bound),(num[2]/tf_bound, num[2]*tf_bound),
@@ -142,12 +133,12 @@ def main(argv):
     #result = op.differential_evolution(nll_det, bounds, args=(p, wfParams), polish=False)
     end = timer()
     print "Elapsed time: " + str(end-start)
-    temp, impGrad, pcRad = result["x"][0], result["x"][1], result["x"][2]
+    temp, impGrad, pcRad, pcLen = result["x"][0], result["x"][1], result["x"][2], , result["x"][3]
 
     temp *= tempMult
     impGrad /= 100.
-    num = [result["x"][3] *1E9 , result["x"][4] *1E17, result["x"][5]*1E15 ]
-    den = [1, result["x"][6] *1E7 , result["x"][7] *1E14, result["x"][8]*1E18 ]
+    num = [result["x"][4] *1E9 , result["x"][5] *1E17, result["x"][6]*1E15 ]
+    den = [1, result["x"][7] *1E7 , result["x"][8] *1E14, result["x"][9]*1E18 ]
 
     print "MLE temp is %f" % temp
     print "MLE grad is %f" % impGrad
@@ -155,7 +146,7 @@ def main(argv):
     
     fig2 = plt.figure()
     det.SetTemperature(temp)
-    det.SetFields(pcRad, impGrad)
+    det.SetFields(pcRad, pcLen, impGrad)
     det.SetTransferFunction(num, den)
     simWfArr = np.empty((1,numWaveforms, fitSamples))
     for (idx,wf) in enumerate(wfs):

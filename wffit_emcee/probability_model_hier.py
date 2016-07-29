@@ -18,27 +18,29 @@ def init_wfs(wf_Arr):
 def lnlike_detector(theta, *wfParams):
   '''assumes the data comes in w/ 10ns sampling period'''
 
-  temp, impGrad, pcRad = np.copy(theta[:3])
-  
-  pool = wfParams[0]
-  
-  wfParams = np.array(wfParams[1:])
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr = wfParams[:].reshape((5, len(wf_arr)))
-  num = [np.copy(theta[3]) *1E9 , np.copy(theta[4]) *1E17, np.copy(theta[5])*1E15 ]
-  den = [1, np.copy(theta[6]) *1E7 , np.copy(theta[7]) *1E14, np.copy(theta[8])*1E18 ]
+  temp, impGrad, pcRad, pcLen = np.copy(theta[:4])
+  tfStartIdx = 4
+  num = [np.copy(theta[tfStartIdx]) *1E9 , np.copy(theta[tfStartIdx+1]) *1E17, np.copy(theta[tfStartIdx+2])*1E15 ]
+  den = [1, np.copy(theta[tfStartIdx+3]) *1E7 , np.copy(theta[tfStartIdx+4]) *1E14, np.copy(theta[tfStartIdx+5])*1E18 ]
   
   temp *= 10.
   impGrad /= 100.
-  
-  print ">>>> temp: %0.2f, pcrad %0.6f, impgrad = %0.4f" % (temp, pcRad, impGrad)
+  print ">>>> temp: %0.2f, pcrad %0.6f, pclen %0.6f, impgrad = %0.4f" % (temp, pcRad, pcLen, impGrad)
   print ">>>>              num: " + str(num)
   print ">>>>              den: " + str(den)
+  
+  pool = wfParams[0]
+  wfParams = np.array(wfParams[1:])
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr = wfParams[:].reshape((5, len(wf_arr)))
 
   gradList  = detector.gradList
   pcRadList =  detector.pcRadList
+  pcLenList =  detector.pcLenList
   
   #Take care of detector business
   if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
+    return -np.inf
+  if pcLen < pcLenList[0] or pcLen > pcLenList[-1]:
     return -np.inf
   if impGrad < gradList[0] or impGrad > gradList[-1]:
     return -np.inf
@@ -52,7 +54,7 @@ def lnlike_detector(theta, *wfParams):
   args = []
 
   for idx in a_args:
-    args.append( [r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], temp, pcRad, impGrad, num, den, wf_arr[idx] ]  )
+    args.append( [r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], temp, pcRad, pcLen, impGrad, num, den, wf_arr[idx] ]  )
 
   results = pool.map(minimize_wf_star, args)
 
@@ -97,19 +99,18 @@ def lnlike_waveform(theta, wf):
 
   inv_sigma2 = 1.0/(model_err**2)
 
-
   return -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
 
 def neg_lnlike_wf(theta, wf):
   return -1*lnlike_waveform(theta, wf)
 
-def minimize_wf(r, phi, z, scale, t0, temp, pcRad, impGrad, num, den, wf):
+def minimize_wf(r, phi, z, scale, t0, temp, pcRad, pcLen, impGrad, num, den, wf):
 
   detector.SetTemperature(temp)
-  detector.SetFields(pcRad, impGrad)
+  detector.SetFields(pcRad, pcLen, impGrad)
   detector.SetTransferFunction(num, den)
   
-  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0], args=wf ,method="Nelder-Mead", tol=0.5)
+  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0], args=wf ,method="Nelder-Mead", tol=5.)
 
   return result
 

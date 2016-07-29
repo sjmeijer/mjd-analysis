@@ -81,9 +81,11 @@ class Detector:
       efld_zArray = data['efld_zArray']
       gradList = data['gradList']
       pcRadList = data['pcRadList']
+      pcLenList = data['pcLenList']
     
     self.gradList = gradList
     self.pcRadList = pcRadList
+    self.pcLenList = pcLenList
     
 #    print "gradList is " + str(gradList)
 #    print "pcRadList is " + str(pcRadList)
@@ -92,29 +94,13 @@ class Detector:
     r_space = np.arange(0, wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4'))
     z_space = np.arange(0, wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4'))
 
-    self.wp_function = interpolate.RegularGridInterpolator((r_space, z_space, pcRadList), wpArray)
-    self.efld_r_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList), efld_rArray)
-    self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList), efld_zArray)
+    self.wp_function = interpolate.RegularGridInterpolator((r_space, z_space, pcRadList, pcLenList), wpArray)
+    self.efld_r_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList, pcLenList), efld_rArray)
+    self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList, pcLenList), efld_zArray)
     
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
-    
-    
-#  def LoadFieldsSplint(self,fieldFileName):
-#    self.fieldFileName = fieldFileName
-#  
-#    with np.load(fieldFileName) as data:
-#      data = np.load(fieldFileName)
-#      wpArray  = data['wpArray']
-#      efld_rArray = data['efld_rArray']
-#      efld_zArray = data['efld_zArray']
-#      gradList = data['gradList']
-#      pcRadList = data['pcRadList']
-#    
-#    self.gradList = gradList
-#    self.pcRadList = pcRadList
 
-
-  def SetFields(self, pcSize, impurityGrad):
+  def SetFields(self, pcRad, pcLen, impurityGrad):
 #    print "setting pc radius to %0.4f, grad to %0.4f" % (pcSize, impurityGrad)
 
     rr = self.rr
@@ -123,11 +109,12 @@ class Detector:
     efld_r_function = self.efld_r_function
     efld_z_function = self.efld_z_function
     
-    pcpc = np.ones_like(rr) * pcSize
+    radrad = np.ones_like(rr) * pcRad
+    lenlen = np.ones_like(rr) * pcLen
     gradgrad = np.ones_like(rr) * impurityGrad
     
-    points_wp =  np.array([rr.flatten() , zz.flatten(), pcpc.flatten()], dtype=np.dtype('f4') ).T
-    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), pcpc.flatten()], dtype=np.dtype('f4') ).T
+    points_wp =  np.array([rr.flatten() , zz.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
+    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
     
     
     new_wp = np.array(wp_function( points_wp ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
@@ -146,8 +133,8 @@ class Detector:
       return 0
     elif r <0 or z <0:
       return 0
-#    elif phi <0 or phi > np.pi/4:
-#      return 0
+    elif phi <0 or phi > np.pi/4:
+      return 0
     else:
       return 1
 
