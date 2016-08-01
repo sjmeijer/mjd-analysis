@@ -131,7 +131,7 @@ class Detector:
 #    value = raw_input('  --> Press q to quit, any other key to continue\n')
 
   def IsInDetector(self, r, phi, z):
-    if r > self.detector_radius or z > self.detector_length:
+    if r > np.floor(self.detector_radius*10.)/10. or z > np.floor(self.detector_length*10.)/10.:
       return 0
     elif r <0 or z <0:
       return 0
@@ -173,9 +173,12 @@ class Detector:
     self.raw_siggen_data.fill(0.)
 
     calcFlag = self.siggenInst.GetWaveform(x, y, z, self.raw_siggen_data.ctypes.data_as(ctypes.POINTER(ctypes.c_float)).contents, energy);
-    if calcFlag == 0:
+    if calcFlag == -1:
       print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
       return None
+    
+    if np.amax(self.raw_siggen_data) == 0:
+      print "found zero wf at r=%0.2f, phi=%0.2f, z=%0.2f (calcflag is %d)" % (r, phi, z, calcFlag)
 
     return self.raw_siggen_data
 
@@ -198,10 +201,10 @@ class Detector:
     
     smax = np.amax(siggen_data)
     
-    if smax == 0:
-      print "waveform max is 0 -- something went wrong"
-      exit(0)
-    
+#    if smax == 0:
+#      print "waveform max is 0 -- something went wrong"
+#      exit(0)
+
     siggen_data /= smax
     
 #    siggen_data = siggen_wf[zeroPaddingIdx::]

@@ -25,15 +25,15 @@ def main(argv):
   
   
   fitSamples = 200
-  numWaveforms = 16
-  numThreads = 4
+  numWaveforms = 8
+  numThreads = 8
 
   #Prepare detector
-  num =  [6844918856.3626842, 1.0056419216500803e+18, 4626569053162539.0]
-  den = [1, 45217063.104665026, 612041935759981.0, 9.7725455204044268e+18]
+  num =  [8454739843.9016666, 1.0566866303942518e+18, 11973029704858290.0]
+  den = [1, 43930183.709196955, 587652922648432.25, 8.1532403986672435e+18]
   system = signal.lti(num, den)
   
-  tempGuess = 85.9
+  tempGuess = 81.14
   gradGuess = 0.026
   pcRadGuess = 2.53
   pcLenGuess = 1.41
@@ -88,6 +88,7 @@ def main(argv):
   #      
   #      simWfArr[0,idx,:]   = det.GetSimWaveform(r_arr[idx]*10, phi_arr[idx], z_arr[idx]*10, scale_arr[idx]*1000, t0_arr[idx],  fitSamples, smoothing=smooth_arr[idx],)
 
+    print "performing parallelized initial fit..."
     start = timer()
     results = p.map(minimize_waveform_only_star, args)
     end = timer()
@@ -103,8 +104,8 @@ def main(argv):
       simWfArr[0,idx,:]   = det.GetSimWaveform(r_arr[idx]*10, phi_arr[idx], z_arr[idx]*10, scale_arr[idx]*1000, t0_arr[idx],  fitSamples, smoothing=smooth_arr[idx],)
 
 
-    fig2 = plt.figure(figsize=(20,10))
-    helpers.plotManyResidual(simWfArr, wfs, fig2, residAlpha=1)
+    fig1 = plt.figure(figsize=(20,10))
+    helpers.plotManyResidual(simWfArr, wfs, fig1, residAlpha=1)
     np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr, smooth_arr=smooth_arr  )
     value = raw_input('  --> Press q to quit, any other key to continue\n')
     if value == 'q': exit(0)
@@ -128,7 +129,7 @@ def main(argv):
     mcmc_startguess = np.hstack((tempGuess/tempMult, gradGuess*gradMult, pcRadGuess, pcLenGuess, num[:], den[1:]))
     wfParams = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:],) )
     
-    bounds = [ (70./tempMult, 100./tempMult), (det.gradList[0]*gradMult, det.gradList[-1]*gradMult), (det.pcRadList[0], det.pcRadList[-1]),
+    bounds = [ (78./tempMult, 85./tempMult), (det.gradList[0]*gradMult, det.gradList[-1]*gradMult), (det.pcRadList[0], det.pcRadList[-1]), (det.pcLenList[0], det.pcLenList[-1]),
                 (num[0]/tf_bound, num[0]*tf_bound),(num[1]/tf_bound, num[1]*tf_bound),(num[2]/tf_bound, num[2]*tf_bound),
                 (den[1]/tf_bound, den[1]*tf_bound),(den[2]/tf_bound, den[2]*tf_bound),(den[3]/tf_bound, den[3]*tf_bound) ]
 
@@ -137,9 +138,10 @@ def main(argv):
     #fitting only the 3 detector params
     start = timer()
     #result = op.basinhopping(nll_det, mcmc_startguess, accept_test=IsAllowableStep, T=20., stepsize=0.5, minimizer_kwargs={  "method":"Nelder-Mead", "tol":5., "args": (p, wfParams)})
-    result = op.minimize(nll_det, mcmc_startguess, method="Brent", tol=1., args=(p, wfParams))
+    #result = op.minimize(nll_det, mcmc_startguess, method="Brent", tol=1., args=(p, wfParams))
     #result = op.minimize(nll_det, mcmc_startguess, method="L-BFGS-B", tol=5, bounds=bounds, args=(p, wfParams))
-    #result = op.differential_evolution(nll_det, bounds, args=(p, wfParams), polish=False)
+    result = op.differential_evolution(nll_det, bounds, args=(p, wfParams), polish=False)
+    
     end = timer()
     print "Elapsed time: " + str(end-start)
     temp, impGrad, pcRad, pcLen = result["x"][0], result["x"][1], result["x"][2],  result["x"][3]

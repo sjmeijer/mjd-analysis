@@ -118,7 +118,6 @@ def minimize_wf(r, phi, z, scale, t0, smooth, temp, pcRad, pcLen, impGrad, num, 
   if detector.pcLen != pcLen or detector.pcRad != pcRad or detector.impurityGrad != impGrad:
     detector.SetFields(pcRad, pcLen, impGrad)
 
-
   detector.SetTransferFunction(num, den)
   
   result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=(wf) ,method="Nelder-Mead", tol=5.)
