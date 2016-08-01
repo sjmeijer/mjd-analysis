@@ -6,10 +6,10 @@ import itertools
 from multiprocessing import Pool
 '''Fit detector properties given an array of waveforms'''
 
-
-def init_detector( det):
+def initializeDetector(det):
   global detector
   detector = det
+  detector.ReinitializeDetector()
   
 def init_wfs(wf_Arr):
   global wf_arr
@@ -75,9 +75,8 @@ def lnlike_detector(theta, *wfParams):
 
   return totalLike
 
-
-def minimize_waveform_only(r, phi, z, scale, t0, smooth, wf):
-  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=wf ,method="Nelder-Mead", tol=1.)
+def minimize_waveform_only(r, phi, z, scale, t0, smooth, wf,):
+  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=(wf) ,method="Nelder-Mead", tol=1.)
   return result
 def minimize_waveform_only_star(a_b):
   return minimize_waveform_only(*a_b)
@@ -110,18 +109,45 @@ def lnlike_waveform(theta, wf):
 def neg_lnlike_wf(theta, wf):
   return -1*lnlike_waveform(theta, wf)
 
+
+
 def minimize_wf(r, phi, z, scale, t0, smooth, temp, pcRad, pcLen, impGrad, num, den, wf):
 
-  detector.SetTemperature(temp)
-  detector.SetFields(pcRad, pcLen, impGrad)
+  if detector.temperature != temp:
+    detector.SetTemperature(temp)
+  if detector.pcLen != pcLen or detector.pcRad != pcRad or detector.impurityGrad != impGrad:
+    detector.SetFields(pcRad, pcLen, impGrad)
+
+
   detector.SetTransferFunction(num, den)
   
-  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=wf ,method="Nelder-Mead", tol=1.)
+  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=(wf) ,method="Nelder-Mead", tol=5.)
 
   return result
 
 def minimize_wf_star(a_b):
   return minimize_wf(*a_b)
+
+def IsAllowableStep(f_new, x_new, f_old, x_old):
+  temp, impGrad, pcRad, pcLen = (x_new[:4])
+
+  gradList  = detector.gradList
+  pcRadList =  detector.pcRadList
+  pcLenList =  detector.pcLenList
+  
+  #Take care of detector business
+  if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
+    return False
+  if pcLen < pcLenList[0] or pcLen > pcLenList[-1]:
+    return False
+  if impGrad < gradList[0] or impGrad > gradList[-1]:
+    return False
+  if temp < 40 or temp > 120:
+    return False
+
+  return True
+
+
 
 
 

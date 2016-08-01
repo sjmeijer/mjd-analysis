@@ -25,26 +25,27 @@ def main(argv):
   
   
   fitSamples = 200
-  numWaveforms = 4
+  numWaveforms = 16
   numThreads = 4
-  
 
   #Prepare detector
-  num = [9444619140.7602386, 5.6541009375868186e+17, 6862099457187322.0]
-  den = [1, 39786017.017542012, 507044769163371.25, 6.6153719754940365e+18]
+  num =  [6844918856.3626842, 1.0056419216500803e+18, 4626569053162539.0]
+  den = [1, 45217063.104665026, 612041935759981.0, 9.7725455204044268e+18]
   system = signal.lti(num, den)
   
-  tempGuess = 81.6
-  gradGuess = 0.0388
-  pcRadGuess = 2.51
-  pcLenGuess = 1.607490
+  tempGuess = 85.9
+  gradGuess = 0.026
+  pcRadGuess = 2.53
+  pcLenGuess = 1.41
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.04,2.5, 1.6)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
   det.LoadFields("P42574A_fields_len.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
-  init_detector(det)
+  initializeDetector(det)
+  
+  p = Pool(numThreads, initializer=initializeDetector, initargs=[det])
   
   wfFileName = "P42574A_%dwaveforms.npz" % numWaveforms
   if os.path.isfile(wfFileName):
@@ -62,6 +63,9 @@ def main(argv):
     #get waveforms
     cut = "trapECal>%f && trapECal<%f && TSCurrent100nsMax/trapECal > %f" %  (1588,1594, aeCutVal)
     wfs = helpers.GetWaveforms(runRange, channel, numWaveforms, cut)
+    
+    for (idx, wf) in enumerate(wfs):
+      wf.WindowWaveformTimepoint(fallPercentage=.995)
 
     #prep holders for each wf-specific param
     r_arr = np.empty(numWaveforms)
@@ -70,36 +74,42 @@ def main(argv):
     scale_arr = np.empty(numWaveforms)
     t0_arr = np.empty(numWaveforms)
     smooth_arr = np.empty(numWaveforms)
-
-    #ML as a start, using each individual wf
-    nll_wf = lambda *args: -lnlike_waveform(*args)
-    
-    start = timer()
-    for (idx,wf) in enumerate(wfs):
-      print "Doing MLE for waveform %d" % idx
-      wf.WindowWaveformTimepoint(fallPercentage=.995)
-      
-      startGuess = [15./10, np.pi/8, 15./10, wf.wfMax/1000., wf.t0Guess, 10.]
-      result = op.minimize(nll_wf, startGuess, args=(wf) ,method="Nelder-Mead")
-      r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx] = result["x"]
-    end = timer()
-    print "Elapsed time: " + str(end-start)
-    np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr, smooth_arr=smooth_arr  )
-
-  init_wfs(wfs)
-
-
-  #plot the wf-wise MLE:
-  if True:
-    fig = plt.figure(figsize=(20,10))
     simWfArr = np.empty((1,numWaveforms, fitSamples))
-    for (idx,wf) in enumerate(wfs):
-      print "  >> wf %d:" % (idx)
+    
+    #parallel fit the waveforms with the initial detector params
+    args = []
+    for (idx, wf) in enumerate(wfs):
+      wf.WindowWaveformTimepoint(fallPercentage=.99)
+      args.append( [15./10., np.pi/8., 15./10., wf.wfMax/1000., wf.t0Guess, 10.,  wfs[idx] ]  )
+  #      result = op.minimize(neg_lnlike_wf, [15./10., np.pi/8., 15./10., wf.wfMax/1000., wf.t0Guess, 10.], args=(wf, det) ,method="Nelder-Mead", tol=1.)
+  #      r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx] = result["x"]
+  #      print "  >> wf %d (normalized likelihood %0.2f):" % (idx, result["fun"]/wfs[idx].wfLength)
+  #      print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f, smooth:%0.2f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx])
+  #      
+  #      simWfArr[0,idx,:]   = det.GetSimWaveform(r_arr[idx]*10, phi_arr[idx], z_arr[idx]*10, scale_arr[idx]*1000, t0_arr[idx],  fitSamples, smoothing=smooth_arr[idx],)
+
+    start = timer()
+    results = p.map(minimize_waveform_only_star, args)
+    end = timer()
+
+    print "Initial fit time: %f" % (end-start)
+
+
+    for (idx,result) in enumerate(results):
+      r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx] = result["x"]
+      print "  >> wf %d (normalized likelihood %0.2f):" % (idx, result["fun"]/wfs[idx].wfLength)
       print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f, smooth:%0.2f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx])
-      simWfArr[0,idx,:] = det.GetSimWaveform(r_arr[idx]*10, phi_arr[idx], z_arr[idx]*10, scale_arr[idx]*1000, t0_arr[idx], fitSamples, smoothing = smooth_arr[idx] )
-    helpers.plotManyResidual(simWfArr, wfs, fig, residAlpha=1)
+      
+      simWfArr[0,idx,:]   = det.GetSimWaveform(r_arr[idx]*10, phi_arr[idx], z_arr[idx]*10, scale_arr[idx]*1000, t0_arr[idx],  fitSamples, smoothing=smooth_arr[idx],)
+
+
+    fig2 = plt.figure(figsize=(20,10))
+    helpers.plotManyResidual(simWfArr, wfs, fig2, residAlpha=1)
+    np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr, smooth_arr=smooth_arr  )
     value = raw_input('  --> Press q to quit, any other key to continue\n')
     if value == 'q': exit(0)
+  init_wfs(wfs)
+
 
   #do the detector-wide fit
   if True:
@@ -108,8 +118,8 @@ def main(argv):
 
     nll_det = lambda *args: -lnlike_detector(*args)
     
-    num = [9.408524745, 5.6758925068323565, 6.777]
-    den = [ 1., 4., 5.12, 6.49]
+    num = [num[0] / 1E9  , num[1]/1E17, num[2]/1E15]
+    den = [ 1., den[1]/1E7, den[2]/1E14, den[3]/1E18]
 
     tf_bound = 2.
     tempMult = 10.
@@ -122,12 +132,12 @@ def main(argv):
                 (num[0]/tf_bound, num[0]*tf_bound),(num[1]/tf_bound, num[1]*tf_bound),(num[2]/tf_bound, num[2]*tf_bound),
                 (den[1]/tf_bound, den[1]*tf_bound),(den[2]/tf_bound, den[2]*tf_bound),(den[3]/tf_bound, den[3]*tf_bound) ]
 
-    p = Pool(numThreads)
+
 
     #fitting only the 3 detector params
     start = timer()
-    #result = op.basinhopping(nll_det, mcmc_startguess, minimizer_kwargs={  "method":"Nelder-Mead", "tol":50, "args": (p, wfParams)})
-    result = op.minimize(nll_det, mcmc_startguess, method="Nelder-Mead", tol=1., args=(p, wfParams))
+    #result = op.basinhopping(nll_det, mcmc_startguess, accept_test=IsAllowableStep, T=20., stepsize=0.5, minimizer_kwargs={  "method":"Nelder-Mead", "tol":5., "args": (p, wfParams)})
+    result = op.minimize(nll_det, mcmc_startguess, method="Brent", tol=1., args=(p, wfParams))
     #result = op.minimize(nll_det, mcmc_startguess, method="L-BFGS-B", tol=5, bounds=bounds, args=(p, wfParams))
     #result = op.differential_evolution(nll_det, bounds, args=(p, wfParams), polish=False)
     end = timer()

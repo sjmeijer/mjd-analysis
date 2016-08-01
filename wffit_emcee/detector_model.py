@@ -36,7 +36,7 @@ class Detector:
     self.tfSystem = tfSystem
   
     if temperature > 0:
-      self.siggenInst.SetTemperature(temperature)
+      self.SetTemperature(temperature)
 
     #stuff for field interp
     self.wp_function = None
@@ -96,6 +96,11 @@ class Detector:
 
   def SetFields(self, pcRad, pcLen, impurityGrad):
 #    print "setting pc radius to %0.4f, grad to %0.4f" % (pcSize, impurityGrad)
+
+    self.pcRad = pcRad
+    self.pcLen = pcLen
+    self.impurityGrad = impurityGrad
+
 
     rr = self.rr
     zz = self.zz
@@ -190,7 +195,14 @@ class Detector:
 
     #actual wf gen
     tout, siggen_data, x = signal.lsim(self.tfSystem, siggen_wf, self.time_steps)
-    siggen_data /= np.amax(siggen_data)
+    
+    smax = np.amax(siggen_data)
+    
+    if smax == 0:
+      print "waveform max is 0 -- something went wrong"
+      exit(0)
+    
+    siggen_data /= smax
     
 #    siggen_data = siggen_wf[zeroPaddingIdx::]
     siggen_data *= scale
@@ -218,6 +230,7 @@ class Detector:
     self.tfSystem = signal.lti(num, den)
 
   def SetTemperature(self, temp):
+    self.temperature = temp
     self.siggenInst.SetTemperature(temp)
 
   def PlotFields(self):
@@ -274,20 +287,22 @@ class Detector:
     
     self.LoadFields(self.fieldFileName)
     self.wp_pp = None
+  
+  def ReinitializeDetector(self):
+    self.SetTemperature(self.temperature)
+    self.SetFields(self.pcRad, self.pcLen, self.impurityGrad)
 
   #For pickling a detector object
   def __getstate__(self):
     # Copy the object's state from self.__dict__ which contains
     # all our instance attributes. Always use the dict.copy()
     # method to avoid modifying the original state.
-    
-#    self.siggenSetup = Safe_Siggen_Setup()
-#    self.siggenInst.SaveSiggenSetup(self.siggenSetup)
 
     #manually do a deep copy of the velo data
     self.siggenSetup = self.siggenInst.GetSafeSiggenSetup()
-    
     self.siggenVelo = v_lookup(self.siggenSetup.velo_data)
+    
+    
   
     state = self.__dict__.copy()
     # Remove the unpicklable entries.
@@ -302,6 +317,7 @@ class Detector:
     del state['wp_function']
     del state['pcRadList']
     del state['gradList']
+    del state['pcLenList']
     del state['siggenInst']
     
     state['wp_pp'] = None
