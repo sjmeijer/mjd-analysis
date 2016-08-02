@@ -25,17 +25,17 @@ def main(argv):
   channel = 626
   aeCutVal = 0.01425
   
-  numThreads=4
+  numThreads=8
   tempGuess = 118
   fitSamples = 200
-  numWaveforms = 3
+  numWaveforms = 10
   
   #MCMC params
-  iter, burnIn = 10, 8
-  wfPlotNumber = 1
+  iter, burnIn = 1000, 800
+  wfPlotNumber = 10
   ndim = 5*numWaveforms + 3 + 6
   nwalkers = ndim * 2
-  ntemps = 5
+  ntemps = 10
 
   
   #Prepare detector
@@ -155,6 +155,9 @@ def main(argv):
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], tempGuess, gradGuess,pcRadGuess, num[:], den[1:]))
 
 #  pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
+
+  if nwalkers % 2:
+    nwalkers +=1
 
   pos0 = np.random.uniform(low=0.9, high=1.1, size=(ntemps, nwalkers, ndim))
 
