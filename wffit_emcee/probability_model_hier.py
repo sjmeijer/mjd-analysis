@@ -6,11 +6,16 @@ import itertools
 from multiprocessing import Pool
 '''Fit detector properties given an array of waveforms'''
 
+
+r_mult = 1.
+z_mult = 1.
+scale_mult = 100.
+
 def initializeDetector(det):
   global detector
   detector = det
   detector.ReinitializeDetector()
-  
+
 def init_wfs(wf_Arr):
   global wf_arr
   wf_arr = wf_Arr
@@ -76,17 +81,53 @@ def lnlike_detector(theta, *wfParams):
   return totalLike
 
 def minimize_waveform_only(r, phi, z, scale, t0, smooth, wf,):
-  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=(wf) ,method="Nelder-Mead", tol=1.)
+
+  bounds = [ (0,np.floor(detector.detector_radius*10.)/10. /r_mult ), (0, np.pi/4.), (0,np.floor(detector.detector_length*10.)/10./z_mult), (wf.wfMax/2/scale_mult, wf.wfMax*2/scale_mult), (0, 15), (0, 20)  ]
+
+  constraints = [{ "type": 'ineq', "fun": constr_r  },
+                 { "type": 'ineq', "fun": constr_theta  },
+                 { "type": 'ineq', "fun": constr_z  },
+                 { "type": 'ineq', "fun": constr_t0  },
+                 { "type": 'ineq', "fun": constr_smooth  }]
+
+  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=(wf) ,method="Powell")
+  
+  #result = op.differential_evolution(neg_lnlike_wf, bounds, args=([wf]), polish=False )
   return result
+
+def constr_r(x):
+  if x[0] <0:
+    return -1
+  else:
+    return np.floor(detector.detector_radius*10.)/10./r_mult  - x[0]
+
+def constr_theta(x):
+  if x[1] <0:
+    return -1
+  else:
+    return np.pi/4 - x[1]
+def constr_z(x):
+  if x[2] <0:
+    return -1
+  else:
+    return np.floor(detector.detector_length*10.)/10./z_mult - x[2]
+
+def constr_smooth(x):
+  #must be g.t. 0
+  return x[5]
+def constr_t0(x):
+  #must be g.t. 0
+  return x[4]
+
 def minimize_waveform_only_star(a_b):
   return minimize_waveform_only(*a_b)
 
 def lnlike_waveform(theta, wf):
   r, phi, z, scale, t0, smooth = np.copy(theta)
   
-  r *= 10.
-  z *= 10.
-  scale *= 1000.
+  r *= r_mult
+  z *= z_mult
+  scale *= scale_mult
   
   if scale < 0 or t0 < 0 or smooth<0:
     return -np.inf
@@ -109,7 +150,8 @@ def lnlike_waveform(theta, wf):
 def neg_lnlike_wf(theta, wf):
   return -1*lnlike_waveform(theta, wf)
 
-
+def neg_lnlike_wf_star(*a_b):
+  return neg_lnlike_wf(a_b)
 
 def minimize_wf(r, phi, z, scale, t0, smooth, temp, pcRad, pcLen, impGrad, num, den, wf):
 
@@ -120,7 +162,7 @@ def minimize_wf(r, phi, z, scale, t0, smooth, temp, pcRad, pcLen, impGrad, num, 
 
   detector.SetTransferFunction(num, den)
   
-  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=(wf) ,method="Nelder-Mead", tol=5.)
+  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale, t0, smooth], args=(wf) ,method="Powell")
 
   return result
 

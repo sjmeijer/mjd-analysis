@@ -17,6 +17,8 @@ detectorName = "P3KJR"
 
 baselineSamples = 800
 
+#funnyEntries = [4110, 66905]
+
 class Waveform:
   def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_rms):
     self.waveformData = waveform_data
@@ -68,7 +70,7 @@ class Waveform:
 
 ########################################################################
 
-def GetWaveforms(runRange, channelNumber, numWaveforms, cutStr):
+def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
   '''cut string should include all cuts except for channel cut'''
 
   cutChan = "channel == %d" % channelNumber
@@ -78,8 +80,13 @@ def GetWaveforms(runRange, channelNumber, numWaveforms, cutStr):
   baseline.SetBaselineSamples(baselineSamples)
   
   waveformArray = []
+  
+  runList = []
+  for runs in runRanges:
+    for run in range(runs[0], runs[1]+1):
+      runList.append(run)
 
-  for iRun in range( runRange[0],  runRange[1]+1):
+  for iRun in runList:
     print 'processing run', iRun
     gatFilePath =  os.path.expandvars("$MJDDATADIR/%s/data/gatified/%s/%s%d.root" % (dataSetName, detectorName, gatDataName, iRun  ) )
     builtFilePath =  os.path.expandvars("$MJDDATADIR/%s/data/built/%s/%s%d.root" % (dataSetName, detectorName, builtDataName, iRun  ) )
@@ -103,6 +110,9 @@ def GetWaveforms(runRange, channelNumber, numWaveforms, cutStr):
     
     for ientry in xrange( elist.GetN() ):
       entryNumber = gatTree.GetEntryNumber(ientry);
+      
+#      if entryNumber in funnyEntries: continue
+
       waveform = getWaveform(gatTree, builtTree, entryNumber, channelNumber)
       waveform.SetLength(waveform.GetLength()-10)
       
@@ -144,12 +154,12 @@ def getWaveform(gatTree, builtTree, entryNumber, channelNumber):
 
 ########################################################################
 
-def plotResidual(simWFArray, dataWF, figure=None):
+def plotResidual(simWFArray, dataWF, figure=None, residAlpha=0.1):
   '''I'd be willing to hear the argument this shouldn't be in here so that i don't need to load matplotlib to run this module,
      but for now, i don't think it matters
   '''
   if figure is None:
-    figure = plt.figure()
+    figure = plt.figure(figsize=(20,10))
   else:
     plt.figure(figure.number)
     plt.clf()
@@ -170,8 +180,8 @@ def plotResidual(simWFArray, dataWF, figure=None):
     simWF = simWF[:dataLen]
     diff = simWF - dataWF
 
-    ax0.plot(t_data, simWF  ,color="black", alpha = 0.1  )
-    ax1.plot(t_data, diff  ,color="#7BAFD4",  alpha = 0.1 )
+    ax0.plot(t_data, simWF  ,color="black", alpha = residAlpha  )
+    ax1.plot(t_data, diff  ,color="#7BAFD4",  alpha = residAlpha )
 
   legend_line_1 = ax0.plot( np.NaN, np.NaN, color='r', label='Data (unfiltered)' )
   legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveform' )

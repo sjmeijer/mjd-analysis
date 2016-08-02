@@ -179,6 +179,7 @@ class Detector:
     
     if np.amax(self.raw_siggen_data) == 0:
       print "found zero wf at r=%0.2f, phi=%0.2f, z=%0.2f (calcflag is %d)" % (r, phi, z, calcFlag)
+      return None
 
     return self.raw_siggen_data
 
