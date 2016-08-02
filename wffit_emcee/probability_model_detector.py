@@ -1,7 +1,7 @@
 #!/usr/local/bin/python
 import numpy as np
 import scipy.stats as stats
-
+import scipy.optimize as op
 '''Fit detector properties given an array of waveforms'''
 
 
@@ -10,8 +10,10 @@ def initializeDetector(det):
   detector = det
   detector.ReinitializeDetector()
 
-def init_wfs(wf_Arr):
+def initializeDetectorAndWaveforms(det, wf_Arr):
+  global detector
   global wf_arr
+  detector = det
   wf_arr = wf_Arr
 
 def lnprob(theta):
@@ -49,7 +51,7 @@ def lnlike_detector(theta):
   den = [1, den1, den2, den3]
   detector.SetTransferFunction(num, den)
   detector.SetTemperature(temp)
-  detector.SetFields(pcRad, impGrad)
+  detector.SetFields(pcRad, pcLen, impGrad)
 
   totalLike = 0
   for (wf_idx) in np.arange(r_arr.size):
@@ -104,14 +106,17 @@ def lnprior(theta):
   
   #Flat priors on most the detector params...
   if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
+    print "bad prior pcRad %f must be between:" % pcRad + str(pcRadList)
     return -np.inf
-  if pcLen < pcLenList[0] or pcRad > pcLenList[-1]:
+  if pcLen < pcLenList[0] or pcLen > pcLenList[-1]:
+    print "bad prior pclen %f must be between:" % pcLen + str(pcLenList)
     return -np.inf
   if impGrad < gradList[0] or impGrad > gradList[-1]:
+    print "bad prior grad %f must be between:" % impGrad + str(gradList)
     return -np.inf
   #...except for temp.
   if temp <40 or temp > 120:
-#    print "bad prior temp %f" % temp
+    print "bad prior temp %f" % temp
     return -np.inf
   else:
     temp_prior = stats.norm.pdf(temp, loc=81., scale=5. )
@@ -121,7 +126,6 @@ def lnprior(theta):
     wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx], wf_arr[wf_idx], )
 
     if not np.isfinite(wf_like):
-#      print "bad prior wf"
       return -np.inf
 
     totalPrior += wf_like
@@ -130,7 +134,7 @@ def lnprior(theta):
 
 def lnprior_waveform(r, phi, z, scale, t0, smoothing, wf, ):
   if not detector.IsInDetector(r, phi, z):
-#    print "bad prior: position (%f, %f, %f)" % (r, phi, z)
+    print "bad prior: position (%f, %f, %f)" % (r, phi, z)
     return -np.inf
   else:
     location_prior = 1.

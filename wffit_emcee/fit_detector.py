@@ -14,14 +14,21 @@ from probability_model_detector import *
 
 from progressbar import ProgressBar, Percentage, Bar
 from timeit import default_timer as timer
-
+from multiprocessing import Pool
 
 
 def main(argv):
 ##################
 #These change a lot
-  numWaveforms = 16
-  numThreads = 4
+  numWaveforms = 8
+  numThreads = 8
+  
+  ndim = 6*numWaveforms + 10
+  nwalkers = 2 * ndim
+  
+  iter=10
+  burnIn = 8
+  
 ######################
 
 
@@ -50,12 +57,12 @@ def main(argv):
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   initializeDetector(det)
   
-  p = Pool(numThreads, initializer=initializeDetector, initargs=[det])
-  
   tempIdx = -10
   gradIdx = -9
   pcRadIdx = -8
   pcLenIdx = -7
+  
+  fig_size = (20,10)
   
   
   #Create a decent start guess by fitting waveform-by-waveform
@@ -96,9 +103,11 @@ def main(argv):
       args.append( [15., np.pi/8., 15., wf.wfMax, wf.t0Guess, 10.,  wfs[idx] ]  )
 
     print "performing parallelized initial fit..."
+    p = Pool(numThreads, initializer=initializeDetector, initargs=[det])
     start = timer()
     results = p.map(minimize_waveform_only_star, args)
     end = timer()
+    p.close()
 
     print "Initial fit time: %f" % (end-start)
     
@@ -106,19 +115,19 @@ def main(argv):
       r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx] = result["x"]
       print "  >> wf %d (normalized likelihood %0.2f):" % (idx, result["fun"]/wfs[idx].wfLength)
       print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f, smooth:%0.2f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx])
-      simWfArr[0,idx,:] = det.GetSimWaveform(r_arr[idx]*r_mult, phi_arr[idx], z_arr[idx]*z_mult, scale_arr[idx]*scale_mult, t0_arr[idx],  fitSamples, smoothing=smooth_arr[idx],)
+      simWfArr[0,idx,:] = det.GetSimWaveform(r_arr[idx]*1., phi_arr[idx], z_arr[idx]*1., scale_arr[idx]*1., t0_arr[idx],  fitSamples, smoothing=smooth_arr[idx],)
 
-    fig1 = plt.figure(1, figsize=(20,15))
+    fig1 = plt.figure(1, figsize=fig_size)
     helpers.plotManyResidual(simWfArr, wfs, fig1, residAlpha=1)
     np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr, smooth_arr=smooth_arr  )
     value = raw_input('  --> Press q to quit, any other key to continue\n')
     if value == 'q': exit(0)
   
-  init_wfs(wfs)
-  
+  p = Pool(numThreads, initializer=initializeDetectorAndWaveforms, initargs=[det, wfs])
+  initializeDetectorAndWaveforms(det, wfs)
   #Do the MCMC
 
-  mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], smooth_arr[:]. tempGuess, gradGuess,pcRadGuess, pcLenGuess, num[:], den[1:]))
+  mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], smooth_arr[:], tempGuess, gradGuess,pcRadGuess, pcLenGuess, num[:], den[1:]))
 
 
   if nwalkers % 2:
@@ -126,23 +135,24 @@ def main(argv):
 
   #Do it without the parallel tempering
 
-  pos0 = np.random.uniform(low=0.9, high=1.1, size=(nwalkers, ndim))
-  for widx in range(nwalkers):
-    pos0[widx, :] = pos0[tidx, widx, :] * mcmc_startguess
+  pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
 
-    pos = pos0[widx, :]
-
-    #Clip to make sure we stay within physical bounds...
-    pos[:numWaveforms] = np.clip( pos[:numWaveforms], 0, np.floor(det.detector_radius))
+  for pos in pos0:
+#    print "radius is %f" % det.detector_radius
+#    print "length is %f" % det.detector_length
+#  
+    pos[:numWaveforms] = np.clip( pos[:numWaveforms], 0, np.floor(det.detector_radius*10.)/10.)
     pos[numWaveforms:2*numWaveforms] = np.clip(pos[numWaveforms:2*numWaveforms], 0, np.pi/4)
-    pos[2*numWaveforms:3*numWaveforms] = np.clip(pos[2*numWaveforms:3*numWaveforms], 0, det.detector_length)
+    pos[2*numWaveforms:3*numWaveforms] = np.clip(pos[2*numWaveforms:3*numWaveforms], 0, np.floor(det.detector_length*10.)/10.)
     pos[4*numWaveforms:5*numWaveforms] = np.clip(pos[4*numWaveforms:5*numWaveforms], 0, fitSamples)
     pos[5*numWaveforms:6*numWaveforms] = np.clip(pos[5*numWaveforms:6*numWaveforms], 0, 100.)
-  
+    
     pos[tempIdx] = np.clip(pos[tempIdx], 40, 120)
     pos[gradIdx] = np.clip(pos[gradIdx], det.gradList[0], det.gradList[-1])
     pos[pcRadIdx] = np.clip(pos[pcRadIdx], det.pcRadList[0], det.pcRadList[-1])
     pos[pcLenIdx] = np.clip(pos[pcLenIdx], det.pcLenList[0], det.pcLenList[-1])
+  
+#    print pos[0:30]
 
     prior = lnprior(pos,)
     if not np.isfinite(prior) :
@@ -156,6 +166,7 @@ def main(argv):
   #w/ progress bar
   bar = ProgressBar(widgets=[Percentage(), Bar()], maxval=iter).start()
   for (idx,result) in enumerate(sampler.sample(pos0, iterations=iter, storechain=True)):
+    exit(0)
     bar.update(idx+1)
 
   end = timer()
@@ -170,7 +181,7 @@ def main(argv):
   print "Making MCMC steps figure..."
 
   #########  Plots for Waveform params
-  stepsFig = plt.figure(2, figsize=(20, 15))
+  stepsFig = plt.figure(2, figsize=fig_size)
   plt.clf()
   ax0 = stepsFig.add_subplot(511)
   ax1 = stepsFig.add_subplot(512, sharex=ax0)
@@ -199,7 +210,7 @@ def main(argv):
 
 
   #########  Plots for Detector params
-  stepsFigDet = plt.figure(3, figsize=(20, 15))
+  stepsFigDet = plt.figure(3, figsize=fig_size)
   plt.clf()
   ax0 = stepsFigDet.add_subplot(411)
   ax1 = stepsFigDet.add_subplot(412, sharex=ax0)
@@ -212,7 +223,7 @@ def main(argv):
   ax3.set_ylabel('pcLen')
 
   #and for the transfer function
-  stepsFigTF = plt.figure(4, figsize=(20, 15))
+  stepsFigTF = plt.figure(4, figsize=fig_size)
   plt.clf()
   tf0 = stepsFigDet.add_subplot(611)
   tf1 = stepsFigDet.add_subplot(612, sharex=ax0)
@@ -234,17 +245,32 @@ def main(argv):
     ax2.plot(sampler.chain[i,:,pcRadIdx], "b", alpha=0.3) #pcrad
     ax3.plot(sampler.chain[i,:,pcLenIdx], "b", alpha=0.3) #pclen
     
-    tf0.plot(sampler.chain[j, i,:,-6], "b", alpha=0.3) #num0
-    tf1.plot(sampler.chain[j, i,:,-5], "b", alpha=0.3) #1
-    tf2.plot(sampler.chain[j, i,:,-4], "b", alpha=0.3) #2
-    tf3.plot(sampler.chain[j, i,:,-3], "b", alpha=0.3) #den1
-    tf4.plot(sampler.chain[j, i,:,-2], "b", alpha=0.3) #2
-    tf5.plot(sampler.chain[j, i,:,-1], "b", alpha=0.3) #3
+    tf0.plot(sampler.chain[i,:,-6], "b", alpha=0.3) #num0
+    tf1.plot(sampler.chain[i,:,-5], "b", alpha=0.3) #1
+    tf2.plot(sampler.chain[i,:,-4], "b", alpha=0.3) #2
+    tf3.plot(sampler.chain[i,:,-3], "b", alpha=0.3) #den1
+    tf4.plot(sampler.chain[i,:,-2], "b", alpha=0.3) #2
+    tf5.plot(sampler.chain[i,:,-1], "b", alpha=0.3) #3
 
   plt.savefig("emcee_detchain_%dwfs.png" % numWaveforms)
   plt.savefig("emcee_tfchain_%dwfs.png" % numWaveforms)
 
+
+  samples = sampler.chain[:, burnIn:, :].reshape((-1, ndim))
+
+  print "temp is %f" % np.median(samples[:,tempIdx])
+  print "grad is %f" % np.median(samples[:,gradIdx])
+  print "pcrad is %f" % np.median(samples[:,pcRadIdx])
+  print "pclen is %f" % np.median(samples[:,pcLenIdx])
+  print "num1 is %f" % np.median(samples[:,-6])
+  print "num2 is %f" % np.median(samples[:,-5])
+  print "num3 is %f" % np.median(samples[:,-4])
+  print "den1 is %f" % np.median(samples[:,-3])
+  print "den2 is %f" % np.median(samples[:,-2])
+  print "den3 is %f" % np.median(samples[:,-1])
+
   plt.show()
+  
   value = raw_input('  --> Press q to quit, any other key to continue\n')
   if value == 'q':
     exit(0)
