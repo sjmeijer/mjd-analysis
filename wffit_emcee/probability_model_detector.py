@@ -22,6 +22,11 @@ def lnprob(theta):
   lp = lnprior(theta)
   if not np.isfinite(lp):
     return -np.inf
+  
+#  like = lnlike_detector(theta)
+#  if not np.isfinite(like):
+#    print "bad like..."
+
   return lp + lnlike_detector(theta)
 
 #################################################################
@@ -39,12 +44,17 @@ def lnlike_detector(theta):
   
   #Take care of detector business
   if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
+#    print "bad like pcRad %f must be between:" % pcRad + str(pcRadList)
     return -np.inf
-  if pcLen < pcLenList[0] or pcRad > pcLenList[-1]:
+  if pcLen < pcLenList[0] or pcLen > pcLenList[-1]:
+#    print "bad like pclen %f must be between:" % pcLen + str(pcLenList)
     return -np.inf
   if impGrad < gradList[0] or impGrad > gradList[-1]:
+#    print "bad like grad %f must be between:" % impGrad + str(gradList)
     return -np.inf
-  if temp < 40 or temp > 120:
+  #...except for temp.
+  if temp <40 or temp > 120:
+#    print "bad like temp %f" % temp
     return -np.inf
   
   num = [num1, num2, num3]
@@ -55,7 +65,7 @@ def lnlike_detector(theta):
 
   totalLike = 0
   for (wf_idx) in np.arange(r_arr.size):
-    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx]], smooth_arr[wf_idx], wf_arr[wf_idx], )
+    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]], wf_arr[wf_idx], )
 
     if not np.isfinite(wf_like):
       return -np.inf
@@ -100,23 +110,32 @@ def lnprior(theta):
   temp, impGrad, pcRad, pcLen, num1, num2, num3, den1, den2, den3 = theta[-10:]
   r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-10].reshape((6, len(wf_arr)))
   
+#  print "now inside prior..."
+#  print "  >>r: " + str(r_arr)
+#  print "  >>z: " + str(z_arr)
+#  print "  >>smooth: " + str(smooth_arr)
+#  print "  >>imp_grad: " + str(impGrad)
+#  print "  >>pc_rad: " + str(pcRad)
+#  print "  >>pc_len: " + str(pcLen)
+
+  
   gradList  = detector.gradList
   pcRadList =  detector.pcRadList
   pcLenList =  detector.pcLenList
   
   #Flat priors on most the detector params...
   if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
-    print "bad prior pcRad %f must be between:" % pcRad + str(pcRadList)
+#    print "bad prior pcRad %f must be between:" % pcRad + str(pcRadList)
     return -np.inf
   if pcLen < pcLenList[0] or pcLen > pcLenList[-1]:
-    print "bad prior pclen %f must be between:" % pcLen + str(pcLenList)
+#    print "bad prior pclen %f must be between:" % pcLen + str(pcLenList)
     return -np.inf
   if impGrad < gradList[0] or impGrad > gradList[-1]:
-    print "bad prior grad %f must be between:" % impGrad + str(gradList)
+#    print "bad prior grad %f must be between:" % impGrad + str(gradList)
     return -np.inf
   #...except for temp.
   if temp <40 or temp > 120:
-    print "bad prior temp %f" % temp
+#    print "bad prior temp %f" % temp
     return -np.inf
   else:
     temp_prior = stats.norm.pdf(temp, loc=81., scale=5. )
@@ -126,6 +145,7 @@ def lnprior(theta):
     wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx], wf_arr[wf_idx], )
 
     if not np.isfinite(wf_like):
+#      print "bad wf prior"
       return -np.inf
 
     totalPrior += wf_like
@@ -134,7 +154,7 @@ def lnprior(theta):
 
 def lnprior_waveform(r, phi, z, scale, t0, smoothing, wf, ):
   if not detector.IsInDetector(r, phi, z):
-    print "bad prior: position (%f, %f, %f)" % (r, phi, z)
+#    print "bad prior: position (%f, %f, %f)" % (r, phi, z)
     return -np.inf
   else:
     location_prior = 1.
