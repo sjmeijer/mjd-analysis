@@ -65,6 +65,7 @@ class Detector:
     
     #Holders for wf simulation
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
+    self.raw_siggen_data_electron = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
 
   def LoadFields(self, fieldFileName):
     self.fieldFileName = fieldFileName
@@ -143,7 +144,7 @@ class Detector:
     else:
       return 1
 
-  def GetSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, temp=None, num=None, den=None, smoothing=None):
+  def GetSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, temp=None, num=None, den=None, smoothing=None, electron_smoothing=None):
   
     if num is not None and den is not None:
       self.tfSystem = signal.lti(num, den)
@@ -151,19 +152,30 @@ class Detector:
     if temp is not None:
       self.siggenInst.SetTemperature(temp)
   
-    sig_wf = self.GetRawSiggenWaveform(r, phi, z)
+    if electron_smoothing is None:
+      sig_wf = self.GetRawSiggenWaveform(r, phi, z)
     
-    if sig_wf is None:
-      return None
+      if sig_wf is None:
+        return None
+        
+      #smoothing for charge cloud size effects
+      if smoothing is not None:
+        ndimage.filters.gaussian_filter1d(sig_wf, smoothing, output=sig_wf)
       
-    #smoothing for charge cloud size effects
-    if smoothing is not None:
-      ndimage.filters.gaussian_filter1d(sig_wf, smoothing, output=sig_wf)
-    
-    sim_wf = self.ProcessWaveform(sig_wf, numSamples, scale, switchpoint)
-    
-    
-    
+      sim_wf = self.ProcessWaveform(sig_wf, numSamples, scale, switchpoint)
+
+    else:
+      electron_wf = self.GetRawElectronWaveform(r, phi, z)
+      hole_wf = self.GetRawHoleWaveform(r, phi, z)
+      
+      if hole_wf is None or electron_wf is None: #should i require only the hole signal... ??
+        return None
+
+      ndimage.filters.gaussian_filter1d(electron_wf, electron_smoothing, output=electron_wf)
+      ndimage.filters.gaussian_filter1d(hole_wf, smoothing, output=hole_wf)
+ 
+      np.add(electron_wf, hole_wf, out=hole_wf)
+      sim_wf = self.ProcessWaveform(hole_wf, numSamples, scale, switchpoint)
     
     return sim_wf
 
@@ -185,6 +197,32 @@ class Detector:
       return None
 
     return self.raw_siggen_data
+    
+  def GetRawHoleWaveform(self, r,phi,z, energy=1):
+
+    x = r * np.sin(phi)
+    y = r * np.cos(phi)
+    
+    self.raw_siggen_data.fill(0.)
+
+    calcFlag = self.siggenInst.GetChargeWaveform(x, y, z, self.raw_siggen_data.ctypes.data_as(ctypes.POINTER(ctypes.c_float)).contents, 1.0, energy);
+    if calcFlag == -1:
+      return None
+
+    return self.raw_siggen_data
+    
+  def GetRawElectronWaveform(self, r,phi,z, energy=1):
+
+    x = r * np.sin(phi)
+    y = r * np.cos(phi)
+    
+    self.raw_siggen_data_electron.fill(0.)
+
+    calcFlag = self.siggenInst.GetChargeWaveform(x, y, z, self.raw_siggen_data_electron.ctypes.data_as(ctypes.POINTER(ctypes.c_float)).contents, -1.0, energy);
+    if calcFlag == -1:
+      return None
+
+    return self.raw_siggen_data_electron
 
 ########################################################################################################
 
