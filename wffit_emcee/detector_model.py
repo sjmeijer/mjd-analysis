@@ -124,6 +124,7 @@ class Detector:
     efr_pp = getPointer(new_ef_r)
     efz_pp = getPointer(new_ef_z)
   
+    self.siggenInst.SetPointContact( pcRad, pcLen )
     self.siggenInst.SetWeightingPotential( self.wp_pp )
     self.siggenInst.SetElectricField( efr_pp, efz_pp )
 
@@ -136,6 +137,8 @@ class Detector:
     elif r <0 or z <0:
       return 0
     elif phi <0 or phi > np.pi/4:
+      return 0
+    elif r**2/self.pcRad**2 + z**2/self.pcLen**2 < 1:
       return 0
     else:
       return 1
@@ -174,7 +177,7 @@ class Detector:
 
     calcFlag = self.siggenInst.GetWaveform(x, y, z, self.raw_siggen_data.ctypes.data_as(ctypes.POINTER(ctypes.c_float)).contents, energy);
     if calcFlag == -1:
-      print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
+#      print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
       return None
     
     if np.amax(self.raw_siggen_data) == 0:
