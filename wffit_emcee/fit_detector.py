@@ -20,11 +20,11 @@ from multiprocessing import Pool
 def main(argv):
 ##################
 #These change a lot
-  numWaveforms = 8
-  numThreads = 8
+  numWaveforms = 2
+  numThreads = 1
   
   ndim = 6*numWaveforms + 10
-  nwalkers = 2 * ndim
+  nwalkers = 2*ndim
   
   iter=10
   burnIn = 8
@@ -36,7 +36,8 @@ def main(argv):
 
   channel = 626
   aeCutVal = 0.01425
-  runRanges = [(13385, 13392),  (13420,13429)]
+  #runRanges = [(13385, 13392),  (13420,13429)]
+  runRanges = [(13420,13429)]
   
   fitSamples = 200
 
@@ -151,8 +152,6 @@ def main(argv):
     pos[gradIdx] = np.clip(pos[gradIdx], det.gradList[0], det.gradList[-1])
     pos[pcRadIdx] = np.clip(pos[pcRadIdx], det.pcRadList[0], det.pcRadList[-1])
     pos[pcLenIdx] = np.clip(pos[pcLenIdx], det.pcLenList[0], det.pcLenList[-1])
-  
-#    print pos[0:30]
 
     prior = lnprior(pos,)
     if not np.isfinite(prior) :
