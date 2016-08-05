@@ -256,15 +256,14 @@ class Detector:
     switchpoint_ceil= np.int( np.ceil(switchpoint) )
     samples_to_fill = (outputLength - switchpoint_ceil)
 
-
     siggen_interp_fn = interpolate.interp1d(np.arange(self.num_steps ), siggen_data, kind="linear", copy="False", assume_sorted="True")
 
-    siggen_start_idx = switchpoint_ceil - switchpoint
+    siggen_start_idx = (switchpoint_ceil - switchpoint) * self.data_to_siggen_size_ratio
     
 
     sampled_idxs = np.arange(samples_to_fill)*self.data_to_siggen_size_ratio + siggen_start_idx
     
-#    print sampled_idxs
+    print sampled_idxs[0:10]
 
     out = np.zeros(outputLength)
     out[switchpoint_ceil:] = siggen_interp_fn(sampled_idxs)
