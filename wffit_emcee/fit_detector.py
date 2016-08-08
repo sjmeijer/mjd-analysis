@@ -20,14 +20,14 @@ from multiprocessing import Pool
 def main(argv):
 ##################
 #These change a lot
-  numWaveforms = 2
-  numThreads = 1
+  numWaveforms = 16
+  numThreads = 8
   
   ndim = 6*numWaveforms + 10
-  nwalkers = 2*ndim
+  nwalkers = 3*ndim
   
-  iter=10
-  burnIn = 8
+  iter=1000
+  burnIn = 800
   
 ######################
 
@@ -46,7 +46,7 @@ def main(argv):
   den = [1, 50310572.447231829, 701441983664560.88, 1.4012406413698292e+19]
   system = signal.lti(num, den)
   
-  tempGuess = 82.48
+  tempGuess = 78
   gradGuess = 0.0482
   pcRadGuess = 2.563885
   pcLenGuess = 1.440751
@@ -68,7 +68,7 @@ def main(argv):
   
   #Create a decent start guess by fitting waveform-by-waveform
   
-  wfFileName = "P42574A_%dwaveforms.npz" % numWaveforms
+  wfFileName = "P42574A_256waveforms_%drisetimeculled.npz"  % numWaveforms
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     r_arr  = data['r_arr']
@@ -121,9 +121,9 @@ def main(argv):
     fig1 = plt.figure(1, figsize=fig_size)
     helpers.plotManyResidual(simWfArr, wfs, fig1, residAlpha=1)
     np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr, smooth_arr=smooth_arr  )
-    value = raw_input('  --> Press q to quit, any other key to continue\n')
-    if value == 'q': exit(0)
-  
+#    value = raw_input('  --> Press q to quit, any other key to continue\n')
+#    if value == 'q': exit(0)
+
   p = Pool(numThreads, initializer=initializeDetectorAndWaveforms, initargs=[det, wfs])
   initializeDetectorAndWaveforms(det, wfs)
   #Do the MCMC
@@ -165,7 +165,6 @@ def main(argv):
   #w/ progress bar
   bar = ProgressBar(widgets=[Percentage(), Bar()], maxval=iter).start()
   for (idx,result) in enumerate(sampler.sample(pos0, iterations=iter, storechain=True)):
-    exit(0)
     bar.update(idx+1)
 
   end = timer()
