@@ -151,7 +151,12 @@ def minimize_waveform_only(r, phi, z, scale, t0, smooth, esmooth,  wf,):
 
 def minimize_waveform_only_nosmooth(r, phi, z, scale, t0,  wf,):
   #result = op.minimize(neg_lnlike_wf_nosmooth, [r, phi, z, scale,t0], args=(wf) ,method="Nelder-Mead")
-  result = op.basinhopping(neg_lnlike_wf_nosmooth, [r, phi, z, scale,t0], niter=10, minimizer_kwargs={"args":wf, "method": "Nelder-Mead"})
+  #result = op.basinhopping(neg_lnlike_wf_nosmooth, [r, phi, z, scale,t0], niter=10, minimizer_kwargs={"args":wf, "method": "Nelder-Mead"})
+
+  bounds = [ (0, detector.detector_radius), (0, np.pi/4), (0, detector.detector_length), (scale/1.2, scale*1.2), (0, 15)   ]
+  result = op.differential_evolution(neg_lnlike_wf_nosmooth, bounds, args=([wf]), polish=False, maxiter=100)
+  
+  
   return result
 
 def minimize_waveform_only_star(a_b):
@@ -183,8 +188,8 @@ def lnlike_waveform_nosmooth(theta, wf):
   inv_sigma2 = 1.0/(model_err**2)
   return -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
 
-def neg_lnlike_wf_nosmooth(theta, wf):
-  return -1*lnlike_waveform_nosmooth(theta, wf)
+def neg_lnlike_wf_nosmooth(theta, *wf):
+  return -1*lnlike_waveform_nosmooth(theta, wf[0])
 
 def lnlike_waveform(theta, wf):
   r, phi, z, scale, t0, smooth, esmooth  = np.copy(theta)
