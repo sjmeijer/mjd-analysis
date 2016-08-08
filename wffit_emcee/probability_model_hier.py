@@ -24,9 +24,9 @@ def initializeDetectorAndWfs(det, wfs):
   global wf_arr
   wf_arr = wfs
 
-#def init_wfs(wf_Arr):
-#  global wf_arr
-#  wf_arr = wf_Arr
+def init_wfs(wf_Arr):
+  global wf_arr
+  wf_arr = wf_Arr
 
 def lnlike_detector(theta, *wfParams):
   '''assumes the data comes in w/ 10ns sampling period'''
