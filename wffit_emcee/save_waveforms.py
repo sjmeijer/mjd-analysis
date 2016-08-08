@@ -14,8 +14,8 @@ from timeit import default_timer as timer
 from multiprocessing import Pool
 
 def main(argv):
-  numWaveforms = 16
-  numThreads = 4
+  numWaveforms =  512
+  numThreads = 8
   figsize = (20,10)
   plt.ion()
 
@@ -52,7 +52,7 @@ def main(argv):
   #Crate a decent start guess by fitting waveform-by-waveform
   
   wfFileName = "P42574A_%dwaveforms_raw.npz" % numWaveforms
-  wfFileNameProcessed = "P42574A_%dwaveforms_fit.npz" % numWaveforms
+  wfFileNameProcessed = "P42574A_%dwaveforms_fit_nosmooth.npz" % numWaveforms
   
   if os.path.isfile(wfFileName):
     print "Raw File already exists %s" % wfFileName
@@ -72,7 +72,9 @@ def main(argv):
   fig = plt.figure(figsize=figsize)
   for (idx, wf) in enumerate(wfs):
     wf.WindowWaveformTimepoint(fallPercentage=.99)
-    args.append( [15./r_mult, np.pi/8., 15./z_mult, wf.wfMax/scale_mult, wf.t0Guess, 10., 5.,  wfs[idx] ]  )
+    args.append( [15./r_mult, np.pi/8., 15./z_mult, wf.wfMax/scale_mult, wf.t0Guess,  wfs[idx] ]  )
+
+#    args.append( [15./r_mult, np.pi/8., 15./z_mult, wf.wfMax/scale_mult, wf.t0Guess, 10., 5.,  wfs[idx] ]  )
     plt.plot(wf.windowedWf, color="r")
 
   np.savez(wfFileName, wfs = wfs )
@@ -82,17 +84,21 @@ def main(argv):
 
   print "performing parallelized initial fit..."
   start = timer()
-  results = p.map(minimize_waveform_only_star, args)
+  results = p.map(minimize_waveform_only_nosmooth_star, args)
   end = timer()
   print "Initial fit time: %f" % (end-start)
 
   simWfArr = np.empty((1,len(results), fitSamples))
   for (idx,result) in enumerate(results):
-    r, phi, z, scale, t0, smooth, esmooth = result["x"]
+#    r, phi, z, scale, t0, smooth, esmooth = result["x"]
+
+    r, phi, z, scale, t0,  = result["x"]
     print "  >> wf %d (normalized likelihood %0.2f):" % (idx, result["fun"]/wfs[idx].wfLength)
-    print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f, smooth:%0.2f, esmooth:%0.2f" % (r, phi, z, scale, t0, smooth, esmooth)
-    
-    simWfArr[0,idx,:] = det.GetSimWaveform(r*r_mult, phi, z*z_mult, scale*scale_mult, t0,  fitSamples, smoothing=smooth, electron_smoothing=esmooth)
+    print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f" % (r, phi, z, scale, t0,  )
+    simWfArr[0,idx,:] = det.GetSimWaveform(r*r_mult, phi, z*z_mult, scale*scale_mult, t0,  fitSamples, )
+
+#    print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f, smooth:%0.2f, esmooth:%0.2f" % (r, phi, z, scale, t0, smooth, esmooth)
+#    simWfArr[0,idx,:] = det.GetSimWaveform(r*r_mult, phi, z*z_mult, scale*scale_mult, t0,  fitSamples, smoothing=smooth, electron_smoothing=esmooth)
 
 
   fig1 = plt.figure(figsize=figsize)

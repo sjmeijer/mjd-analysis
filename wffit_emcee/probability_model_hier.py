@@ -146,30 +146,48 @@ def lnlike_detector_holdtf(theta, *wfParams):
 
 
 def minimize_waveform_only(r, phi, z, scale, t0, smooth, esmooth,  wf,):
-
-#  bounds = [ (0,np.floor(detector.detector_radius*10.)/10. /r_mult ), (0, np.pi/4.), (0,np.floor(detector.detector_length*10.)/10./z_mult), (wf.wfMax/2/scale_mult, wf.wfMax*2/scale_mult), (0, 15), (0, 20)  ]
-#
-#  constraints = [{ "type": 'ineq', "fun": constr_r  },
-#                 { "type": 'ineq', "fun": constr_theta  },
-#                 { "type": 'ineq', "fun": constr_z  },
-#                 { "type": 'ineq', "fun": constr_t0  },
-#                 { "type": 'ineq', "fun": constr_smooth  }]
-
   result = op.minimize(neg_lnlike_wf, [r, phi, z, scale,t0,  smooth, esmooth], args=(wf) ,method="Powell")
-  
-  #result = op.differential_evolution(neg_lnlike_wf, bounds, args=([wf]), polish=False )
   return result
 
-
+def minimize_waveform_only_nosmooth(r, phi, z, scale, t0,  wf,):
+  result = op.minimize(neg_lnlike_wf_nosmooth, [r, phi, z, scale,t0], args=(wf) ,method="Powell")
+  return result
 
 def minimize_waveform_only_star(a_b):
   return minimize_waveform_only(*a_b)
 
+def minimize_waveform_only_nosmooth_star(a_b):
+  return minimize_waveform_only_nosmooth(*a_b)
+
+def lnlike_waveform_nosmooth(theta, wf):
+  r, phi, z, scale, t0 = np.copy(theta)
+
+  r *= r_mult
+  z *= z_mult
+  scale *= scale_mult
+  
+  if scale < 0 or t0 < 0 :
+    return -np.inf
+
+  if not detector.IsInDetector(r, phi, z):
+    return -np.inf
+
+  data = wf.windowedWf
+  model_err = wf.baselineRMS
+  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data))
+  
+  if model is None:
+    return -np.inf
+
+  inv_sigma2 = 1.0/(model_err**2)
+  return -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
+
+def neg_lnlike_wf_nosmooth(theta, wf):
+  return -1*lnlike_waveform_nosmooth(theta, wf)
+
 def lnlike_waveform(theta, wf):
   r, phi, z, scale, t0, smooth, esmooth  = np.copy(theta)
-#  print "  r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f, smooth: %0.2f" % (r, phi, z, scale, t0, smooth)
 
-  
   r *= r_mult
   z *= z_mult
   scale *= scale_mult
@@ -182,14 +200,12 @@ def lnlike_waveform(theta, wf):
 
   data = wf.windowedWf
   model_err = wf.baselineRMS
-
   model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data), smoothing=smooth, electron_smoothing=esmooth)
   
   if model is None:
     return -np.inf
 
   inv_sigma2 = 1.0/(model_err**2)
-
   return -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
 
 def neg_lnlike_wf(theta, wf):
@@ -213,6 +229,15 @@ def minimize_wf(r, phi, z, scale, t0, smooth, temp, pcRad, pcLen, impGrad, num, 
 
 def minimize_wf_star(a_b):
   return minimize_wf(*a_b)
+
+
+
+
+
+
+
+
+
 
 def minimize_wf_holdtf(r, phi, z, scale, t0, smooth, temp, pcRad, pcLen, impGrad, wf):
 
