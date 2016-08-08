@@ -27,18 +27,31 @@ def main(argv):
   numWaveforms = 2
   
   #get waveforms
-  cut = "trapECal>%f && trapECal<%f && TSCurrent100nsMax/trapECal > %f" %  (1588,1594, aeCutVal)
-  wfs = helpers.GetWaveforms(runRange, channel, numWaveforms, cut)
-
-  #init wf sim
-  grad = 0.08
-  pcRad = 2.75#this is the actual starret value ish
-  detName = "conf/P42574A_grad%0.2f_pcrad%0.2f.conf" % (grad,pcRad)
+  wfFileName = "P42574A_32waveforms_risetimeculled.npz"
+  if os.path.isfile(wfFileName):
+    data = np.load(wfFileName)
+    wfs = data['wfs']
+  else:
+    exit(0)
   
-  num = [3.64e+09, 1.88e+17, 6.05e+15]
-  den = [1, 4.03e+07, 5.14e+14, 7.15e+18]
+  
+#  cut = "trapECal>%f && trapECal<%f && TSCurrent100nsMax/trapECal > %f" %  (1588,1594, aeCutVal)
+#  wfs = helpers.GetWaveforms(runRange, channel, numWaveforms, cut)
+
+  num = [8772059139.7583485, 1.7795141663115218e+18, 17696700392300130.0]
+  den = [1, 50813678.171704151, 708456403501206.5, 1.4152530477835272e+19]
   system = signal.lti(num, den)
-  det =  Detector(detName, temperature=83., timeStep=1., numSteps=fitSamples*10, tfSystem=system)
+  
+  tempGuess = 77
+  gradGuess = 0.0487
+  pcRadGuess = 2.535691
+  pcLenGuess = 1.655159
+
+  #Create a detector model
+  detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.04,2.5, 1.6)
+  det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
+  det.LoadFields("P42574A_fields_len.npz")
+  det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
 
 
 #  #plot to make sure you like what you see
@@ -60,17 +73,17 @@ def main(argv):
     plt.figure(1)
   
     wf.WindowWaveformTimepoint()
-    startGuess = [15., np.pi/8, 15., wf.wfMax, wf.t0Guess]
+    startGuess = [15., np.pi/8, 15., wf.wfMax, wf.t0Guess, 3., 1.]
     init_wf = det.GetSimWaveform(15, np.pi/8, 15, wf.wfMax, wf.t0Guess, fitSamples)
     plt.plot(init_wf, color="g")
     
     result = op.minimize(nll, startGuess, args=(wf.windowedWf, det,  wf.baselineRMS),  method="Powell")
-    r, phi, z, scale, t0= result["x"]
+    r, phi, z, scale, t0, smooth, esmooth= result["x"]
     
     plt.plot(wf.windowedWf, color="r")
     
-    ml_wf = det.GetSimWaveform(r, phi, z, scale, t0, fitSamples)
-    ml_wf_inv = det.GetSimWaveform(z, phi, r, scale, t0, fitSamples)
+    ml_wf = det.GetSimWaveform(r, phi, z, scale, t0, fitSamples, smoothing=smooth, electron_smoothing = esmooth)
+    ml_wf_inv = det.GetSimWaveform(z, phi, r, scale, t0, fitSamples, smoothing=smooth, electron_smoothing = esmooth)
     
     plt.plot(ml_wf, color="b")
     plt.plot(ml_wf_inv, "b:")
@@ -83,16 +96,16 @@ def main(argv):
 
 
     #Do the MCMC
-    ndim, nwalkers = 5, 20
-    mcmc_startguess = np.array([r, phi, z, scale, t0])
+    ndim, nwalkers = 7, 100
+    mcmc_startguess = np.array([r, phi, z, scale, t0, smooth, esmooth])
     
-    pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim) for i in range(nwalkers)]
+    pos0 = [mcmc_startguess + 1e-1*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wf.windowedWf, det,  wf.baselineRMS, wf.wfMax, wf.t0Guess))
 #    f = open("chain.dat", "w")
 #    f.close()
 
 
-    iter, burnIn = 1000, 500
+    iter, burnIn = 2000, 1500
     
     bar = ProgressBar(widgets=[Percentage(), Bar()], maxval=iter).start()
     start = timer()
@@ -116,17 +129,21 @@ def main(argv):
     #########  Plots for MC Steps
     stepsFig = plt.figure(2)
     plt.clf()
-    ax0 = stepsFig.add_subplot(511)
-    ax1 = stepsFig.add_subplot(512, sharex=ax0)
-    ax2 = stepsFig.add_subplot(513, sharex=ax0)
-    ax3 = stepsFig.add_subplot(514, sharex=ax0)
-    ax4 = stepsFig.add_subplot(515, sharex=ax0)
+    ax0 = stepsFig.add_subplot(711)
+    ax1 = stepsFig.add_subplot(712, sharex=ax0)
+    ax2 = stepsFig.add_subplot(713, sharex=ax0)
+    ax3 = stepsFig.add_subplot(714, sharex=ax0)
+    ax4 = stepsFig.add_subplot(715, sharex=ax0)
+    ax5 = stepsFig.add_subplot(716, sharex=ax0)
+    ax6 = stepsFig.add_subplot(717, sharex=ax0)
     
     ax0.set_ylabel('r')
     ax1.set_ylabel('phi')
     ax2.set_ylabel('z')
     ax3.set_ylabel('scale')
     ax4.set_ylabel('t0')
+    ax5.set_ylabel('smooth')
+    ax6.set_ylabel('esmooth')
 
     for i in range(nwalkers):
       ax0.plot(sampler.chain[i,:,0], "b", alpha=0.3)
@@ -134,14 +151,16 @@ def main(argv):
       ax2.plot(sampler.chain[i,:,2], "b", alpha=0.3)
       ax3.plot(sampler.chain[i,:,3], "b", alpha=0.3)
       ax4.plot(sampler.chain[i,:,4], "b", alpha=0.3)
+      ax5.plot(sampler.chain[i,:,5], "b", alpha=0.3)
+      ax6.plot(sampler.chain[i,:,6], "b", alpha=0.3)
 
     #pull the samples after burn-in
 
-    samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
+    samples = sampler.chain[:, burnIn:, :].reshape((-1, ndim))
     wfPlotNumber = 100
     simWfs = np.empty(wfPlotNumber, dtype=object)
-    for idx, (r, phi, z, scale, t0) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
-      simWfs[idx] = det.GetSimWaveform(r, phi, z, scale, t0, fitSamples)
+    for idx, (r, phi, z, scale, t0, smooth, e_smooth) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
+      simWfs[idx] = det.GetSimWaveform(r, phi, z, scale, t0, fitSamples, smoothing = smooth, electron_smoothing = e_smooth)
 
 
     residFig = plt.figure(3)
