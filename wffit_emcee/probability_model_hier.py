@@ -150,7 +150,8 @@ def minimize_waveform_only(r, phi, z, scale, t0, smooth, esmooth,  wf,):
   return result
 
 def minimize_waveform_only_nosmooth(r, phi, z, scale, t0,  wf,):
-  result = op.minimize(neg_lnlike_wf_nosmooth, [r, phi, z, scale,t0], args=(wf) ,method="Powell")
+  #result = op.minimize(neg_lnlike_wf_nosmooth, [r, phi, z, scale,t0], args=(wf) ,method="Nelder-Mead")
+  result = op.basinhopping(neg_lnlike_wf_nosmooth, [r, phi, z, scale,t0], niter=10, minimizer_kwargs={"args":wf, "method": "Nelder-Mead"})
   return result
 
 def minimize_waveform_only_star(a_b):
