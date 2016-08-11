@@ -134,11 +134,6 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
 
     gatTree.SetEntryList(elist);
     builtTree.SetEntryList(elist);
-
-
-
-    print "cut list has %d events" % elist.GetN()
-    print "channel list has %d events" % elistChan.GetN()
     
     for ientry in xrange( elist.GetN() ):
       entryNumber = gatTree.GetEntryNumber(ientry);
@@ -170,9 +165,6 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
       lastEvent = builtTree.event
       
       timeSinceLast =  current_time - lastEvent.GetTime()
-      
-      print "time since last is %e" % timeSinceLast
-      
 
       waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineRMS(), timeSinceLast) )
       if len(waveformArray) >= numWaveforms: break
