@@ -84,14 +84,16 @@ def GetWaveformByEntry(runNumber, entryNumber, channelNumber, doBaselineSub=True
     waveform = getWaveform(gatTree, builtTree, entryNumber, channelNumber)
     waveform.SetLength(waveform.GetLength()-10)
     
+    rms=0
     if doBaselineSub:
       baseline = MGWFBaselineRemover()
       baseline.SetBaselineSamples(baselineSamples)
       baseline.TransformInPlace(waveform)
+      rms = baseline.GetBaselineRMS()
 
     np_data = np.array(waveform.GetVectorData())
 
-    return Waveform(np_data, channelNumber, runNumber, entryNumber ,baseline.GetBaselineRMS())
+    return Waveform(np_data, channelNumber, runNumber, entryNumber ,rms)
 
 
 ########################################################################
