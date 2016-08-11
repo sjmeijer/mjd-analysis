@@ -20,12 +20,13 @@ baselineSamples = 800
 #funnyEntries = [4110, 66905]
 
 class Waveform:
-  def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_rms, timeSinceLast):
+  def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_rms, timeSinceLast, energyLast):
     self.waveformData = waveform_data
     self.channel = channel_number
     self.runNumber = run_number
     self.baselineRMS = baseline_rms
     self.timeSinceLast = timeSinceLast
+    self.energyLast = energyLast
 
   def WindowWaveform(self, numSamples, earlySamples=10, t0riseTime = 0.005):
     '''Windows to a given number of samples'''
@@ -166,7 +167,9 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
       
       timeSinceLast =  current_time - lastEvent.GetTime()
 
-      waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineRMS(), timeSinceLast) )
+      energyLast = getWaveformEnergy(gatTree, builtTree, last_entry_number, channelNumber)
+
+      waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineRMS(), timeSinceLast, energyLast) )
       if len(waveformArray) >= numWaveforms: break
       
     gat_file.Close()
@@ -193,6 +196,21 @@ def getWaveform(gatTree, builtTree, entryNumber, channelNumber):
         channel = channelVec[i_wfm]
         if (channel != channelNumber): continue
         return event.GetWaveform(i_wfm)
+
+def getWaveformEnergy(gatTree, builtTree, entryNumber, channelNumber):
+    
+    builtTree.GetEntry( entryNumber )
+    gatTree.GetEntry( entryNumber )
+    
+    event = builtTree.event
+    channelVec   = gatTree.channel
+    numWaveforms = event.GetNWaveforms()
+
+    for i_wfm in xrange( numWaveforms ):
+        channel = channelVec[i_wfm]
+        if (channel != channelNumber): continue
+        return gatTree.trapECal
+
 
 ########################################################################
 
