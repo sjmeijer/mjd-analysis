@@ -209,7 +209,7 @@ def getWaveformEnergy(gatTree, builtTree, entryNumber, channelNumber):
     for i_wfm in xrange( numWaveforms ):
         channel = channelVec[i_wfm]
         if (channel != channelNumber): continue
-        return gatTree.trapECal
+        return gatTree.trapECal[i_wfm]
 
 
 ########################################################################
