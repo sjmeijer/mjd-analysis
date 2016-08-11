@@ -24,9 +24,11 @@ class Waveform:
     self.waveformData = waveform_data
     self.channel = channel_number
     self.runNumber = run_number
+    self.entry_number = entry_number
     self.baselineRMS = baseline_rms
     self.timeSinceLast = timeSinceLast
     self.energyLast = energyLast
+  
 
   def WindowWaveform(self, numSamples, earlySamples=10, t0riseTime = 0.005):
     '''Windows to a given number of samples'''
@@ -69,7 +71,7 @@ class Waveform:
     return np.where(np.greater(self.waveformData, searchValue))[0][-1]
 
 
-def GetWaveformByEntry(runNumber, entryNumber, channelNumber):
+def GetWaveformByEntry(runNumber, entryNumber, channelNumber, doBaselineSub=True):
     gatFilePath =  os.path.expandvars("$MJDDATADIR/%s/data/gatified/%s/%s%d.root" % (dataSetName, detectorName, gatDataName, runNumber  ) )
     builtFilePath =  os.path.expandvars("$MJDDATADIR/%s/data/built/%s/%s%d.root" % (dataSetName, detectorName, builtDataName, runNumber  ) )
 
@@ -82,9 +84,10 @@ def GetWaveformByEntry(runNumber, entryNumber, channelNumber):
     waveform = getWaveform(gatTree, builtTree, entryNumber, channelNumber)
     waveform.SetLength(waveform.GetLength()-10)
     
-    baseline = MGWFBaselineRemover()
-    baseline.SetBaselineSamples(baselineSamples)
-    baseline.TransformInPlace(waveform)
+    if doBaselineSub:
+      baseline = MGWFBaselineRemover()
+      baseline.SetBaselineSamples(baselineSamples)
+      baseline.TransformInPlace(waveform)
 
     np_data = np.array(waveform.GetVectorData())
 
