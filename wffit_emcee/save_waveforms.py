@@ -27,16 +27,17 @@ def main(argv):
   z_mult = 1.
   scale_mult = 100.
   
-  #Prepare detector
-  num =  [8685207069.0676746, 1.7618952141698222e+18, 17521485536930826.0]
-  den = [1, 50310572.447231829, 701441983664560.88, 1.4012406413698292e+19]
+  #Prepare detectoren = [1, 40503831.367655091, 507743886451386.06, 7.0164915381862738e+18]
+  num =
+  den =
+  
   system = signal.lti(num, den)
   fitSamples=200
   
   tempGuess = 78
-  gradGuess = 0.0482
-  pcRadGuess = 2.563885
-  pcLenGuess = 1.440751
+  gradGuess = 0.0487
+  pcRadGuess = 2.495226
+  pcLenGuess = 1.632869
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.04,2.5, 1.6)
@@ -52,7 +53,7 @@ def main(argv):
   #Crate a decent start guess by fitting waveform-by-waveform
   
   wfFileName = "P42574A_%dwaveforms_raw.npz" % numWaveforms
-  wfFileNameProcessed = "P42574A_%dwaveforms_fit_nosmooth.npz" % numWaveforms
+  wfFileNameProcessed = "P42574A_%dwaveforms_fit_nosmooth_de.npz" % numWaveforms
   
   if os.path.isfile(wfFileName):
     print "Raw File already exists %s" % wfFileName

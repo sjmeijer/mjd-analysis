@@ -30,7 +30,7 @@ class Waveform:
     self.energyLast = energyLast
   
 
-  def WindowWaveform(self, numSamples, earlySamples=10, t0riseTime = 0.005):
+  def WindowWaveform(self, numSamples, earlySamples=20, t0riseTime = 0.005):
     '''Windows to a given number of samples'''
     self.wfMax = np.amax(self.waveformData)
 
@@ -44,7 +44,7 @@ class Waveform:
     self.windowedWf = np_data_early
     self.wfLength = len(np_data_early)
 
-  def WindowWaveformTimepoint(self, earlySamples=5, fallPercentage=None):
+  def WindowWaveformTimepoint(self, earlySamples=20, fallPercentage=None):
     '''Does "smart" windowing by guessing t0 and wf max'''
     self.wfMax = np.amax(self.waveformData)
 
