@@ -20,14 +20,14 @@ def main(argv):
   fitSamples = 200
 
   #Prepare detector
-  num =  [8685207069.0676746, 1.7618952141698222e+18, 17521485536930826.0]
-  den = [1, 50310572.447231829, 701441983664560.88, 1.4012406413698292e+19]
+  num =  [3478247474.8078203, 1.9351287044375424e+17, 6066014749714584.0]
+  den = [1, 40525756.715025946, 508584795912802.25, 7.0511687850000589e+18]
   system = signal.lti(num, den)
   
-  tempGuess = 82.48
-  gradGuess = 0.0482
-  pcRadGuess = 2.563885
-  pcLenGuess = 1.440751
+  tempGuess = 77.89
+  gradGuess = 0.0483
+  pcRadGuess = 2.591182
+  pcLenGuess = 1.613357
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.04,2.5, 1.6)
