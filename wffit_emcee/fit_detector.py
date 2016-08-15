@@ -20,24 +20,19 @@ from multiprocessing import Pool
 def main(argv):
 ##################
 #These change a lot
-  numWaveforms = 16
-  numThreads = 8
+  numWaveforms = 8
+  numThreads = 4
   
-  ndim = 6*numWaveforms + 10
+  ndim = 5*numWaveforms + 10
   nwalkers = 3*ndim
   
-  iter=1000
-  burnIn = 800
+  iter=10
+  burnIn = 8
   
 ######################
 
 
   plt.ion()
-
-  channel = 626
-  aeCutVal = 0.01425
-  #runRanges = [(13385, 13392),  (13420,13429)]
-  runRanges = [(13420,13429)]
   
   fitSamples = 200
 
@@ -71,64 +66,30 @@ def main(argv):
   wfFileName = "P42574A_256waveforms_%drisetimeculled.npz"  % numWaveforms
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
-    r_arr  = data['r_arr']
-    phi_arr = data['phi_arr']
-    z_arr = data['z_arr']
-    scale_arr = data['scale_arr']
-    t0_arr = data['t0_arr']
-    smooth_arr = data['smooth_arr']
+    results = data['results']
     wfs = data['wfs']
   
   else:
-    print "No saved waveforms available.  Loading from Data"
-    #get waveforms
-    cut = "trapECal>%f && trapECal<%f && TSCurrent100nsMax/trapECal > %f" %  (1588,1594, aeCutVal)
-    wfs = helpers.GetWaveforms(runRanges, channel, numWaveforms, cut)
-    
-    for (idx, wf) in enumerate(wfs):
-      wf.WindowWaveformTimepoint(fallPercentage=.99)
+    print "No saved waveforms available."
+    exit(0)
 
-    #prep holders for each wf-specific param
-    r_arr = np.empty(numWaveforms)
-    phi_arr = np.empty(numWaveforms)
-    z_arr = np.empty(numWaveforms)
-    scale_arr = np.empty(numWaveforms)
-    t0_arr = np.empty(numWaveforms)
-    smooth_arr = np.empty(numWaveforms)
-    simWfArr = np.empty((1,numWaveforms, fitSamples))
-    
-    #parallel fit the waveforms with the initial detector params
-    args = []
-    for (idx, wf) in enumerate(wfs):
-      wf.WindowWaveformTimepoint(fallPercentage=.99)
-      args.append( [15., np.pi/8., 15., wf.wfMax, wf.t0Guess, 10.,  wfs[idx] ]  )
+  r_arr = np.empty(numWaveforms)
+  phi_arr = np.empty(numWaveforms)
+  z_arr = np.empty(numWaveforms)
+  scale_arr = np.empty(numWaveforms)
+  t0_arr = np.empty(numWaveforms)
+  simWfArr = np.empty((1,numWaveforms, fitSamples))
 
-    print "performing parallelized initial fit..."
-    p = Pool(numThreads, initializer=initializeDetector, initargs=[det])
-    start = timer()
-    results = p.map(minimize_waveform_only_star, args)
-    end = timer()
-    p.close()
-
-    print "Initial fit time: %f" % (end-start)
-    
-    for (idx,result) in enumerate(results):
-      r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx] = result["x"]
-      print "  >> wf %d (normalized likelihood %0.2f):" % (idx, result["fun"]/wfs[idx].wfLength)
-      print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f, smooth:%0.2f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx])
-      simWfArr[0,idx,:] = det.GetSimWaveform(r_arr[idx]*1., phi_arr[idx], z_arr[idx]*1., scale_arr[idx]*1., t0_arr[idx],  fitSamples, smoothing=smooth_arr[idx],)
-
-    fig1 = plt.figure(1, figsize=fig_size)
-    helpers.plotManyResidual(simWfArr, wfs, fig1, residAlpha=1)
-    np.savez(wfFileName, wfs = wfs, r_arr=r_arr, phi_arr = phi_arr, z_arr = z_arr, scale_arr = scale_arr,  t0_arr=t0_arr, smooth_arr=smooth_arr  )
-#    value = raw_input('  --> Press q to quit, any other key to continue\n')
-#    if value == 'q': exit(0)
+  for (idx, result) in enumerate(results):
+    r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx] = result['x']
+    print "  >> wf %d (normalized likelihood %0.2f):" % (idx, result["fun"]/wfs[idx].wfLength)
+    print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx])
 
   p = Pool(numThreads, initializer=initializeDetectorAndWaveforms, initargs=[det, wfs])
   initializeDetectorAndWaveforms(det, wfs)
   #Do the MCMC
 
-  mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], smooth_arr[:], tempGuess, gradGuess,pcRadGuess, pcLenGuess, num[:], den[1:]))
+  mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:]*100., t0_arr[:], tempGuess, gradGuess,pcRadGuess, pcLenGuess, num[:], den[1:]))
 
 
   if nwalkers % 2:
@@ -146,8 +107,8 @@ def main(argv):
     pos[numWaveforms:2*numWaveforms] = np.clip(pos[numWaveforms:2*numWaveforms], 0, np.pi/4)
     pos[2*numWaveforms:3*numWaveforms] = np.clip(pos[2*numWaveforms:3*numWaveforms], 0, np.floor(det.detector_length*10.)/10.)
     pos[4*numWaveforms:5*numWaveforms] = np.clip(pos[4*numWaveforms:5*numWaveforms], 0, fitSamples)
-    pos[5*numWaveforms:6*numWaveforms] = np.clip(pos[5*numWaveforms:6*numWaveforms], 0, 100.)
-    
+#    pos[5*numWaveforms:6*numWaveforms] = np.clip(pos[5*numWaveforms:6*numWaveforms], 0, 100.)
+
     pos[tempIdx] = np.clip(pos[tempIdx], 40, 120)
     pos[gradIdx] = np.clip(pos[gradIdx], det.gradList[0], det.gradList[-1])
     pos[pcRadIdx] = np.clip(pos[pcRadIdx], det.pcRadList[0], det.pcRadList[-1])
@@ -156,6 +117,7 @@ def main(argv):
     prior = lnprior(pos,)
     if not np.isfinite(prior) :
       print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
+      print pos
       exit(0)
 
   sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob,  pool=p)
@@ -186,14 +148,14 @@ def main(argv):
   ax2 = stepsFig.add_subplot(513, sharex=ax0)
   ax3 = stepsFig.add_subplot(514, sharex=ax0)
   ax4 = stepsFig.add_subplot(515, sharex=ax0)
-  ax5 = stepsFig.add_subplot(616, sharex=ax0)
-  
+#  ax5 = stepsFig.add_subplot(616, sharex=ax0)
+
   ax0.set_ylabel('r')
   ax1.set_ylabel('phi')
   ax2.set_ylabel('z')
   ax3.set_ylabel('scale')
   ax4.set_ylabel('t0')
-  ax5.set_ylabel('smoothing')
+#  ax5.set_ylabel('smoothing')
 
   for i in range(nwalkers):
     for j in range(wfs.size):
@@ -202,7 +164,7 @@ def main(argv):
       ax2.plot(sampler.chain[i,:,2*numWaveforms + j], alpha=0.3)  #z
       ax3.plot(sampler.chain[i,:,3*numWaveforms + j],  alpha=0.3) #energy
       ax4.plot(sampler.chain[i,:,4*numWaveforms + j],  alpha=0.3) #t0
-      ax5.plot(sampler.chain[i,:,5*numWaveforms + j],  alpha=0.3) #smoothing
+#      ax5.plot(sampler.chain[i,:,5*numWaveforms + j],  alpha=0.3) #smoothing
 
   plt.savefig("emcee_wfchain_%dwfs.png" % numWaveforms)
 
@@ -220,16 +182,24 @@ def main(argv):
   ax2.set_ylabel('pcRad')
   ax3.set_ylabel('pcLen')
 
+  for i in range(nwalkers):
+    ax0.plot(sampler.chain[i,:,tempIdx], "b", alpha=0.3) #temp
+    ax1.plot(sampler.chain[i,:,gradIdx], "b", alpha=0.3) #grad
+    ax2.plot(sampler.chain[i,:,pcRadIdx], "b", alpha=0.3) #pcrad
+    ax3.plot(sampler.chain[i,:,pcLenIdx], "b", alpha=0.3) #pclen
+    
+  plt.savefig("emcee_detchain_%dwfs.png" % numWaveforms)
+
+
   #and for the transfer function
   stepsFigTF = plt.figure(4, figsize=fig_size)
   plt.clf()
-  tf0 = stepsFigDet.add_subplot(611)
-  tf1 = stepsFigDet.add_subplot(612, sharex=ax0)
-  tf2 = stepsFigDet.add_subplot(613, sharex=ax0)
-  tf3 = stepsFigDet.add_subplot(614, sharex=ax0)
-  tf4 = stepsFigDet.add_subplot(615, sharex=ax0)
-  tf5 = stepsFigDet.add_subplot(616, sharex=ax0)
-
+  tf0 = stepsFigTF.add_subplot(611)
+  tf1 = stepsFigTF.add_subplot(612, sharex=ax0)
+  tf2 = stepsFigTF.add_subplot(613, sharex=ax0)
+  tf3 = stepsFigTF.add_subplot(614, sharex=ax0)
+  tf4 = stepsFigTF.add_subplot(615, sharex=ax0)
+  tf5 = stepsFigTF.add_subplot(616, sharex=ax0)
   tf0.set_ylabel('num0')
   tf1.set_ylabel('num1')
   tf2.set_ylabel('num2')
@@ -238,11 +208,6 @@ def main(argv):
   tf5.set_ylabel('den3')
 
   for i in range(nwalkers):
-    ax0.plot(sampler.chain[i,:,tempIdx], "b", alpha=0.3) #temp
-    ax1.plot(sampler.chain[i,:,gradIdx], "b", alpha=0.3) #grad
-    ax2.plot(sampler.chain[i,:,pcRadIdx], "b", alpha=0.3) #pcrad
-    ax3.plot(sampler.chain[i,:,pcLenIdx], "b", alpha=0.3) #pclen
-    
     tf0.plot(sampler.chain[i,:,-6], "b", alpha=0.3) #num0
     tf1.plot(sampler.chain[i,:,-5], "b", alpha=0.3) #1
     tf2.plot(sampler.chain[i,:,-4], "b", alpha=0.3) #2
@@ -250,7 +215,6 @@ def main(argv):
     tf4.plot(sampler.chain[i,:,-2], "b", alpha=0.3) #2
     tf5.plot(sampler.chain[i,:,-1], "b", alpha=0.3) #3
 
-  plt.savefig("emcee_detchain_%dwfs.png" % numWaveforms)
   plt.savefig("emcee_tfchain_%dwfs.png" % numWaveforms)
 
 
