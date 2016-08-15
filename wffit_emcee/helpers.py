@@ -20,11 +20,15 @@ baselineSamples = 800
 #funnyEntries = [4110, 66905]
 
 class Waveform:
-  def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_rms):
+  def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_rms, timeSinceLast=None, energyLast=None):
     self.waveformData = waveform_data
     self.channel = channel_number
     self.runNumber = run_number
+    self.entry_number = entry_number
     self.baselineRMS = baseline_rms
+    self.timeSinceLast = timeSinceLast
+    self.energyLast = energyLast
+  
 
   def WindowWaveform(self, numSamples, earlySamples=10, t0riseTime = 0.005):
     '''Windows to a given number of samples'''
@@ -67,6 +71,30 @@ class Waveform:
     return np.where(np.greater(self.waveformData, searchValue))[0][-1]
 
 
+def GetWaveformByEntry(runNumber, entryNumber, channelNumber, doBaselineSub=True):
+    gatFilePath =  os.path.expandvars("$MJDDATADIR/%s/data/gatified/%s/%s%d.root" % (dataSetName, detectorName, gatDataName, runNumber  ) )
+    builtFilePath =  os.path.expandvars("$MJDDATADIR/%s/data/built/%s/%s%d.root" % (dataSetName, detectorName, builtDataName, runNumber  ) )
+
+    gat_file = TFile.Open(gatFilePath)
+    gatTree = gat_file.Get(gatTreeName)
+    built_file = TFile.Open(builtFilePath)
+    builtTree = built_file.Get(builtTreeName)
+    builtTree.AddFriend(gatTree)
+
+    waveform = getWaveform(gatTree, builtTree, entryNumber, channelNumber)
+    waveform.SetLength(waveform.GetLength()-10)
+    
+    rms=0
+    if doBaselineSub:
+      baseline = MGWFBaselineRemover()
+      baseline.SetBaselineSamples(baselineSamples)
+      baseline.TransformInPlace(waveform)
+      rms = baseline.GetBaselineRMS()
+
+    np_data = np.array(waveform.GetVectorData())
+
+    return Waveform(np_data, channelNumber, runNumber, entryNumber ,rms)
+
 
 ########################################################################
 
@@ -105,6 +133,11 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
     gatTree.Draw(">>elist", cutStr, "entrylist")
     elist = gDirectory.Get("elist")
     #print "Number of entries in the entryList is " + str(elist.GetN())
+
+    
+    gatTree.Draw(">>elistChan", cutChan, "entrylist")
+    elistChan = gDirectory.Get("elistChan")
+
     gatTree.SetEntryList(elist);
     builtTree.SetEntryList(elist);
     
@@ -123,8 +156,25 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
       #fitWaveform(waveform, fig, fig2, iRun, entryNumber, channelNumber)
       
       np_data = waveform.GetVectorData()
-      np_data = np.multiply(np_data, 1.)
-      waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineRMS()) )
+      np_data = np.array(np_data)
+      
+      event = builtTree.event
+      current_time = event.GetTime()
+      
+      #find the last hit event for this channel
+      for i in range(elistChan.GetN()):
+        e_num_tmp = elistChan.GetEntry(i)
+        if e_num_tmp >= entryNumber: break
+        last_entry_number = e_num_tmp
+      
+      builtTree.GetEntry(last_entry_number)
+      lastEvent = builtTree.event
+      
+      timeSinceLast =  current_time - lastEvent.GetTime()
+
+      energyLast = getWaveformEnergy(gatTree, builtTree, last_entry_number, channelNumber)
+
+      waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineRMS(), timeSinceLast, energyLast) )
       if len(waveformArray) >= numWaveforms: break
       
     gat_file.Close()
@@ -151,6 +201,21 @@ def getWaveform(gatTree, builtTree, entryNumber, channelNumber):
         channel = channelVec[i_wfm]
         if (channel != channelNumber): continue
         return event.GetWaveform(i_wfm)
+
+def getWaveformEnergy(gatTree, builtTree, entryNumber, channelNumber):
+    
+    builtTree.GetEntry( entryNumber )
+    gatTree.GetEntry( entryNumber )
+    
+    event = builtTree.event
+    channelVec   = gatTree.channel
+    numWaveforms = event.GetNWaveforms()
+
+    for i_wfm in xrange( numWaveforms ):
+        channel = channelVec[i_wfm]
+        if (channel != channelNumber): continue
+        return gatTree.trapECal[i_wfm]
+
 
 ########################################################################
 
@@ -186,7 +251,7 @@ def plotResidual(simWFArray, dataWF, figure=None, residAlpha=0.1):
   legend_line_1 = ax0.plot( np.NaN, np.NaN, color='r', label='Data (unfiltered)' )
   legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveform' )
 
-  first_legend = ax0.legend(loc=2)
+  first_legend = ax0.legend(loc=4)
 
 ########################################################################
 
@@ -225,7 +290,7 @@ def plotManyResidual(simWFArray, dataWFArray, figure=None, residAlpha=0.1):
   legend_line_1 = ax0.plot( np.NaN, np.NaN, color='r', label='Data (unfiltered)' )
   legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveform' )
 
-  first_legend = ax0.legend(loc=2)
+  first_legend = ax0.legend(loc=4)
 
 ########################################################################
 
