@@ -35,20 +35,30 @@ def main(argv):
   det.LoadFields("P42574A_fields_len.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   
-  wf1 = det.GetSimWaveform(10, .18, 10, 3917., 2.5, fitSamples)
-  plt.plot(wf1, color = "r")
+  for r in np.linspace(2, det.detector_radius, 20):
+    wf1 = det.GetSimWaveform(r, .18, 10, 1, 2., fitSamples)
+    plt.plot(np.arange(wf1.size)*10, wf1, color="b")
   
-  wf2 = det.GetSimWaveform(10, .18, 10, 3917., 2.75, fitSamples,)
-  plt.plot(wf2, color = "b")
+  plt.xlim(0,1000)
+  plt.ylim(-0.05,1.1)
   
-  wf3 = det.GetSimWaveform(10, .18, 10, 3917., 2.1, fitSamples,)
-  plt.plot(wf3,color = "g")
+  plt.xlabel("Time [ns]")
+  plt.ylabel("Energy [arb]")
   
-  wf4 = det.GetSimWaveform(10, .18, 10, 3917., 3, fitSamples)
-  plt.plot(wf4,color = "m")
-
-  wf5 = det.GetSimWaveform(10, .18, 10, 3917., 2.4, fitSamples)
-  plt.plot(wf5,color = "black")
+#  wf1 = det.GetSimWaveform(10, .18, 10, 3917., 2., fitSamples)
+#  plt.plot(wf1, color = "r")
+#  
+#  wf2 = det.GetSimWaveform(10, .18, 10, 3917., 2.75, fitSamples,)
+#  plt.plot(wf2, color = "b")
+#  
+#  wf3 = det.GetSimWaveform(10, .18, 10, 3917., 2.24, fitSamples,)
+#  plt.plot(wf3,color = "g")
+#  
+#  wf4 = det.GetSimWaveform(10, .18, 10, 3917., 3, fitSamples)
+#  plt.plot(wf4,color = "m")
+#
+#  plt.xlim(1,5)
+#  plt.ylim(0,10)
 
 
 
