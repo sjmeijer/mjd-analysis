@@ -34,7 +34,7 @@ class Waveform:
     '''Windows to a given number of samples'''
     self.wfMax = np.amax(self.waveformData)
 
-    startGuess = findTimePoint(self.waveformData, t0riseTime)
+    startGuess = self.EstimateT0()
     firstFitSampleIdx = startGuess-earlySamples
     lastFitSampleIdx = firstFitSampleIdx + numSamples
     
