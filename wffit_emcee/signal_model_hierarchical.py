@@ -119,7 +119,9 @@ def CreateFullDetectorModel(detector, waveforms, startGuess, prior_num, prior_de
     
     BoundAtZero = Bound(Normal, lower=0)
     t0 =  BoundAtZero('switchpoint', mu=startGuess['switchpoint'], sd=5, shape=n_waveforms)
-    sigma =   BoundAtZero('sigma', mu=startGuess['smooth'], sd=3, shape=n_waveforms)
+    
+    SigmaBound = Bound(Normal, lower=0, upper=20)
+    sigma =   SigmaBound('sigma', mu=startGuess['smooth'], sd=3, shape=n_waveforms)
     
     #detector-wide params
 #    tempEst = Bound( Normal('temp', mu=startGuess['temp'], sd=3.), lower=40, upper=120)

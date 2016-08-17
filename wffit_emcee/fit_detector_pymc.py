@@ -35,11 +35,11 @@ def main(argv):
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.04,2.5, 1.6)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
-  det.LoadFields("P42574A_fields_len.npz")
+  det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   
   
-  wfFileName = "P42574A_512waveforms_8risetimeculled.npz"
+  wfFileName = "P42574A_512waveforms_16risetimeculled.npz"
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     results = data['results']
@@ -99,7 +99,7 @@ def main(argv):
   with siggen_model:
   
     step = Metropolis()
-    trace = sample(1000,  step = step)
+    trace = sample(500,  step = step)
     
     burnin = np.int(len(trace['temp'][:]) - 0.25*len(trace['temp'][:]))#no clue what to choose, for now, just make it 75%
   
