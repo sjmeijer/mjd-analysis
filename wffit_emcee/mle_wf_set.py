@@ -62,7 +62,7 @@ def main(argv):
   args = []
   for (idx, wf) in enumerate(wfs):
     wf.WindowWaveformTimepoint(fallPercentage=.99)
-    args.append( [15, np.pi/8, 15, wf.wfMax, wf.t0Guess,  5.,  wfs[idx] ]  )
+    args.append( [15, np.pi/8, 15, wf.wfMax/100., wf.t0Guess,  5.,  wfs[idx] ]  )
 
   if True:
     p = Pool(numThreads, initializer=initializeDetector, initargs=[det])
