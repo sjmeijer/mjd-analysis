@@ -20,7 +20,7 @@ baselineSamples = 800
 #funnyEntries = [4110, 66905]
 
 class Waveform:
-  def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_rms, timeSinceLast=None, energyLast=None):
+  def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_rms, energy=None, timeSinceLast=None, energyLast=None):
     self.waveformData = waveform_data
     self.channel = channel_number
     self.runNumber = run_number
@@ -28,6 +28,7 @@ class Waveform:
     self.baselineRMS = baseline_rms
     self.timeSinceLast = timeSinceLast
     self.energyLast = energyLast
+    self.energy = energy
   
 
   def WindowWaveform(self, numSamples, earlySamples=20, t0riseTime = 0.005):
@@ -148,9 +149,7 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
 
       waveform = getWaveform(gatTree, builtTree, entryNumber, channelNumber)
       waveform.SetLength(waveform.GetLength()-10)
-      
       baseline.TransformInPlace(waveform)
-      
       
       print "Waveform number %d in run %d" % (entryNumber, iRun)
       #fitWaveform(waveform, fig, fig2, iRun, entryNumber, channelNumber)
@@ -158,23 +157,25 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
       np_data = waveform.GetVectorData()
       np_data = np.array(np_data)
       
-      event = builtTree.event
-      current_time = event.GetTime()
-      
-      #find the last hit event for this channel
-      for i in range(elistChan.GetN()):
-        e_num_tmp = elistChan.GetEntry(i)
-        if e_num_tmp >= entryNumber: break
-        last_entry_number = e_num_tmp
-      
-      builtTree.GetEntry(last_entry_number)
-      lastEvent = builtTree.event
-      
-      timeSinceLast =  current_time - lastEvent.GetTime()
+#      event = builtTree.event
+#      current_time = event.GetTime()
+#      
+#      #find the last hit event for this channel
+#      for i in range(elistChan.GetN()):
+#        e_num_tmp = elistChan.GetEntry(i)
+#        if e_num_tmp >= entryNumber: break
+#        last_entry_number = e_num_tmp
+#      
+#      builtTree.GetEntry(last_entry_number)
+#      lastEvent = builtTree.event
+#      
+#      timeSinceLast =  current_time - lastEvent.GetTime()
+#
+#      energyLast = getWaveformEnergy(gatTree, builtTree, last_entry_number, channelNumber)
 
-      energyLast = getWaveformEnergy(gatTree, builtTree, last_entry_number, channelNumber)
+      energy = getWaveformEnergy(gatTree, builtTree, entryNumber, channelNumber)
 
-      waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineRMS(), timeSinceLast, energyLast) )
+      waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineRMS(),  energy=energy) )
       if len(waveformArray) >= numWaveforms: break
       
     gat_file.Close()
@@ -214,7 +215,7 @@ def getWaveformEnergy(gatTree, builtTree, entryNumber, channelNumber):
     for i_wfm in xrange( numWaveforms ):
         channel = channelVec[i_wfm]
         if (channel != channelNumber): continue
-        return gatTree.trapECal[i_wfm]
+        return gatTree.trapENFCal[i_wfm]
 
 
 ########################################################################
@@ -241,8 +242,8 @@ def plotResidual(simWFArray, dataWF, figure=None, residAlpha=0.1):
 
   ax0.plot(t_data, dataWF  ,color="red", lw=2, alpha=0.8)
 
-  for simWF in simWFArray:
-    simWF = simWF[:dataLen]
+  for idx in range(simWFArray.shape[0]):
+    simWF = simWFArray[idx,:dataLen]
     diff = simWF - dataWF
 
     ax0.plot(t_data, simWF  ,color="black", alpha = residAlpha  )

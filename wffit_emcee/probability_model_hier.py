@@ -147,7 +147,8 @@ def lnlike_detector_holdtf(theta, *wfParams):
 
 def minimize_waveform_only(r, phi, z, scale, t0, smooth,  wf,):
 #  result = op.minimize(neg_lnlike_wf, [r, phi, z, scale,t0,  smooth, esmooth], args=(wf) ,method="Powell")
-  bounds = [ (0, detector.detector_radius), (0, np.pi/4), (0, detector.detector_length), (scale/1.2, scale*1.2), (wf.t0Guess - 10, wf.t0Guess +5), (0, 20)   ]
+
+  bounds = [ (0, detector.detector_radius), (0, np.pi/4), (0, detector.detector_length), (scale/1.2, scale*1.2), (wf.t0Guess - 15, wf.t0Guess +10), (0, 20)   ]
   result = op.differential_evolution(neg_lnlike_wf, bounds, args=([wf]), polish=False, maxiter=100)
   
   return result
@@ -174,6 +175,7 @@ def lnlike_waveform_nosmooth(theta, wf):
   r *= r_mult
   z *= z_mult
   scale *= scale_mult
+
   
   if scale < 0 or t0 < 0 :
     return -np.inf
@@ -201,6 +203,10 @@ def lnlike_waveform(theta, wf):
   z *= z_mult
   scale *= scale_mult
   
+  if wf.wfLength > detector.num_steps/10.:
+#    print "this waveform is too long yo"
+    return -np.inf
+  
   if scale < 0 or t0 < 0 or smooth<0  :
     return -np.inf
 
@@ -208,6 +214,10 @@ def lnlike_waveform(theta, wf):
     return -np.inf
 
   data = wf.windowedWf
+
+  if t0 > data.size:
+    return -np.inf
+
   model_err = wf.baselineRMS
   model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data), smoothing=smooth, )
   
