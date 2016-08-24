@@ -263,15 +263,27 @@ class Detector:
 
     sampled_idxs = np.arange(samples_to_fill)*self.data_to_siggen_size_ratio + siggen_start_idx
     
-#    print sampled_idxs[0:10]
+    
+    
 
     out = np.zeros(outputLength)
-    out[switchpoint_ceil:] = siggen_interp_fn(sampled_idxs)
+    
+    try:
+      out[switchpoint_ceil:] = siggen_interp_fn(sampled_idxs)
+    except ValueError:
+      print "Something goofy happened here during interp"
+      print outputLength
+      print siggen_wf.size
+      print sampled_idxs[-10:]
+      return None
     return out
 
 
   def SetTransferFunction(self, num, den):
     self.tfSystem = signal.lti(num, den)
+  
+  def SetTransferFunction(self, num, den, gain):
+    self.tfSystem = signal.lti(num, den, gain)
 
   def SetTemperature(self, temp):
     self.temperature = temp
