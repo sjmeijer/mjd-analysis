@@ -5,6 +5,8 @@ from pymc3 import *#DiscreteUniform, Exponential, Poisson, Uniform, Normal, find
 import theano.tensor as T
 from theano.compile.ops import as_op
 from scipy import signal
+
+#import matplotlib.pyplot as plt
 """
     Models for ppc response
     """
@@ -103,7 +105,7 @@ from scipy import signal
 #      baseline_observed.append( Normal("baseline_observed_%d" % i, mu=siggen_model(t0[i], radEst[i], phiEst[i], zEst[i], wfScale[i], tempEst, grad, pcRad, wflength), sd=wf.baselineRMS, observed= wf.windowedWf ) )
 #    return signal_model
 
-def CreateFullDetectorModel(detector, waveforms, startGuess, prior_num, prior_den):
+def CreateFullDetectorModel(detector, waveforms, startGuess, prior_zero, prior_pole1, prior_pole_real, prior_pole_imag):
   
   n_waveforms = len(waveforms)
   sample_length = len(waveforms[0].windowedWf)
@@ -142,15 +144,17 @@ def CreateFullDetectorModel(detector, waveforms, startGuess, prior_num, prior_de
     pcLen = BoundLen('pcLen', mu=startGuess['pcLen'], sd=0.2)
 
 
-    num_1 = Normal('num_1', mu=prior_num[0], sd=.3*prior_num[0])
-    num_2 = Normal('num_2', mu=prior_num[1], sd=.3*prior_num[1])
-    num_3 = Normal('num_3', mu=prior_num[2], sd=.3*prior_num[2])
-    den_1 = Normal('den_1', mu=prior_den[1], sd=.3*prior_den[1])
-    den_2 = Normal('den_2', mu=prior_den[2], sd=.3*prior_den[2])
-    den_3 = Normal('den_3', mu=prior_den[3], sd=.3*prior_den[3])
+    zero_1 = Normal('zero_1', mu=prior_zero, sd=.3*prior_zero)
+    pole_1 = Normal('pole_1', mu=prior_pole1, sd=.3*prior_pole1)
+    pole_real = Normal('pole_real', mu=prior_pole_real, sd=.3*prior_pole_real)
+    pole_imag = Normal('pole_imag', mu=prior_pole_imag, sd=.3*prior_pole_imag)
     
-    @as_op(itypes=[T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar, T.dscalar,T.dscalar,  T.dscalar, T.dscalar,T.dscalar,  T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.wscalar], otypes=[T.dvector])
-    def siggen_model(s, rad, phi, z, e, smooth, temp, num_1, num_2, num_3, den_1, den_2, den_3, grad, pc_rad, pc_len, fit_length):
+    
+#    fig1 = plt.figure(100)
+
+    
+    @as_op(itypes=[T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar,  T.dscalar,  T.dscalar, T.dscalar,T.dscalar,  T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.dscalar, T.wscalar], otypes=[T.dvector])
+    def siggen_model(s, rad, phi, z, e, smooth, temp, zero_1, pole_1, pole_real, pole_imag, grad, pc_rad, pc_len, fit_length):
     
       if s<0 or s>= fit_length:
         return np.ones(fit_length)*-np.inf
@@ -167,24 +171,32 @@ def CreateFullDetectorModel(detector, waveforms, startGuess, prior_num, prior_de
       if not detector.IsInDetector(rad, phi, z):
         return -np.inf * np.ones(fit_length)
       
-      num = [num_1, num_2, num_3]
-      den = [1,   den_1, den_2, den_3]
-      detector.SetTransferFunction(num, den)
+      zeros = [zero_1, 0]
+      poles = [pole_real + pole_imag*1j, pole_real - pole_imag*1j, pole_1]
+      detector.SetTransferFunction(zeros, poles, 1E7)
       
       if detector.pcRad != pc_rad or detector.pcLen != pc_len or detector.impurityGrad != grad:
         detector.SetFields(pc_rad, pc_len, grad)
       
-      siggen_wf = detector.GetSimWaveform(rad, phi, z, e*100, s, fit_length, smoothing=smooth)
-  
+      siggen_wf = detector.GetSimWaveform(rad, phi, z, e, s, fit_length, smoothing=smooth)
       if siggen_wf is None:
 #        print "siggen wf is none at (%0.2f, %0.2f, %0.2f)" % (rad, phi, z)
         return np.ones(fit_length)*-np.inf
+      
+            
+#      plt.figure(100)
+#      plt.clf()
+#      for wf in waveforms:
+#        plt.plot(wf.windowedWf, color="r")
+#      plt.plot(siggen_wf)
+#      value = raw_input('  --> Press q to quit, any other key to continue\n')
+
       return siggen_wf
         
     baseline_observed = []
     for (i, wf) in enumerate(waveforms):
       wflength = T.as_tensor_variable(np.int16(wf.wfLength))
-      baseline_observed.append( Normal("baseline_observed_%d" % i, mu=siggen_model(t0[i], radEst[i], phiEst[i], zEst[i], wfScale[i], sigma[i], tempEst, num_1, num_2, num_3, den_1, den_2, den_3, grad, pcRad, pcLen, wflength), sd=wf.baselineRMS, observed= wf.windowedWf ) )
+      baseline_observed.append( Normal("baseline_observed_%d" % i, mu=siggen_model(t0[i], radEst[i], phiEst[i], zEst[i], wfScale[i], sigma[i], tempEst, zero_1, pole_1, pole_real, pole_imag, grad, pcRad, pcLen, wflength), sd=wf.baselineRMS, observed= wf.windowedWf ) )
     return signal_model
 
 
