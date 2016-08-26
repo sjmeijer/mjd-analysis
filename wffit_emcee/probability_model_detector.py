@@ -17,7 +17,6 @@ def initializeDetectorAndWaveforms(det, wf_Arr):
   wf_arr = wf_Arr
 
 def lnprob(theta):
-
   '''Bayes theorem'''
   lp = lnprior(theta)
   if not np.isfinite(lp):
@@ -35,9 +34,9 @@ def lnprob(theta):
 def lnlike_detector(theta):
   '''assumes the data comes in w/ 10ns sampling period'''
 
-  temp, impGrad, pcRad, pcLen, num1, num2, num3, den1, den2, den3 = theta[-10:]
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-10].reshape((5, len(wf_arr)))
-#  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-10].reshape((6, len(wf_arr)))
+  temp, impGrad, pcRad, pcLen, zero_1, pole_1, pole_real, pole_imag = theta[-8:]
+#  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-10].reshape((5, len(wf_arr)))
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-8].reshape((6, len(wf_arr)))
 
   gradList  = detector.gradList
   pcRadList =  detector.pcRadList
@@ -58,16 +57,19 @@ def lnlike_detector(theta):
 #    print "bad like temp %f" % temp
     return -np.inf
   
-  num = [num1, num2, num3]
-  den = [1, den1, den2, den3]
-  detector.SetTransferFunction(num, den)
-  detector.SetTemperature(temp)
-  detector.SetFields(pcRad, pcLen, impGrad)
+  zeros = [zero_1,0 ]
+  poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
+  detector.SetTransferFunction(zeros, poles, 1E7)
+  
+  if temp != detector.temperature:
+    detector.SetTemperature(temp)
+  if detector.pcRad != pcRad or detector.pcLen != pcLen or detector.impurityGrad != impGrad:
+    detector.SetFields(pcRad, pcLen, impGrad)
 
   totalLike = 0
   for (wf_idx) in np.arange(r_arr.size):
-#    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]], wf_arr[wf_idx], )
-    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx]], wf_arr[wf_idx], )
+    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]], wf_arr[wf_idx], )
+#    wf_like = lnlike_waveform( [r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx]], wf_arr[wf_idx], )
 
     if not np.isfinite(wf_like):
       return -np.inf
@@ -81,22 +83,22 @@ def lnlike_detector(theta):
   return totalLike
 
 def lnlike_waveform(theta, wf):
-#  r, phi, z, scale, t0, smooth = theta
-  r, phi, z, scale, t0,  = theta
+  r, phi, z, scale, t0, smooth = theta
+#  r, phi, z, scale, t0,  = theta
 
 
   if scale < 0 or t0 < 0:
     return -np.inf
-#  if smooth < 0:
-#     return -np.inf
+  if smooth < 0:
+     return -np.inf
   if not detector.IsInDetector(r, phi, z):
     return -np.inf
 
   data = wf.windowedWf
   model_err = wf.baselineRMS
 
-#  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data), smoothing=smooth)
-  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data))
+  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data), smoothing=smooth)
+#  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data))
 
   if model is None:
     return -np.inf
@@ -114,9 +116,9 @@ def lnprior(theta):
      Normal prior on energy scale with sigma = 0.1 * wfMax
   '''
   
-  temp, impGrad, pcRad, pcLen, num1, num2, num3, den1, den2, den3 = theta[-10:]
-#  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-10].reshape((6, len(wf_arr)))
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-10].reshape((5, len(wf_arr)))
+  temp, impGrad, pcRad, pcLen, zero_1, pole_1, pole_real, pole_imag = theta[-8:]
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-8].reshape((6, len(wf_arr)))
+#  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-10].reshape((5, len(wf_arr)))
 
 #  print "now inside prior..."
 #  print "  >>r: " + str(r_arr)
@@ -146,12 +148,12 @@ def lnprior(theta):
 #    print "bad prior temp %f" % temp
     return -np.inf
   else:
-    temp_prior = stats.norm.pdf(temp, loc=81., scale=5. )
+    temp_prior = stats.norm.pdf(temp, loc=78., scale=5. )
 
   totalPrior = 0
   for (wf_idx) in np.arange(r_arr.size):
-#    wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx], wf_arr[wf_idx], )
-    wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], wf_arr[wf_idx], )
+    wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx], wf_arr[wf_idx], )
+#    wf_like = lnprior_waveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], wf_arr[wf_idx], )
 #    print "      r: %0.2f, phi: %0.3f, z: %0.2f, e: %0.2f, t0: %0.2f" % (r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx])
     if not np.isfinite(wf_like):
 #      print "bad wf prior"
@@ -161,12 +163,14 @@ def lnprior(theta):
 
   return totalPrior + np.log(temp_prior)
 
-def lnprior_waveform(r, phi, z, scale, t0,  wf, ):
+def lnprior_waveform(r, phi, z, scale, t0,  smooth, wf, ):
   if not detector.IsInDetector(r, phi, z):
 #    print "bad prior: position (%f, %f, %f)" % (r, phi, z)
     return -np.inf
   else:
     location_prior = 1.
+  if smooth < 0:
+    return -np.inf
 
   #TODO: rename this so it isn't so confusing
   scale_prior = stats.norm.pdf(scale, loc=wf.wfMax, scale=0.1*wf.wfMax )
