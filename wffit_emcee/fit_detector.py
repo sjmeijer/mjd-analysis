@@ -20,15 +20,15 @@ from multiprocessing import Pool
 def main(argv):
 ##################
 #These change a lot
-  numWaveforms = 8
-  numThreads = 8
+  numWaveforms = 30
+  numThreads = 12
   
   ndim = 6*numWaveforms + 8
-  nwalkers = 2*ndim
+  nwalkers = 4*ndim
   
-  iter=5
-  burnIn = 4
-  wfPlotNumber = 10
+  iter=5000
+  burnIn = 4000
+  wfPlotNumber = 100
   
 ######################
 
@@ -53,7 +53,7 @@ def main(argv):
   pcLenGuess = 1.613357
 
   #Create a detector model
-  detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.04,2.5, 1.6)
+  detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
   det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
   det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
