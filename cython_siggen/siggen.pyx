@@ -39,6 +39,7 @@ cdef class Siggen:
         self.fSiggenData.ntsteps_out = self.fSiggenData.time_steps_calc / np.int(self.fSiggenData.step_time_out/self.fSiggenData.step_time_calc);
       else:
         self.set_time_step_length(timeStepLength)
+        self.set_calc_time_step_length(timeStepLength)
         self.set_time_step_number(numTimeSteps)
     
     self.fSiggenData.dpath_e = <csiggen.point *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
@@ -91,8 +92,12 @@ cdef class Siggen:
 
   cpdef set_time_step_length(self, float timeStepLength):
     if timeStepLength < self.fSiggenData.step_time_calc:
+      print "Also reducing time step calc to %f" % timeStepLength
       self.fSiggenData.step_time_calc = timeStepLength;
     self.fSiggenData.step_time_out = timeStepLength
+
+  cpdef set_calc_time_step_length(self, float timeStepOutLength):
+      self.fSiggenData.step_time_calc = timeStepOutLength;
 
   cpdef set_time_step_number(self, int waveformLength):
     self.fSiggenData.ntsteps_out = waveformLength;
