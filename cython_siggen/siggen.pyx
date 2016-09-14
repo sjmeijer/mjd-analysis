@@ -39,7 +39,7 @@ cdef class Siggen:
         self.fSiggenData.ntsteps_out = self.fSiggenData.time_steps_calc / np.int(self.fSiggenData.step_time_out/self.fSiggenData.step_time_calc);
       else:
         self.set_time_step_length(timeStepLength)
-        self.set_calc_time_step_length(timeStepLength)
+#        self.set_calc_time_step_length(timeStepLength)
         self.set_time_step_number(numTimeSteps)
     
     self.fSiggenData.dpath_e = <csiggen.point *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
@@ -90,6 +90,7 @@ cdef class Siggen:
   def GetSignal(self, float x, float y, float z, np.ndarray[float, ndim=1, mode="c"] input not None):
     return self.c_get_signal(x,y,z, &input[0])
 
+
   cpdef set_time_step_length(self, float timeStepLength):
     if timeStepLength < self.fSiggenData.step_time_calc:
       print "Also reducing time step calc to %f" % timeStepLength
@@ -101,7 +102,7 @@ cdef class Siggen:
 
   cpdef set_time_step_number(self, int waveformLength):
     self.fSiggenData.ntsteps_out = waveformLength;
-    self.fSiggenData.time_steps_calc = waveformLength;
+    self.fSiggenData.time_steps_calc = waveformLength * np.int(self.fSiggenData.step_time_out/self.fSiggenData.step_time_calc);
 
   cdef c_read_velocity_table(self):
     #read in the drift velocity table
