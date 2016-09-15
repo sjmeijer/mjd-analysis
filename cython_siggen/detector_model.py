@@ -18,12 +18,15 @@ class Detector:
       self.siggenInst = Siggen(siggen_config_file)
     else:
       self.siggenInst =  Siggen(siggen_config_file, timeStep, numSteps)
-      self.num_steps = numSteps
+      self.num_steps = np.int(numSteps)
       self.time_step_size = timeStep
     
+      print "Time step size is %d" % self.time_step_size
+      print "There will be %d steps in output" % self.num_steps
+    
     (self.detector_radius, self.detector_length) = self.siggenInst.GetDimensions()
-
-    self.tfSystem = tfSystem
+    
+    self.SetTransferFunction(tfSystem)
   
     if temperature > 0:
       self.SetTemperature(temperature)
@@ -54,7 +57,8 @@ class Detector:
     self.data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
     
     #Holders for wf simulation
-    self.raw_siggen_data = np.zeros( numSteps, dtype=np.dtype('f4'), order="C" )
+    self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
+    self.processed_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.time_steps = np.arange(0, self.num_steps) * self.time_step_size*1E-9 #this is in ns
 ###########################################################################################################################
   def LoadFields(self, fieldFileName):
@@ -115,11 +119,14 @@ class Detector:
     self.temperature = temp
     self.siggenInst.SetTemperature(temp)
 ###########################################################################################################################
-  def SetTransferFunction(self, num, den, gain=None):
-    if gain is None: #this is a numerator and denomenator situation
-      self.tfSystem = signal.lti(num, den)
-    else:#zeros, poles, gain
-      self.tfSystem = signal.lti(num, den, gain)
+  def SetTransferFunction(self, tfSystem):
+    self.tfSystem = tfSystem
+    tfSystem.to_tf()
+    num = tfSystem.num
+    den = tfSystem.den
+    new_num, new_den, dt = signal.cont2discrete((num, den), 1E-8)
+    self.num = new_num[0]
+    self.den = new_den
 ###########################################################################################################################
   def IsInDetector(self, r, phi, z):
     if r > np.floor(self.detector_radius*10.)/10. or z > np.floor(self.detector_length*10.)/10.:
@@ -164,31 +171,37 @@ class Detector:
   def ProcessWaveform(self, siggen_wf, outputLength, scale, switchpoint):
     '''Use interpolation instead of rounding'''
     siggen_len = self.num_steps #+ self.zeroPadding
+    
+    switchpoint_ceil = switchpoint
 
     #actual wf gen
-    tout, siggen_data, x = signal.lsim(self.tfSystem, siggen_wf, self.time_steps)
-    smax = np.amax(siggen_data)
-    siggen_data /= smax
-    siggen_data *= scale
+    siggen_wf= signal.lfilter(self.num, self.den, siggen_wf)
+    smax = np.amax(siggen_wf)
+    siggen_wf /= smax
+    siggen_wf *= scale
 
     #resample the siggen wf to the 10ns digitized data frequency w/ interpolaiton
     switchpoint_ceil= np.int( np.ceil(switchpoint) )
     samples_to_fill = (outputLength - switchpoint_ceil)
-    siggen_interp_fn = interpolate.interp1d(np.arange(self.num_steps ), siggen_data, kind="linear", copy="False", assume_sorted="True")
+    siggen_interp_fn = interpolate.interp1d(np.arange(self.num_steps ), siggen_wf, kind="linear", copy="False", assume_sorted="True")
     siggen_start_idx = (switchpoint_ceil - switchpoint) * self.data_to_siggen_size_ratio
 
     sampled_idxs = np.arange(samples_to_fill)*self.data_to_siggen_size_ratio + siggen_start_idx
-    out = np.zeros(outputLength)
     
+    self.processed_siggen_data.fill(0.)
+
+#    out[switchpoint_ceil:] = siggen_wf[:outputLength-switchpoint_ceil+1]
+#    out *= scale
+
     try:
-      out[switchpoint_ceil:] = siggen_interp_fn(sampled_idxs)
+      self.processed_siggen_data[switchpoint_ceil:outputLength] = siggen_interp_fn(sampled_idxs)
     except ValueError:
       print "Something goofy happened here during interp"
       print outputLength
       print siggen_wf.size
       print sampled_idxs[-10:]
       return None
-    return out
+    return self.processed_siggen_data[:outputLength]
 ########################################################################################################
   #For pickling a detector object
   def __getstate__(self):
@@ -223,7 +236,7 @@ class Detector:
 
     self.siggenInst =  Siggen(savedConfig=self.siggenSetup)
   
-    self.time_steps = np.arange(0, self.num_steps+ self.zeroPadding) * self.time_step_size*1E-9 #this is in ns
+    self.time_steps = np.arange(0, self.num_steps) * self.time_step_size*1E-9 #this is in ns
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
   
