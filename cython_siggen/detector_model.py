@@ -10,7 +10,7 @@ from siggen import Siggen
 #Does all the interfacing with siggen for you, stores/loads lookup tables, and does electronics shaping
 
 class Detector:
-  def __init__(self, siggen_config_file, temperature=0, timeStep=None, numSteps=None, tfSystem = None):
+  def __init__(self, siggen_config_file, temperature=0, timeStep=None, numSteps=None, poles=None, zeros=None):
   
     self.conf_file = siggen_config_file
 
@@ -26,7 +26,8 @@ class Detector:
     
     (self.detector_radius, self.detector_length) = self.siggenInst.GetDimensions()
     
-    self.SetTransferFunction(tfSystem)
+    if poles is not None and zeros is not None:
+      self.SetTransferFunction( zeros, poles)
   
     if temperature > 0:
       self.SetTemperature(temperature)
@@ -59,7 +60,6 @@ class Detector:
     #Holders for wf simulation
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.processed_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
-    self.time_steps = np.arange(0, self.num_steps) * self.time_step_size*1E-9 #this is in ns
 ###########################################################################################################################
   def LoadFields(self, fieldFileName):
     self.fieldFileName = fieldFileName
@@ -119,14 +119,9 @@ class Detector:
     self.temperature = temp
     self.siggenInst.SetTemperature(temp)
 ###########################################################################################################################
-  def SetTransferFunction(self, tfSystem):
-    self.tfSystem = tfSystem
-    tfSystem.to_tf()
-    num = tfSystem.num
-    den = tfSystem.den
-    new_num, new_den, dt = signal.cont2discrete((num, den), 1E-8)
-    self.num = new_num[0]
-    self.den = new_den
+  def SetTransferFunction(self, zeros, poles, gain=2E8):
+    #should already be discrete params
+    (self.num, self.den) = signal.zpk2tf(zeros, poles, gain)
 ###########################################################################################################################
   def IsInDetector(self, r, phi, z):
     if r > np.floor(self.detector_radius*10.)/10. or z > np.floor(self.detector_length*10.)/10.:
@@ -217,7 +212,6 @@ class Detector:
     del state['rr']
     del state['zz']
     del state['raw_siggen_data']
-    del state['time_steps']
     del state['efld_r_function']
     del state['efld_z_function']
     del state['wp_function']
@@ -236,7 +230,6 @@ class Detector:
 
     self.siggenInst =  Siggen(savedConfig=self.siggenSetup)
   
-    self.time_steps = np.arange(0, self.num_steps) * self.time_step_size*1E-9 #this is in ns
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
   

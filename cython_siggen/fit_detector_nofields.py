@@ -25,13 +25,13 @@ def main():
   ndim = 6*numWaveforms + 5
   nwalkers = 4*ndim
   
-  iter=100
-  burnIn = 80
+  iter=1000
+  burnIn = 800
   wfPlotNumber = 20
   
 ######################
 
-  doPlots = 0
+  doPlots = 1
 
 #  plt.ion()
 
@@ -39,14 +39,13 @@ def main():
   timeStepSize = 10. #ns
   
   #Prepare detector
-  zero_1 = -5.56351644e+07
-  pole_1 = -1.38796386e+04
-  pole_real = -2.02559385e+07
-  pole_imag = 9885315.37450211
+  zero_1 = 0.56472996
+  pole_1 = 0.99986121
+  pole_real = 0.81241831
+  pole_imag = 0.08134322
   
-  zeros = [zero_1,0 ]
-  poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
-  system = signal.lti(zeros, poles, 1E7 )
+  zeros = [zero_1, -1., 1. ]
+  poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
   
   tempGuess = 77.89
   gradGuess = 0.0483
@@ -55,7 +54,7 @@ def main():
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-  det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, tfSystem=system)
+  det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, poles=poles, zeros=zeros)
   det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   
@@ -92,7 +91,7 @@ def main():
 
 
   #Plot the waveforms to take a look at the initial guesses
-  if False:
+  if True:
     fig = plt.figure()
     for (idx,wf) in enumerate(wfs):
       
@@ -229,9 +228,9 @@ def main():
     r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-5].reshape((6, numWaveforms))
     det.SetTemperature(temp)
     
-    zeros = [zero_1,0 ]
+    zeros = [zero_1,1., -1 ]
     poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
-    det.SetTransferFunction(zeros, poles, 1E7)
+    det.SetTransferFunction(zeros, poles)
 
     for wf_idx in range(wfs.size):
       wf_i = det.GetSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples)
