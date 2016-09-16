@@ -19,15 +19,16 @@ from multiprocessing import Pool
 def main():
 ##################
 #These change a lot
-  numWaveforms = 16
+  numWaveforms = 4
+  t0offset = 10
   numThreads = 8
   
   ndim = 6*numWaveforms + 5
   nwalkers = 4*ndim
   
-  iter=1000
-  burnIn = 800
-  wfPlotNumber = 20
+  iter=10000
+  burnIn = 8000
+  wfPlotNumber = 200
   
 ######################
 
@@ -64,6 +65,8 @@ def main():
   
   #Create a decent start guess by fitting waveform-by-waveform
   wfFileName = "P42574A_512waveforms_%drisetimeculled.npz" % numWaveforms
+  
+  
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     results = data['results']
@@ -86,12 +89,13 @@ def main():
   for (idx, wf) in enumerate(wfs):
     wf.WindowWaveformTimepoint(fallPercentage=.99)
     r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx]  = results[idx]['x']
-    t0_arr[idx] += 0 #because i had a different windowing offset back in the day
+    t0_arr[idx] += t0offset #because i had a different windowing offset back in the day
     smooth_arr[idx] /= timeStepSize #because i had a different windowing offset back in the day
 
 
   #Plot the waveforms to take a look at the initial guesses
   if True:
+    plt.ion()
     fig = plt.figure()
     for (idx,wf) in enumerate(wfs):
       
@@ -100,8 +104,8 @@ def main():
       ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx]*100, t0_arr[idx], fitSamples, smoothing = smooth_arr[idx])
       plt.plot(ml_wf, color="b")
       plt.plot(wf.windowedWf, color="r")
-    plt.show()
     value = raw_input('  --> Press q to quit, any other key to continue\n')
+    plt.ioff()
     if value == 'q': exit(0)
 
   #Initialize the multithreading
@@ -232,8 +236,8 @@ def main():
     poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
     det.SetTransferFunction(zeros, poles)
 
-    for wf_idx in range(wfs.size):
-      wf_i = det.GetSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples)
+    for wf_idx in range(numWaveforms):
+      wf_i = det.GetSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples, smoothing = smooth_arr[wf_idx])
       simWfs[idx, wf_idx, :] = wf_i
       if wf_i is None:
         print "Waveform %d, %d is None" % (idx, wf_idx)
