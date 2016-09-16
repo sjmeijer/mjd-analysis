@@ -2,7 +2,7 @@
 
 #import sys
 import numpy as np
-import copy
+import copy, math
 from scipy import  signal, interpolate, ndimage
 
 from siggen import Siggen
@@ -80,13 +80,26 @@ class Detector:
     r_space = np.arange(0, wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4'))
     z_space = np.arange(0, wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4'))
 
-    self.wp_function = interpolate.RegularGridInterpolator((r_space, z_space, pcRadList, pcLenList), wpArray)
-    self.efld_r_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList, pcLenList), efld_rArray)
-    self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList, pcLenList), efld_zArray)
+#    self.wp_functions = np.empty((wpArray.shape[0],wpArray.shape[1]), dtype=np.object)
+#    self.efld_r_functions = np.empty((wpArray.shape[0],wpArray.shape[1]), dtype=np.object)
+#    self.efld_z_functions = np.empty((wpArray.shape[0],wpArray.shape[1]), dtype=np.object)
+    self.wpArray = wpArray
+    self.efld_rArray = efld_rArray
+    self.efld_zArray = efld_zArray
+##
+#    for r in range(wpArray.shape[0]):
+#      for z in range(wpArray.shape[1]):
+#        self.wp_functions[r,z] = interpolate.RectBivariateSpline(pcRadList, pcLenList, wpArray[r,z,:,:], kx=1, ky=1)
+#        self.efld_r_functions[r,z] = interpolate.RegularGridInterpolator((gradList, pcRadList, pcLenList), efld_rArray[r,z,:,:,:])
+#        self.efld_z_functions[r,z] = interpolate.RegularGridInterpolator((gradList, pcRadList, pcLenList), efld_zArray[r,z,:,:,:])
+#
+    self.wp_function = interpolate.RegularGridInterpolator((r_space, z_space, pcRadList, pcLenList), wpArray, )
+    self.efld_r_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList, pcLenList), efld_rArray, )
+    self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList, pcLenList), efld_zArray,)
     
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
 ###########################################################################################################################
-  def SetFields(self, pcRad, pcLen, impurityGrad):
+  def SetFieldsFullInterp(self, pcRad, pcLen, impurityGrad):
     self.pcRad = pcRad
     self.pcLen = pcLen
     self.impurityGrad = impurityGrad
@@ -110,6 +123,87 @@ class Detector:
   
     self.siggenInst.SetPointContact( pcRad, pcLen )
     self.siggenInst.SetFields(new_ef_r, new_ef_z, new_wp)
+
+  def SetFields(self, pcRad, pcLen, impurityGrad):
+    self.pcRad = pcRad
+    self.pcLen = pcLen
+    self.impurityGrad = impurityGrad
+
+    grad_idx = find_nearest_idx(self.gradList, impurityGrad)
+    rad_idx = find_nearest_idx(self.pcRadList, pcRad)
+    len_idx = find_nearest_idx(self.pcLenList, pcLen)
+    
+    new_wp = np.copy(self.wpArray[:,:,rad_idx, len_idx][:,:,0])
+    new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx,rad_idx, len_idx][:,:,0])
+    new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx,rad_idx, len_idx][:,:,0])
+    
+    wp_function = self.wp_function
+    efld_r_function = self.efld_r_function
+    efld_z_function = self.efld_z_function
+    
+#    grad_idx = np.searchsorted(self.gradList, impurityGrad, side="left")
+#    rad_idx = np.searchsorted(self.pcRadList, pcRad, side="left")
+#    len_idx = np.searchsorted(self.pcLenList, pcLen, side="left")
+
+##    wpArray = self.wpArray[:,:,rad_idx, len_idx]
+##    wpArrayNext = self.wpArray[:,:,rad_idx-1, len_idx-1]
+#    wpArray = self.efld_rArray[:,:,grad_idx, rad_idx, len_idx]
+#    wpArrayNext = self.efld_rArray[:,:,grad_idx-1,rad_idx-1, len_idx-1]
+#    wpArray[np.where(wpArray==0)] = np.nan
+#    div= np.divide(np.subtract(wpArray, wpArrayNext), wpArray)
+#    import matplotlib.pyplot as plt
+#    
+#    div_true = np.zeros_like(div)
+#    div_true[np.where(div > 0.01)] = 1
+#    
+#    plt.imshow(div_true.T, origin='lower')
+#    plt.colorbar()
+#    plt.show()
+#    exit(0)
+
+    #do the interp for the closest... 5mm?
+#    min_distance_r = 20
+#    min_distance_z = 30
+#    r_space = np.around(np.arange(min_distance_r, self.wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4')), 1)
+#    z_space = np.around(np.arange(min_distance_z, self.wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4')),1)
+#    rr, zz = np.meshgrid(r_space, z_space)
+#    radrad = np.ones_like(rr) * pcRad
+#    lenlen = np.ones_like(rr) * pcLen
+#    gradgrad = np.ones_like(rr) * impurityGrad
+#    points_wp =  np.array([rr.flatten() , zz.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
+#    new_wp[min_distance_r*10:len(r_space)+min_distance_r*10,  min_distance_z*10:len(z_space)+min_distance_z*10] =  wp_function( points_wp ).reshape(rr.shape).T
+
+#    min_distance_r = 1.5
+#    min_distance_z = 1.5
+#    r_space = np.around(np.arange(min_distance_r, 5 , 0.1, dtype=np.dtype('f4')),1)
+#    z_space = np.around(np.arange(min_distance_z, 5 , 0.1, dtype=np.dtype('f4')),1)
+#    rr, zz = np.meshgrid(r_space, z_space)
+#    radrad = np.ones_like(rr) * pcRad
+#    lenlen = np.ones_like(rr) * pcLen
+#    gradgrad = np.ones_like(rr) * impurityGrad
+#    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
+#    new_ef_r[min_distance_r*10:len(r_space)+min_distance_r*10,  min_distance_z*10:len(z_space)+min_distance_z*10] = efld_r_function( points_ef ).reshape(rr.shape).T
+#    
+    min_distance_r = 1.5
+    min_distance_z = 1.5
+    r_space = np.around(np.arange(min_distance_r, self.wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4')),1)
+    z_space = np.around(np.arange(min_distance_z, 15 , 0.1, dtype=np.dtype('f4')),1)
+    rr, zz = np.meshgrid(r_space, z_space)
+    radrad = np.ones_like(rr) * pcRad
+    lenlen = np.ones_like(rr) * pcLen
+    gradgrad = np.ones_like(rr) * impurityGrad
+    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
+    new_ef_z[min_distance_r*10:len(r_space)+min_distance_r*10,  min_distance_z*10:len(z_space)+min_distance_z*10] =  efld_z_function( points_ef ).reshape(rr.shape).T
+    
+#    import matplotlib.pyplot as plt
+#    plt.imshow(new_wp[r_idxs,:][:,z_idxs].T - np.array( wp_function( points_wp ).reshape(rr.shape).T).T , origin='lower')
+#    plt.colorbar()
+#    plt.show()
+#    exit()
+
+    self.siggenInst.SetPointContact( pcRad, pcLen )
+    self.siggenInst.SetFields(new_ef_r, new_ef_z, new_wp)
+  
 ###########################################################################################################################
   def ReinitializeDetector(self):
     self.SetTemperature(self.temperature)
@@ -233,7 +327,12 @@ class Detector:
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
   
-
+def find_nearest_idx(array,value):
+    idx = np.searchsorted(array, value, side="left")
+    if idx > 0 and (idx == len(array) or math.fabs(value - array[idx-1]) < math.fabs(value - array[idx])):
+        return [idx-1]
+    else:
+        return [idx]
 #  def __del__(self):
 #    del self.wp_pp
 #    del self.siggenInst
