@@ -101,9 +101,9 @@ class Detector:
 ###########################################################################################################################
   def SetFields(self, pcRad, pcLen, impurityGrad, method="nearest"):
     if method=="nearest":
-      return SetFieldsByNearest(pcRad, pcLen, impurityGrad)
+      return self.SetFieldsByNearest(pcRad, pcLen, impurityGrad)
     else:
-      return SetFieldsFullInterp(pcRad, pcLen, impurityGrad)
+      return self.SetFieldsFullInterp(pcRad, pcLen, impurityGrad)
 
   def SetFieldsFullInterp(self, pcRad, pcLen, impurityGrad):
     self.pcRad = pcRad
