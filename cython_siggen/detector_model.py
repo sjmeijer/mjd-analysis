@@ -99,6 +99,12 @@ class Detector:
     
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
 ###########################################################################################################################
+  def SetFields(self, pcRad, pcLen, impurityGrad, method="nearest"):
+    if method=="nearest":
+      return SetFieldsByNearest(pcRad, pcLen, impurityGrad)
+    else:
+      return SetFieldsFullInterp(pcRad, pcLen, impurityGrad)
+
   def SetFieldsFullInterp(self, pcRad, pcLen, impurityGrad):
     self.pcRad = pcRad
     self.pcLen = pcLen
@@ -124,7 +130,7 @@ class Detector:
     self.siggenInst.SetPointContact( pcRad, pcLen )
     self.siggenInst.SetFields(new_ef_r, new_ef_z, new_wp)
 
-  def SetFields(self, pcRad, pcLen, impurityGrad):
+  def SetFieldsByNearest(self, pcRad, pcLen, impurityGrad):
     self.pcRad = pcRad
     self.pcLen = pcLen
     self.impurityGrad = impurityGrad
