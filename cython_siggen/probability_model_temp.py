@@ -43,10 +43,9 @@ def lnlike_detector(theta):
   if temp <40 or temp > 120:
     return -np.inf
   
-  zeros = [zero_1,0 ]
-  poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
-  system = signal.lti(zeros, poles, 1E7 )
-  detector.SetTransferFunction(system)
+  zeros = [zero_1, -1., 1. ]
+  poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
+  detector.SetTransferFunction(zeros, poles)
   
   if temp != detector.temperature:
     detector.SetTemperature(temp)
