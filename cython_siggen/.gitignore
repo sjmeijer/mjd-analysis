@@ -1,0 +1,8 @@
+*.pyc
+*.pdf
+*.png
+*.npz
+*.npy
+*.o
+*.dylib
+*.so
