@@ -226,7 +226,7 @@ class Detector:
   def IsInDetector(self, r, phi, z):
     if r > np.floor(self.detector_radius*10.)/10. or z > np.floor(self.detector_length*10.)/10.:
       return 0
-    elif r <0 or z <0:
+    elif r <0.1 or z <0.1:
       return 0
     elif phi <0 or phi > np.pi/4:
       return 0
