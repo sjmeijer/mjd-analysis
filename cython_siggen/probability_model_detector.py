@@ -28,6 +28,15 @@ def lnprob(theta):
 
   return lp + lnlike_detector(theta)
 
+def lnprob_waveform(theta, *wf):
+  '''Bayes theorem'''
+  wf = wf[0]
+  r, phi, z, scale, t0, smooth = theta
+  lp = lnprior_waveform(r, phi, z, scale, t0, smooth , wf)
+  if not np.isfinite(lp):
+    return -np.inf
+  return lp + lnlike_waveform(theta, wf)
+
 #################################################################
 '''Likelihood functions'''
 #################################################################
@@ -57,9 +66,9 @@ def lnlike_detector(theta):
 #    print "bad like temp %f" % temp
     return -np.inf
   
-  zeros = [zero_1,0 ]
+  zeros = [zero_1,1., -1 ]
   poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
-  detector.SetTransferFunction(zeros, poles, 1E7)
+  detector.SetTransferFunction(zeros, poles)
   
   if temp != detector.temperature:
     detector.SetTemperature(temp)

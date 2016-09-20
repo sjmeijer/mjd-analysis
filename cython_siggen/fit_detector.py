@@ -12,48 +12,48 @@ import helpers
 from detector_model import *
 from probability_model_detector import *
 
-from progressbar import ProgressBar, Percentage, Bar
+from progressbar import ProgressBar, Percentage, Bar, ETA
 from timeit import default_timer as timer
 from multiprocessing import Pool
 
 def main(argv):
 ##################
 #These change a lot
-  numWaveforms = 16
-  numThreads = 4
+  numWaveforms = 30
+  numThreads = 8
   
   ndim = 6*numWaveforms + 8
-  nwalkers = 4*ndim
+  nwalkers = 8*ndim
   
-  iter=50
-  burnIn = 40
-  wfPlotNumber = 10
+  iter=1000
+  burnIn = 800
+  wfPlotNumber = 200
   
 ######################
 
 
 #  plt.ion()
 
-  fitSamples = 200
+  fitSamples = 210
+  timeStepSize = 10. #ns
   
   #Prepare detector
-  zero_1 = -5.56351644e+07
-  pole_1 = -1.38796386e+04
-  pole_real = -2.02559385e+07
-  pole_imag = 9885315.37450211
+  zero_1 = 0.474472
+  pole_1 = 0.999845
+  pole_real = 0.807801
+  pole_imag = 0.081791
   
-  zeros = [zero_1,0 ]
-  poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
-  system = signal.lti(zeros, poles, 1E7 )
+  zeros = [zero_1, -1., 1. ]
+  poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
   
-  tempGuess = 77.89
-  gradGuess = 0.0483
-  pcRadGuess = 2.591182
-  pcLenGuess = 1.613357
+  tempGuess = 77.747244
+  gradGuess = 0.046950
+  pcRadGuess = 2.547418
+  pcLenGuess = 1.569172
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-  det =  Detector(detName, temperature=tempGuess, timeStep=1., numSteps=fitSamples*10, tfSystem=system)
+  det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, poles=poles, zeros=zeros)
   det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   
@@ -91,11 +91,13 @@ def main(argv):
   for (idx, wf) in enumerate(wfs):
     wf.WindowWaveformTimepoint(fallPercentage=.99)
     r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx]  = results[idx]['x']
+    smooth_arr[idx] /= 10
     t0_arr[idx] += 10 #because i had a different windowing offset back in the day
 
 
   #Plot the waveforms to take a look at the initial guesses
-  if False:
+  if True:
+    plt.ion()
     fig = plt.figure()
     for (idx,wf) in enumerate(wfs):
       
@@ -105,6 +107,7 @@ def main(argv):
       plt.plot(ml_wf, color="b")
       plt.plot(wf.windowedWf, color="r")
     value = raw_input('  --> Press q to quit, any other key to continue\n')
+    plt.ioff()
     if value == 'q': exit(0)
 
   #Initialize the multithreading
@@ -145,14 +148,10 @@ def main(argv):
   sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob,  pool=p)
 
   #w/ progress bar, & time the thing
-  bar = ProgressBar(widgets=[Percentage(), Bar()], maxval=iter).start()
-  start = timer()
+  bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=iter).start()
   for (idx,result) in enumerate(sampler.sample(pos0, iterations=iter, storechain=True)):
     bar.update(idx+1)
-  end = timer()
   bar.finish()
-  
-  print "Elapsed time: " + str(end-start)
 
   print "Dumping chain to file..."
   np.save("sampler_%dwfs.npy" % numWaveforms, sampler.chain)
@@ -253,12 +252,12 @@ def main(argv):
     det.SetTemperature(temp)
     det.SetFields(pcRad, pcLen, impGrad)
     
-    zeros = [zero_1,0 ]
+    zeros = [zero_1,1., -1 ]
     poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
-    det.SetTransferFunction(zeros, poles, 1E7)
+    det.SetTransferFunction(zeros, poles)
 
     for wf_idx in range(wfs.size):
-      wf_i = det.GetSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples)
+      wf_i = det.GetSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples, smoothing = smooth_arr[wf_idx])
       simWfs[idx, wf_idx, :] = wf_i
       if wf_i is None:
         print "Waveform %d, %d is None" % (idx, wf_idx)
