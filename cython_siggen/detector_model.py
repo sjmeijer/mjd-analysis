@@ -224,9 +224,14 @@ class Detector:
     (self.num, self.den) = signal.zpk2tf(zeros, poles, gain)
 ###########################################################################################################################
   def IsInDetector(self, r, phi, z):
+    taper_length = 4.5
     if r > np.floor(self.detector_radius*10.)/10. or z > np.floor(self.detector_length*10.)/10.:
       return 0
-    elif r <0.1 or z <0.1:
+    elif r <0 or z <=0:
+      return 0
+    elif z <= self.pcLen and r <= self.pcRad:
+      return 0
+    elif z < taper_length and r > (self.detector_length - taper_length + z):
       return 0
     elif phi <0 or phi > np.pi/4:
       return 0
