@@ -199,7 +199,7 @@ class Detector:
     lenlen = np.ones_like(rr) * pcLen
     gradgrad = np.ones_like(rr) * impurityGrad
     points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
-    new_ef_z[min_distance_r*10:len(r_space)+min_distance_r*10,  min_distance_z*10:len(z_space)+min_distance_z*10] =  efld_z_function( points_ef ).reshape(rr.shape).T
+    new_ef_z[np.int(min_distance_r*10):len(r_space)+np.int(min_distance_r*10),  np.int(min_distance_z*10):len(z_space)+np.int(min_distance_z*10)] =  efld_z_function( points_ef ).reshape(rr.shape).T
     
 #    import matplotlib.pyplot as plt
 #    plt.imshow(new_wp[r_idxs,:][:,z_idxs].T - np.array( wp_function( points_wp ).reshape(rr.shape).T).T , origin='lower')
