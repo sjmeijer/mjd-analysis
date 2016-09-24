@@ -137,26 +137,28 @@ def main(argv):
 #  #pymc.Matplot.plot(M)
 #  
 #  #########  Plots for MC Steps
-#  stepsFig = plt.figure(figsize=(20,10))
-#  plt.clf()
-#  ax0 = stepsFig.add_subplot(511)
-#  ax1 = stepsFig.add_subplot(512, sharex=ax0)
-#  ax2 = stepsFig.add_subplot(513, sharex=ax0)
-#  ax3 = stepsFig.add_subplot(514, sharex=ax0)
-#  ax4 = stepsFig.add_subplot(515, sharex=ax0)
-#  ax0.set_ylabel('r')
-#  ax1.set_ylabel('z')
-#  ax2.set_ylabel('phi')
-#  ax3.set_ylabel('e')
-#  ax4.set_ylabel('t0')
+  stepsFig = plt.figure(figsize=(20,10))
+  plt.clf()
+  ax0 = stepsFig.add_subplot(611)
+  ax1 = stepsFig.add_subplot(612, sharex=ax0)
+  ax2 = stepsFig.add_subplot(613, sharex=ax0)
+  ax3 = stepsFig.add_subplot(614, sharex=ax0)
+  ax4 = stepsFig.add_subplot(615, sharex=ax0)
+  ax0.set_ylabel('r')
+  ax1.set_ylabel('z')
+  ax2.set_ylabel('phi')
+  ax3.set_ylabel('e')
+  ax4.set_ylabel('t0')
+  ax5.set_ylabel('sig')
+
+  for i in range(len(wfs)):
+    ax0.plot(M.trace('radEst_%d'%i)[:])
+    ax1.plot(M.trace('zEst_%d'%i)[:])
+    ax2.plot(M.trace('phiEst_%d'%i)[:])
+    ax3.plot(M.trace('wfScale_%d'%i)[:])
+    ax4.plot(M.trace('switchpoint_%d'%i)[:])
+    ax5.plot(M.trace('sigma_%d'%i)[:])
 #
-#  for i in range(len(wfs)):
-#    ax0.plot(M.trace('radEst_%d'%i)[:])
-#    ax1.plot(M.trace('zEst_%d'%i)[:])
-#    ax2.plot(M.trace('phiEst_%d'%i)[:])
-#    ax3.plot(M.trace('wfScale_%d'%i)[:])
-#    ax4.plot(M.trace('switchpoint_%d'%i)[:])
-#  
   stepsFig2 = plt.figure(figsize=(20,10))
   plt.clf()
   ax0 = stepsFig2.add_subplot(811)
@@ -186,7 +188,7 @@ def main(argv):
   ax6.plot(M.trace('pcRad')[:])
   ax7.plot(M.trace('pcLen')[:])
 
-  plt.show()
+  plt.savefig("pymc_detector.png")
 
   value = raw_input('  --> Press q to quit, any other key to continue\n')
 
