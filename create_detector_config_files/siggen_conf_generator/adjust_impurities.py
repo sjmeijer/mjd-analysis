@@ -58,7 +58,7 @@ def main(argv):
 
 def copyConfFileWithNewGradient(fileName, newGradient):
     configFileSplit = fileName.split(".")
-    appendString = "_grad%0.3f." % newGradient
+    appendString = "_grad%0.2f." % newGradient
     newConfigFileStr = configFileSplit[0] + appendString +  configFileSplit[1]
     print "cp %s %s" % (fileName, newConfigFileStr)
     #os.rename(fileName, newConfigFileStr )
@@ -73,10 +73,10 @@ def copyConfFileWithNewGradient(fileName, newGradient):
     return newConfigFileStr
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
-def copyConfFileWithNewPcRadius(fileName, newRadius, newFileStart=None):
+def copyConfFileWithNewPcRadius(fileName, newRadius, newLength, newFileStart=None):
     configFileSplit = fileName.split(".")
     
-    appendString = "_pcrad%0.4f" % newRadius
+    appendString = "_pcrad%0.2f_pclen%0.2f" % (newRadius, newLength)
     if newFileStart is None:
       newFileStart = configFileSplit[:-1]
 
@@ -86,7 +86,7 @@ def copyConfFileWithNewPcRadius(fileName, newRadius, newFileStart=None):
     #os.rename(fileName, newConfigFileStr )
     shutil.copy(fileName, newConfigFileStr)
     
-    replaceConfFileValue(newConfigFileStr, 'pc_length', newRadius)
+    replaceConfFileValue(newConfigFileStr, 'pc_length', newLength)
     replaceConfFileValue(newConfigFileStr, 'pc_radius', newRadius)
 
     field_name= "fields/" + newFileStart + appendString + "_"
@@ -98,18 +98,18 @@ def copyConfFileWithNewPcRadius(fileName, newRadius, newFileStart=None):
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
 def writeFieldFiles(fileName, impurityZ0):
-    #create a test file for changing the impurity gradient
-    configFileSplit = fileName.split(".")
-#    appendString = "_grad%0.2f." % impurityZ0
-
-    finalConfigFileStr = '.'.join(configFileSplit[:-1]) + "_final." +  configFileSplit[-1]
-    #finalConfigFileStr = configFileSplit[:-2] + "_final." +  configFileSplit[-1]
-    os.system(  "cp %s %s" % (fileName, finalConfigFileStr) )
-    
+#    #create a test file for changing the impurity gradient
+#    configFileSplit = fileName.split(".")
+##    appendString = "_grad%0.2f." % impurityZ0
+#
+#    finalConfigFileStr = '.'.join(configFileSplit[:-1]) + "_final." +  configFileSplit[-1]
+#    #finalConfigFileStr = configFileSplit[:-2] + "_final." +  configFileSplit[-1]
+#    os.system(  "cp %s %s" % (fileName, finalConfigFileStr) )
+#    
     #change the impurity grad in the copied config file
-    replaceConfFileValue(finalConfigFileStr, 'impurity_z0', impurityZ0)
+    replaceConfFileValue(fileName, 'impurity_z0', impurityZ0)
 
-    runFieldgen(finalConfigFileStr)
+    runFieldgen(fileName)
 '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
 
