@@ -219,7 +219,7 @@ class Detector:
     self.temperature = temp
     self.siggenInst.SetTemperature(temp)
 ###########################################################################################################################
-  def SetTransferFunction(self, zeros, poles, gain=2E8):
+  def SetTransferFunction(self, zeros, poles, gain=1/24.0168381037):
     #should already be discrete params
     (self.num, self.den) = signal.zpk2tf(zeros, poles, gain)
 ###########################################################################################################################
@@ -276,8 +276,8 @@ class Detector:
 
     #actual wf gen
     siggen_wf= signal.lfilter(self.num, self.den, siggen_wf)
-    smax = np.amax(siggen_wf)
-    siggen_wf /= smax
+#    smax = np.amax(siggen_wf)
+#    siggen_wf /= smax
     siggen_wf *= scale
 
     #resample the siggen wf to the 10ns digitized data frequency w/ interpolaiton
