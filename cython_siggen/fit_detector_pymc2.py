@@ -13,25 +13,29 @@ import signal_model_hierarchical_pymc2 as sm
 
 def main(argv):
 
+  plt.ion()
+
   fitSamples = 210
   timeStepSize = 10. #ns
-  numSamples = 10000
+  
+  numSamples = 20000
+  burnin = 0.9*numSamples
   
   doInitPlot = False
   
   #Prepare detector
-  zero_1 = 0.474472
-  pole_1 = 0.999845
-  pole_real = 0.807801
-  pole_imag = 0.081791
+  zero_1 = 0.470677
+  pole_1 = 0.999857
+  pole_real = 0.807248
+  pole_imag = 0.085347
 
   zeros = [zero_1, -1., 1. ]
   poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
   
-  tempGuess = 77.747244
-  gradGuess = 0.046950
-  pcRadGuess = 2.547418
-  pcLenGuess = 1.569172
+  tempGuess = 78.474793
+  gradGuess = 0.045049
+  pcRadGuess = 2.574859
+  pcLenGuess = 1.524812
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
@@ -39,7 +43,7 @@ def main(argv):
   det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   
-  wfFileName = "P42574A_512waveforms_8risetimeculled.npz"
+  wfFileName = "P42574A_512waveforms_30risetimeculled.npz"
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     results = data['results']
@@ -94,26 +98,90 @@ def main(argv):
 
   model_locals = sm.CreateFullDetectorModel(det, wfs,  startGuess, zero_1, pole_1, pole_real, pole_imag)
 
-  M = pymc.MCMC(model_locals)
+  M = pymc.MCMC(model_locals, db='pickle', dbname='Detector.pickle')
 #  M.sample(iter=100, burn=90)
 
+  #12:30 pm 9/24
 
-  M.use_step_method(pymc.AdaptiveMetropolis, [M.tempEst, M.grad, M.pcRad, M.pcLen,M.zero_1,M.pole_1,M.pole_real,M.pole_imag],
-                 scales={M.tempEst:  .3,
-                         M.grad:  0.001,
-                         M.pcRad: 0.01,
-                         M.pcLen: 0.01,
-                         M.zero_1:0.01,
-                         M.pole_1:0.001,
-                         M.pole_real:0.01,
-                         M.pole_imag:0.001
-                         }, delay=100, interval=100,shrink_if_necessary=True)
+  M.use_step_method(pymc.Slicer, M.grad, w = 0.03)
+  M.use_step_method(pymc.Slicer, M.pcRad, w = 0.2)
+  M.use_step_method(pymc.Slicer, M.pcLen, w=0.2)
 
-#  zero_1 = 0.474472
-#  pole_1 = 0.999845
-#  pole_real = 0.807801
-#  pole_imag = 0.081791
+  M.use_step_method(pymc.Slicer, M.tempEst,  w=8)
+  M.use_step_method(pymc.Slicer, M.zero_1, w=0.2)
+  M.use_step_method(pymc.Slicer, M.pole_1, w=0.1)
+  M.use_step_method(pymc.Slicer, M.pole_real, w=0.1)
+  M.use_step_method(pymc.Slicer, M.pole_imag, w=0.01)
+
+#  M.use_step_method(pymc.Metropolis, M.grad, proposal_sd=0.01, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pcRad, proposal_sd=0.05, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pcLen, proposal_sd=0.05, proposal_distribution='Normal')
 #
+#  M.use_step_method(pymc.Metropolis, M.tempEst,  proposal_sd=3., proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.zero_1, proposal_sd=0.5, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pole_1, proposal_sd=0.1, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pole_real, proposal_sd=0.5, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pole_imag, proposal_sd=0.1, proposal_distribution='Normal')
+
+  for idx in range(numWaveforms):
+    M.use_step_method(pymc.AdaptiveMetropolis, [M.radiusArray[idx], M.zArray[idx]],
+                     scales={M.radiusArray[idx]:  10,
+                             M.zArray[idx]:       10}, delay=100, interval=100,shrink_if_necessary=True)
+                      
+
+#    M.use_step_method(pymc.Metropolis, M.radiusArray[idx], proposal_sd=10., proposal_distribution='Normal')
+#    M.use_step_method(pymc.Metropolis, M.zArray[idx], proposal_sd=10., proposal_distribution='Normal')
+
+    M.use_step_method(pymc.Metropolis, M.phiArray[idx], proposal_sd=0.3, proposal_distribution='Normal')
+    M.use_step_method(pymc.Metropolis, M.scaleArray[idx], proposal_sd=0.01*startGuess['wfScale'][idx], proposal_distribution='Normal')
+    M.use_step_method(pymc.Metropolis, M.t0Array[idx], proposal_sd=5, proposal_distribution='Normal')
+    M.use_step_method(pymc.Metropolis, M.sigArray[idx], proposal_sd=0.5, proposal_distribution='Normal')
+
+
+  # morning 9/24
+
+
+#  M.use_step_method(pymc.Metropolis, M.tempEst, proposal_sd=3., proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.grad, proposal_sd=0.005, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pcRad, proposal_sd=0.05, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pcLen, proposal_sd=0.05, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.zero_1, proposal_sd=0.01, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pole_1, proposal_sd=0.001, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pole_real, proposal_sd=0.1, proposal_distribution='Normal')
+#  M.use_step_method(pymc.Metropolis, M.pole_imag, proposal_sd=0.01, proposal_distribution='Normal')
+#  
+#  for idx in range(numWaveforms):
+#    M.use_step_method(pymc.AdaptiveMetropolis, [M.radiusArray[idx], M.zArray[idx]],
+#                     scales={M.radiusArray[idx]:  10,
+#                             M.zArray[idx]:       10}, delay=100, interval=100,shrink_if_necessary=True)
+#                      
+#
+##    M.use_step_method(pymc.Metropolis, M.radiusArray[idx], proposal_sd=10., proposal_distribution='Normal')
+##    M.use_step_method(pymc.Metropolis, M.zArray[idx], proposal_sd=10., proposal_distribution='Normal')
+#
+#    M.use_step_method(pymc.Metropolis, M.phiArray[idx], proposal_sd=0.3, proposal_distribution='Normal')
+#    M.use_step_method(pymc.Metropolis, M.scaleArray[idx], proposal_sd=0.01*startGuess['wfScale'][idx], proposal_distribution='Normal')
+#    M.use_step_method(pymc.Metropolis, M.t0Array[idx], proposal_sd=5, proposal_distribution='Normal')
+#    M.use_step_method(pymc.Metropolis, M.sigArray[idx], proposal_sd=0.5, proposal_distribution='Normal')
+
+
+#
+#  M.use_step_method(pymc.AdaptiveMetropolis, [M.tempEst, M.grad, M.pcRad, M.pcLen,M.zero_1,M.pole_1,M.pole_real,M.pole_imag],
+#                 scales={M.tempEst:  .3,
+#                         M.grad:  0.001,
+#                         M.pcRad: 0.01,
+#                         M.pcLen: 0.01,
+#                         M.zero_1:0.01,
+#                         M.pole_1:0.001,
+#                         M.pole_real:0.01,
+#                         M.pole_imag:0.001
+#                         }, delay=100, interval=100,shrink_if_necessary=True)
+#
+##  zero_1 = 0.474472
+##  pole_1 = 0.999845
+##  pole_real = 0.807801
+##  pole_imag = 0.081791
+##
 #  for idx in range(numWaveforms):
 #    M.use_step_method(pymc.AdaptiveMetropolis, [M.radiusArray[idx],M.phiArray[idx],M.zArray[idx],
 #                                                M.scaleArray[idx], M.t0Array[idx], M.sigArray[idx],],
@@ -123,10 +191,11 @@ def main(argv):
 #                             M.scaleArray[idx]:   0.01*startGuess['wfScale'][idx],
 #                             M.t0Array[idx]:      5,
 #                             M.sigArray[idx]:     0.5
-#                             }, delay=100)
+#                             }, delay=100, interval=100,shrink_if_necessary=True)
 
 
-  M.sample(iter=1000, burn=0)
+  M.sample(iter=numSamples, burn=0, tune_interval=100)
+  M.db.close()
 
 #  totalIter = 0
 #  while totalIter < this_sample:
@@ -144,6 +213,8 @@ def main(argv):
   ax2 = stepsFig.add_subplot(613, sharex=ax0)
   ax3 = stepsFig.add_subplot(614, sharex=ax0)
   ax4 = stepsFig.add_subplot(615, sharex=ax0)
+  ax5 = stepsFig.add_subplot(616, sharex=ax0)
+
   ax0.set_ylabel('r')
   ax1.set_ylabel('z')
   ax2.set_ylabel('phi')
@@ -158,6 +229,8 @@ def main(argv):
     ax3.plot(M.trace('wfScale_%d'%i)[:])
     ax4.plot(M.trace('switchpoint_%d'%i)[:])
     ax5.plot(M.trace('sigma_%d'%i)[:])
+
+  plt.savefig("pymc_wf_params.png")
 #
   stepsFig2 = plt.figure(figsize=(20,10))
   plt.clf()
@@ -189,6 +262,51 @@ def main(argv):
   ax7.plot(M.trace('pcLen')[:])
 
   plt.savefig("pymc_detector.png")
+
+
+  fig3 = plt.figure(3, figsize = (20,10))
+  plt.clf()
+  plt.title("Charge waveform")
+  plt.xlabel("Sample number [10s of ns]")
+  plt.ylabel("Raw ADC Value [Arb]")
+      
+  wfPlotNumber = 10
+  simWfArr = np.empty((wfPlotNumber,numWaveforms, fitSamples))
+
+
+  if burnin > len(M.trace('temp')[:]):
+    burnin = len(M.trace('temp')[:]) - wfPlotNumber
+    numSamples = len(M.trace('temp')[:])
+
+  for (sim_idx, chain_idx) in enumerate(np.random.randint(low=burnin, high=numSamples, size=wfPlotNumber)):
+    
+      temp = M.trace('temp')[chain_idx]
+      grad = M.trace('grad')[chain_idx]
+      pcRad= M.trace('pcRad')[chain_idx]
+      pcLen= M.trace('pcLen')[chain_idx]
+      zero_1 = M.trace('zero_1')[chain_idx]
+      pole_1 = M.trace('pole_1')[chain_idx]
+      pole_real = M.trace('pole_real')[chain_idx]
+      pole_imag = M.trace('pole_imag')[chain_idx]
+      
+      zeros = [zero_1, -1., 1. ]
+      poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
+      det.SetTransferFunction(zeros, poles)
+      det.SetTemperature(temp)
+      det.SetFields(pcRad, pcLen, grad)
+  
+      for (wf_idx, wf) in enumerate(wfs):
+        t0 =    M.trace('switchpoint_%d' % wf_idx)[chain_idx]
+        r =     M.trace('radEst_%d' % wf_idx)[chain_idx]
+        z =     M.trace('zEst_%d' % wf_idx)[chain_idx]
+        phi =   M.trace('phiEst_%d' % wf_idx)[chain_idx]
+        scale = M.trace('wfScale_%d' % wf_idx)[chain_idx]
+        sigma = M.trace('sigma_%d' % wf_idx)[chain_idx]
+
+        simWfArr[sim_idx,wf_idx,:]  = det.GetSimWaveform(r, phi, z, scale, t0, fitSamples, smoothing=sigma)
+  helpers.plotManyResidual(simWfArr, wfs, fig3, residAlpha=1)
+
+  plt.savefig("pymc_waveforms.png")
 
   value = raw_input('  --> Press q to quit, any other key to continue\n')
 

@@ -67,7 +67,7 @@ def CreateFullDetectorModel(detector, waveforms, startGuess, prior_zero, prior_p
     
     zeros = [zero_1, -1., 1. ]
     poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
-    detector.SetTransferFunction(zeros, poles, 1E7)
+    detector.SetTransferFunction(zeros, poles, )
     detector.SetTemperature(temp)
 
     if detector.pcRad != pc_rad or detector.pcLen != pc_len or detector.impurityGrad != grad:
@@ -113,7 +113,7 @@ def CreateFullDetectorModel(detector, waveforms, startGuess, prior_zero, prior_p
                   parents = {'s': t0Array[i],
                           'rad': radiusArray[i],'phi': phiArray[i],'z': zArray[i],
                           'e':scaleArray[i],
-                          'smooth':sigArray[idx],
+                          'smooth':sigArray[i],
                           'temp': tempEst,
                           'zero_1':zero_1, 'pole_1':pole_1, 'pole_real':pole_real, 'pole_imag':pole_imag,
                           'grad':grad,'pc_rad':pcRad,'pc_len':pcLen,
