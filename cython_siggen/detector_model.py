@@ -58,7 +58,10 @@ class Detector:
     self.data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
     
     #Holders for wf simulation
+    self.calc_length = self.siggenInst.GetCalculationLength()
+    
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
+    self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.processed_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
 ###########################################################################################################################
   def LoadFields(self, fieldFileName):
@@ -222,6 +225,10 @@ class Detector:
   def SetTransferFunction(self, zeros, poles, gain=1/24.0168381037):
     #should already be discrete params
     (self.num, self.den) = signal.zpk2tf(zeros, poles, gain)
+  
+  def SetTransferFunctionByTF(self, num, den):
+    #should already be discrete params
+    (self.num, self.den) = (num, den)
 ###########################################################################################################################
   def IsInDetector(self, r, phi, z):
     taper_length = 4.5
@@ -254,19 +261,54 @@ class Detector:
 
     x = r * np.sin(phi)
     y = r * np.cos(phi)
-    
     self.raw_siggen_data.fill(0.)
 
     calcFlag = self.siggenInst.GetSignal(x, y, z, self.raw_siggen_data);
     if calcFlag == -1:
 #      print "Holes out of crystal alert! (%0.3f,%0.3f,%0.3f)" % (r,phi,z)
       return None
-    
     if np.amax(self.raw_siggen_data) == 0:
       print "found zero wf at r=%0.2f, phi=%0.2f, z=%0.2f (calcflag is %d)" % (r, phi, z, calcFlag)
       return None
-
     return self.raw_siggen_data
+    
+###########################################################################################################################
+  def MakeSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, e_smoothing=None, h_smoothing=None):
+  
+    self.raw_siggen_data.fill(0.)
+    ratio = np.int(self.calc_length / self.num_steps)
+    
+    hole_wf = self.MakeRawSiggenWaveform(r, phi, z, 1)
+    if hole_wf is None:
+      return None
+    if h_smoothing is not None:
+      ndimage.filters.gaussian_filter1d(hole_wf, h_smoothing, output=hole_wf)
+    
+    self.raw_siggen_data += hole_wf[::ratio]
+    
+    electron_wf = self.MakeRawSiggenWaveform(r, phi, z, -1)
+    if electron_wf is  None:
+      return None
+    if e_smoothing is not None:
+      ndimage.filters.gaussian_filter1d(hole_wf, e_smoothing, output=electron_wf)
+    
+    self.raw_siggen_data += electron_wf[::ratio]
+
+    sim_wf = self.ProcessWaveform(self.raw_siggen_data, numSamples, scale, switchpoint)
+    return sim_wf
+    
+  def MakeRawSiggenWaveform(self, r,phi,z, charge):
+    #Has CALCULATION, not OUTPUT, step length (ie, usually 1ns instead of 10ns binning)
+    x = r * np.sin(phi)
+    y = r * np.cos(phi)
+    self.raw_charge_data.fill(0.)
+  
+    calcFlag = self.siggenInst.MakeSignal(x, y, z, self.raw_charge_data, charge);
+    if calcFlag == -1:
+      return None
+
+    return self.raw_charge_data
+    
 ########################################################################################################
   def ProcessWaveform(self, siggen_wf, outputLength, scale, switchpoint):
     '''Use interpolation instead of rounding'''
@@ -276,8 +318,8 @@ class Detector:
 
     #actual wf gen
     siggen_wf= signal.lfilter(self.num, self.den, siggen_wf)
-#    smax = np.amax(siggen_wf)
-#    siggen_wf /= smax
+    smax = np.amax(siggen_wf)
+    siggen_wf /= smax
     siggen_wf *= scale
 
     #resample the siggen wf to the 10ns digitized data frequency w/ interpolaiton
@@ -336,6 +378,7 @@ class Detector:
     self.siggenInst =  Siggen(savedConfig=self.siggenSetup)
   
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
+    self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
   
 def find_nearest_idx(array,value):

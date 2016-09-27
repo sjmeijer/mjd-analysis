@@ -90,6 +90,28 @@ cdef class Siggen:
   def GetSignal(self, float x, float y, float z, np.ndarray[float, ndim=1, mode="c"] input not None):
     return self.c_get_signal(x,y,z, &input[0])
 
+  cdef c_make_signal(self, float x, float y, float z, float* signal, float charge):
+    cdef csiggen.point pt
+    pt.x = x
+    pt.y = y
+    pt.z = z
+
+    #memset(self.fSiggenData.dpath_e, 0, self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
+    #memset(self.fSiggenData.dpath_h, 0, self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
+
+    return csiggen.make_signal( pt, signal, charge, &self.fSiggenData)
+
+  def MakeSignal(self, float x, float y, float z, np.ndarray[float, ndim=1, mode="c"] input not None, float charge):
+
+    flag = self.c_make_signal(x,y,z, &input[0], charge)
+
+    for j in range(1, self.fSiggenData.time_steps_calc):
+      input[j] += input[j-1]
+
+    return flag
+
+  def GetCalculationLength(self):
+    return self.fSiggenData.time_steps_calc
 
   cpdef set_time_step_length(self, float timeStepLength):
     if timeStepLength < self.fSiggenData.step_time_calc:

@@ -40,7 +40,7 @@ def lnlike_waveform(theta):
   data = wf.windowedWf
   model_err = wf.baselineRMS
 
-  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data), smoothing=smooth)
+  model = detector.MakeSimWaveform(r, phi, z, scale, t0, len(data), h_smoothing=smooth)
 #  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data))
 
   if model is None:
