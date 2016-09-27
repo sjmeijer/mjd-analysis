@@ -3,6 +3,7 @@ import sys, os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from scipy import ndimage
 
 
 #funnyEntries = [4110, 66905]
@@ -49,7 +50,9 @@ class Waveform:
     self.wfLength = len(np_data_early)
 
   def EstimateT0(self, rmsMult=1):
-    return np.where(np.less(self.waveformData, rmsMult*self.baselineRMS))[0][-1]
+    smoothed_wf = ndimage.filters.gaussian_filter1d(self.waveformData, 2, )
+
+    return np.where(np.less(smoothed_wf, rmsMult*self.baselineRMS))[0][-1]
 
   def EstimateFromMax(self, fallPercentage=None):
   
