@@ -19,11 +19,11 @@ class Waveform:
     self.energy = energy
   
 
-  def WindowWaveform(self, numSamples, earlySamples=20, t0riseTime = 0.005):
+  def WindowWaveform(self, numSamples, earlySamples=20, t0riseTime = 0.005, rmsMult=1):
     '''Windows to a given number of samples'''
     self.wfMax = np.amax(self.waveformData)
 
-    startGuess = self.EstimateT0()
+    startGuess = self.EstimateT0(rmsMult)
     firstFitSampleIdx = startGuess-earlySamples
     lastFitSampleIdx = firstFitSampleIdx + numSamples
     
@@ -33,11 +33,11 @@ class Waveform:
     self.windowedWf = np_data_early
     self.wfLength = len(np_data_early)
 
-  def WindowWaveformTimepoint(self, earlySamples=20, fallPercentage=None):
+  def WindowWaveformTimepoint(self, earlySamples=20, fallPercentage=None, rmsMult=1):
     '''Does "smart" windowing by guessing t0 and wf max'''
     self.wfMax = np.amax(self.waveformData)
 
-    startGuess = self.EstimateT0()
+    startGuess = self.EstimateT0(rmsMult)
     firstFitSampleIdx = startGuess-earlySamples
     
     lastFitSampleIdx = self.EstimateFromMax(fallPercentage)
@@ -48,8 +48,8 @@ class Waveform:
     self.windowedWf = np_data_early
     self.wfLength = len(np_data_early)
 
-  def EstimateT0(self):
-    return np.where(np.less(self.waveformData, self.baselineRMS))[0][-1]
+  def EstimateT0(self, rmsMult=1):
+    return np.where(np.less(self.waveformData, rmsMult*self.baselineRMS))[0][-1]
 
   def EstimateFromMax(self, fallPercentage=None):
   
