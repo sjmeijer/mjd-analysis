@@ -317,7 +317,7 @@ class Detector:
     switchpoint_ceil = switchpoint
 
     #actual wf gen
-    siggen_wf= signal.lfilter(self.num, self.den, siggen_wf)
+    siggen_wf= signal.lfilter(np.concatenate(([0],self.num)), self.den, siggen_wf)
     smax = np.amax(siggen_wf)
     siggen_wf /= smax
     siggen_wf *= scale
