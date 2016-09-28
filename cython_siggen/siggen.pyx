@@ -12,7 +12,7 @@ cimport csiggen
 
 cdef extern from "siggen_helpers.c":
     int read_velocity_table(csiggen.velocity_lookup* v_lookup, csiggen.MJD_Siggen_Setup *setup)
-    int temperature_modify_velocity_table( csiggen.velocity_lookup* v_lookup_saved,  csiggen.velocity_lookup* modified_v_lookup, csiggen.MJD_Siggen_Setup *setup)
+    int temperature_modify_velocity_table(float e_temp, float h_temp, csiggen.velocity_lookup* v_lookup_saved,  csiggen.velocity_lookup* modified_v_lookup, csiggen.MJD_Siggen_Setup *setup)
 
 cdef class Siggen:
 
@@ -194,9 +194,11 @@ cdef class Siggen:
       print self.fVelocityTempData[i].hcorr
       print self.fVelocityTempData[i].ecorr
 
-  cpdef SetTemperature(self, float temp):
-    self.fSiggenData.xtal_temp = temp
-    temperature_modify_velocity_table(self.fVelocityFileData, self.fVelocityTempData, &self.fSiggenData)
+  def SetTemperature(self, h_temp, e_temp=0):
+    self.fSiggenData.xtal_temp = h_temp
+    if e_temp == 0:
+      e_temp = h_temp
+    temperature_modify_velocity_table(e_temp, h_temp, self.fVelocityFileData, self.fVelocityTempData, &self.fSiggenData)
     self.fSiggenData.v_lookup = self.fVelocityTempData
 
   def SetPointContact(self, pcRad, pcLen):

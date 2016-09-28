@@ -104,6 +104,7 @@ class Detector:
 ###########################################################################################################################
   def SetFields(self, pcRad, pcLen, impurityGrad, method="nearest"):
     if method=="nearest":
+      print "WARNING: DOING A CHEAP FIELD SET"
       return self.SetFieldsByNearest(pcRad, pcLen, impurityGrad)
     else:
       return self.SetFieldsFullInterp(pcRad, pcLen, impurityGrad)
@@ -218,9 +219,13 @@ class Detector:
     self.SetTemperature(self.temperature)
     self.SetFields(self.pcRad, self.pcLen, self.impurityGrad)
 ###########################################################################################################################
-  def SetTemperature(self, temp):
-    self.temperature = temp
-    self.siggenInst.SetTemperature(temp)
+  def SetTemperature(self, h_temp, e_temp=0):
+    self.temperature = h_temp
+    
+    if e_temp == 0:
+      e_temp = h_temp
+    
+    self.siggenInst.SetTemperature(h_temp, e_temp)
 ###########################################################################################################################
   def SetTransferFunction(self, zeros, poles, gain=1/24.0168381037):
     #should already be discrete params
@@ -380,7 +385,7 @@ class Detector:
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
-  
+
 def find_nearest_idx(array,value):
     idx = np.searchsorted(array, value, side="left")
     if idx > 0 and (idx == len(array) or math.fabs(value - array[idx-1]) < math.fabs(value - array[idx])):

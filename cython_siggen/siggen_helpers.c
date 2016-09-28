@@ -109,7 +109,8 @@ int read_velocity_table(struct velocity_lookup* v_lookup, MJD_Siggen_Setup *setu
   return 0;
 }
 
-int temperature_modify_velocity_table(struct velocity_lookup* v_lookup_saved, struct velocity_lookup* modified_v_lookup, MJD_Siggen_Setup *setup){
+
+int temperature_modify_velocity_table(float e_temp, float h_temp, struct velocity_lookup* v_lookup_saved, struct velocity_lookup* modified_v_lookup, MJD_Siggen_Setup *setup){
  /*
     apply temperature dependence to mobilities;
     see drift_velocities.doc and tempdep.c
@@ -135,8 +136,8 @@ int temperature_modify_velocity_table(struct velocity_lookup* v_lookup_saved, st
   mu_0_1 = mue * pow(REF_TEMP, pwre);
   v_s_1 = be * sqrt(tanh(0.5 * thetae / REF_TEMP));
   E_c_1 = v_s_1 / mu_0_1;
-  mu_0_2 = mue * pow(setup->xtal_temp, pwre);
-  v_s_2 = be * sqrt(tanh(0.5 * thetae / setup->xtal_temp));
+  mu_0_2 = mue * pow(e_temp, pwre);
+  v_s_2 = be * sqrt(tanh(0.5 * thetae / e_temp));
   E_c_2 = v_s_2 / mu_0_2;
   
   
@@ -155,8 +156,8 @@ int temperature_modify_velocity_table(struct velocity_lookup* v_lookup_saved, st
   mu_0_1 = muh * pow(REF_TEMP, pwrh);
   v_s_1 = bh * sqrt(tanh(0.5 * thetah / REF_TEMP));
   E_c_1 = v_s_1 / mu_0_1;
-  mu_0_2 = muh * pow(setup->xtal_temp, pwrh);
-  v_s_2 = bh * sqrt(tanh(0.5 * thetah / setup->xtal_temp));
+  mu_0_2 = muh * pow(h_temp, pwrh);
+  v_s_2 = bh * sqrt(tanh(0.5 * thetah / h_temp));
   E_c_2 = v_s_2 / mu_0_2;
   for (i = 0; i < vlook_sz; i++){
     e = v_lookup_saved[i].e;
