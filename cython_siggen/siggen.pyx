@@ -23,6 +23,10 @@ cdef class Siggen:
   cdef csiggen.cyl_pt** pEfld;
   cdef float** pWpot;
   
+  #helper arrays for siggen calcs
+  cdef float* sum
+  cdef float* tmp
+  
 #  cdef csiggen.point* pDpath_e
 #  cdef csiggen.point* pDpath_h
 
@@ -44,6 +48,9 @@ cdef class Siggen:
     
     self.fSiggenData.dpath_e = <csiggen.point *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
     self.fSiggenData.dpath_h = <csiggen.point *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
+    
+    self.sum = <float *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(float));
+    self.tmp = <float *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(float));
 
     self.ReadVelocityTable()
     self.SetTemperature(self.fSiggenData.xtal_temp)
@@ -61,6 +68,10 @@ cdef class Siggen:
       PyMem_Free(self.pWpot)
     if self.pEfld is not NULL:
       PyMem_Free(self.pEfld)
+    if self.sum is not NULL:
+      PyMem_Free(self.sum)
+    if self.tmp is not NULL:
+      PyMem_Free(self.tmp)
     
   cdef reinit_from_saved_state(self):
     #init the WP and E-fld
@@ -80,6 +91,7 @@ cdef class Siggen:
     self.pWpot = wpot;
   
   cdef c_get_signal(self, float x, float y, float z, float* signal):
+    print "Getting signal at (%0.2f, %0.2f, %0.2f)" % (x,y,z)
     cdef csiggen.point pt
     pt.x = x
     pt.y = y
@@ -90,6 +102,8 @@ cdef class Siggen:
   def GetSignal(self, float x, float y, float z, np.ndarray[float, ndim=1, mode="c"] input not None):
     return self.c_get_signal(x,y,z, &input[0])
 
+  @cython.boundscheck(False)
+  @cython.wraparound(False)
   cdef c_make_signal(self, float x, float y, float z, float* signal, float charge):
     cdef csiggen.point pt
     pt.x = x
@@ -99,16 +113,52 @@ cdef class Siggen:
     #memset(self.fSiggenData.dpath_e, 0, self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
     #memset(self.fSiggenData.dpath_h, 0, self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
 
-    return csiggen.make_signal( pt, signal, charge, &self.fSiggenData)
-
-  def MakeSignal(self, float x, float y, float z, np.ndarray[float, ndim=1, mode="c"] input not None, float charge):
-
-    flag = self.c_make_signal(x,y,z, &input[0], charge)
-
+    flag = csiggen.make_signal( pt, signal, charge, &self.fSiggenData)
     for j in range(1, self.fSiggenData.time_steps_calc):
-      input[j] += input[j-1]
+      signal[j] += signal[j-1]
 
     return flag
+
+
+  def MakeSignal(self, float x, float y, float z, np.ndarray[float, ndim=1, mode="c"] input not None, float charge):
+    return  self.c_make_signal(x,y,z, &input[0], charge)
+    
+    
+  def ChargeCloudCorrect(self, np.ndarray[float, ndim=1, mode="c"] input not None, charge_cloud_size):
+    self.c_charge_cloud_correction(&input[0], charge_cloud_size)
+
+
+  @cython.boundscheck(False)
+  @cython.wraparound(False)
+  cdef c_charge_cloud_correction(self, float* signal, float charge_cloud_size):
+      tsteps = self.fSiggenData.time_steps_calc
+      sum = self.sum
+      tmp = self.tmp
+  
+      dt = np.int( (1.5 + charge_cloud_size / (self.fSiggenData.step_time_calc * self.fSiggenData.initial_vel)) )
+      if (self.fSiggenData.initial_vel < 0.00001): dt = 0
+
+      if dt > 1:
+        w = (np.float( dt)) / 2.355
+        l = dt/10
+
+        if (l < 1): l = 1;
+
+        for j in range(tsteps):
+          sum[j] = 1.0;
+          tmp[j] = signal[j];
+        
+        for k in np.arange(l, 2*dt, l):
+          x = k/w;
+          y = np.exp(-x*x);
+          for j in np.arange(tsteps - k):
+            sum[j] += y;
+            tmp[j] += signal[j+k] * y;
+            sum[j+k] += y;
+            tmp[j+k] += signal[j] * y;
+          
+          for j in range(tsteps):
+            signal[j] = tmp[j]/sum[j];
 
   def GetCalculationLength(self):
     return self.fSiggenData.time_steps_calc
@@ -239,7 +289,6 @@ cdef class Siggen:
   
   def FindDriftVelocity(self, float x, float y, float z):
     self.c_find_drift_velocity( x, y, z)
-
   
   cdef c_find_drift_velocity(self, float x, float y, float z):
     cdef csiggen.point pt
