@@ -19,43 +19,41 @@ from multiprocessing import Pool
 def main(argv):
 ##################
 #These change a lot
-  numWaveforms = 30
+  numWaveforms = 3
   numThreads = 8
   
   ndim = 6*numWaveforms + 8
-  nwalkers = 8*ndim
+  nwalkers = 5*ndim
   
   iter=1000
   burnIn = 800
-  wfPlotNumber = 200
+  wfPlotNumber = 20
   
 ######################
 
 
 #  plt.ion()
 
-  fitSamples = 210
-  timeStepSize = 10. #ns
+  fitSamples = 140
+  timeStepSize = 1. #ns
   
   #Prepare detector
-  zero_1 = 0.474472
-  pole_1 = 0.999845
-  pole_real = 0.807801
-  pole_imag = 0.081791
-  
-  zeros = [zero_1, -1., 1. ]
-  poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
-  
-  tempGuess = 77.747244
-  gradGuess = 0.046950
-  pcRadGuess = 2.547418
-  pcLenGuess = 1.569172
+  tempGuess = 78.800320
+  gradGuess = 0.046664
+  pcRadGuess = 2.498492
+  pcLenGuess = 1.574738
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-  det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, poles=poles, zeros=zeros)
+  det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10 )
   det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
+  
+  b_over_a = 0.104739
+  c = -0.797782
+  d = 0.802075
+  rc = 74.441511
+  det.SetTransferFunction(b_over_a, c, d, rc)
   
   tempIdx = -8
   gradIdx = -7
@@ -68,11 +66,15 @@ def main(argv):
   
   #Create a decent start guess by fitting waveform-by-waveform
   
-  wfFileName = "P42574A_512waveforms_%drisetimeculled.npz" % numWaveforms
+#  wfFileName = "P42574A_512waveforms_%drisetimeculled.npz" % numWaveforms
+  wfFileName = "P42574A_6_fepset.npz"
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     results = data['results']
     wfs = data['wfs']
+    
+    results = np.array([results[0], results[2],  results[4]])
+    wfs = np.array([wfs[0], wfs[2],  wfs[4]])
     numWaveforms = wfs.size
   else:
     print "No saved waveforms available.  Loading from Data"
@@ -89,11 +91,8 @@ def main(argv):
 
   #Prepare the initial value arrays
   for (idx, wf) in enumerate(wfs):
-    wf.WindowWaveformTimepoint(fallPercentage=.99)
+    wf.WindowWaveformTimepoint(fallPercentage=.999, rmsMult=2)
     r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx]  = results[idx]['x']
-    smooth_arr[idx] /= 10
-    t0_arr[idx] += 10 #because i had a different windowing offset back in the day
-
 
   #Plot the waveforms to take a look at the initial guesses
   if True:
@@ -103,7 +102,7 @@ def main(argv):
       
       print "WF number %d:" % idx
       print "  >>r: %f\n  >>phi %f\n  >>z %f\n  >>e %f\n  >>t0 %f\n >>smooth %f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx])
-      ml_wf = det.GetSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx]*100, t0_arr[idx], fitSamples, smoothing = smooth_arr[idx])
+      ml_wf = det.MakeSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples, h_smoothing = smooth_arr[idx])
       plt.plot(ml_wf, color="b")
       plt.plot(wf.windowedWf, color="r")
     value = raw_input('  --> Press q to quit, any other key to continue\n')
@@ -115,8 +114,8 @@ def main(argv):
   initializeDetectorAndWaveforms(det, wfs)
 
   #Do the MCMC
-  mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:]*100., t0_arr[:],smooth_arr[:],        # waveform-specific params
-                              tempGuess, gradGuess,pcRadGuess, pcLenGuess, zero_1, pole_1, pole_real, pole_imag)) # detector-specific
+  mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:],        # waveform-specific params
+                              tempGuess, gradGuess,pcRadGuess, pcLenGuess, b_over_a, c, d, rc)) # detector-specific
 
   #number of walkers _must_ be even
   if nwalkers % 2:
@@ -217,17 +216,18 @@ def main(argv):
   tf1 = stepsFigTF.add_subplot(412, sharex=ax0)
   tf2 = stepsFigTF.add_subplot(413, sharex=ax0)
   tf3 = stepsFigTF.add_subplot(414, sharex=ax0)
-  tf0.set_ylabel('zero_1')
-  tf1.set_ylabel('pole_1')
-  tf2.set_ylabel('pole_real')
-  tf3.set_ylabel('pole_imag')
+#  tf3 = stepsFigTF.add_subplot(515, sharex=ax0)
+  tf0.set_ylabel('b_over_a')
+  tf1.set_ylabel('c')
+  tf2.set_ylabel('d')
+  tf3.set_ylabel('rc_decay')
 
   for i in range(nwalkers):
     tf0.plot(sampler.chain[i,:,-4], "b", alpha=0.3) #2
     tf1.plot(sampler.chain[i,:,-3], "b", alpha=0.3) #den1
     tf2.plot(sampler.chain[i,:,-2], "b", alpha=0.3) #2
     tf3.plot(sampler.chain[i,:,-1], "b", alpha=0.3) #3
-
+#    tf3.plot(sampler.chain[i,:,-2], "b", alpha=0.3) #3
   plt.savefig("emcee_tfchain_%dwfs.png" % numWaveforms)
 
 
@@ -237,27 +237,25 @@ def main(argv):
   print "grad is %f" % np.median(samples[:,gradIdx])
   print "pcrad is %f" % np.median(samples[:,pcRadIdx])
   print "pclen is %f" % np.median(samples[:,pcLenIdx])
-  print "zero_1 is %f" % np.median(samples[:,-4])
-  print "pole_1 is %f" % np.median(samples[:,-3])
-  print "pole_real is %f" % np.median(samples[:,-2])
-  print "pole_imag is %f" % np.median(samples[:,-1])
+  print "b_over_a is %f" % np.median(samples[:,-4])
+  print "c is %f" % np.median(samples[:,-3])
+  print "d is %f" % np.median(samples[:,-2])
+  print "rc_decay is %f" % np.median(samples[:,-1])
 
   #TODO: Aaaaaaand plot some waveforms..
   simWfs = np.empty((wfPlotNumber,numWaveforms, fitSamples))
 
   for idx, (theta) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
     temp, impGrad, pcRad, pcLen = theta[tempIdx], theta[gradIdx], theta[pcRadIdx], theta[pcLenIdx]
-    zero_1, pole_1, pole_real, pole_imag = theta[-4:]
+    b_over_a, c, d, rc = theta[-4:]
     r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-8].reshape((6, numWaveforms))
     det.SetTemperature(temp)
     det.SetFields(pcRad, pcLen, impGrad)
     
-    zeros = [zero_1,1., -1 ]
-    poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
-    det.SetTransferFunction(zeros, poles)
+    det.SetTransferFunction(b_over_a, c, d, rc)
 
     for wf_idx in range(wfs.size):
-      wf_i = det.GetSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples, smoothing = smooth_arr[wf_idx])
+      wf_i = det.MakeSimWaveform(r_arr[wf_idx], phi_arr[wf_idx], z_arr[wf_idx], scale_arr[wf_idx], t0_arr[wf_idx], fitSamples, h_smoothing = smooth_arr[wf_idx])
       simWfs[idx, wf_idx, :] = wf_i
       if wf_i is None:
         print "Waveform %d, %d is None" % (idx, wf_idx)

@@ -10,7 +10,7 @@ from siggen import Siggen
 #Does all the interfacing with siggen for you, stores/loads lookup tables, and does electronics shaping
 
 class Detector:
-  def __init__(self, siggen_config_file, temperature=0, timeStep=None, numSteps=None, poles=None, zeros=None):
+  def __init__(self, siggen_config_file, temperature=0, timeStep=None, numSteps=None,):
   
     self.conf_file = siggen_config_file
 
@@ -25,9 +25,7 @@ class Detector:
       print "There will be %d steps in output" % self.num_steps
     
     (self.detector_radius, self.detector_length) = self.siggenInst.GetDimensions()
-    
-    if poles is not None and zeros is not None:
-      self.SetTransferFunction( zeros, poles)
+
   
     if temperature > 0:
       self.SetTemperature(temperature)
@@ -102,7 +100,7 @@ class Detector:
     
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
 ###########################################################################################################################
-  def SetFields(self, pcRad, pcLen, impurityGrad, method="nearest"):
+  def SetFields(self, pcRad, pcLen, impurityGrad, method="full"):
     if method=="nearest":
       print "WARNING: DOING A CHEAP FIELD SET"
       return self.SetFieldsByNearest(pcRad, pcLen, impurityGrad)
@@ -227,9 +225,13 @@ class Detector:
     
     self.siggenInst.SetTemperature(h_temp, e_temp)
 ###########################################################################################################################
-  def SetTransferFunction(self, zeros, poles, gain=1/24.0168381037):
-    #should already be discrete params
-    (self.num, self.den) = signal.zpk2tf(zeros, poles, gain)
+  def SetTransferFunction(self, b_over_a, c, d, RC_in_us):
+    self.num = [1., b_over_a, 0.]
+    self.den = [1., 2.*c, d**2]
+    
+    RC_in_us*= 1E-6
+  
+    self.rc_for_tf = np.exp(-1./1E9/RC_in_us)
   
   def SetTransferFunctionByTF(self, num, den):
     #should already be discrete params
@@ -278,25 +280,41 @@ class Detector:
     return self.raw_siggen_data
     
 ###########################################################################################################################
-  def MakeSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, e_smoothing=None, h_smoothing=None):
+  def MakeSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, h_smoothing = None):
   
     self.raw_siggen_data.fill(0.)
     ratio = np.int(self.calc_length / self.num_steps)
     
+#    print "ratio is %d" % ratio
+
     hole_wf = self.MakeRawSiggenWaveform(r, phi, z, 1)
     if hole_wf is None:
       return None
+
     if h_smoothing is not None:
       ndimage.filters.gaussian_filter1d(hole_wf, h_smoothing, output=hole_wf)
-    
+
+#    #currently just correct cloud size for holes
+#    if cloud_size > 0:
+#      self.siggenInst.ChargeCloudCorrect(hole_wf, cloud_size)
+
     self.raw_siggen_data += hole_wf[::ratio]
     
+    #charge trapping (for holes only), currently not being used
+#    if self.collection_rc is not None:
+#      collection_rc = self.collection_rc * 1E-6
+#      collection_rc_exp = np.exp(-1./1E8/collection_rc)
+#      self.raw_siggen_data= signal.lfilter([1., -1], [1., -collection_rc_exp], self.raw_siggen_data)
+#      holes_collected_idx = np.argmax(self.raw_siggen_data)
+#      self.raw_siggen_data[holes_collected_idx:] = self.raw_siggen_data[holes_collected_idx]
+
     electron_wf = self.MakeRawSiggenWaveform(r, phi, z, -1)
     if electron_wf is  None:
       return None
-    if e_smoothing is not None:
-      ndimage.filters.gaussian_filter1d(hole_wf, e_smoothing, output=electron_wf)
-    
+
+    if h_smoothing is not None:
+      ndimage.filters.gaussian_filter1d(electron_wf, h_smoothing, output=electron_wf)
+  
     self.raw_siggen_data += electron_wf[::ratio]
 
     sim_wf = self.ProcessWaveform(self.raw_siggen_data, numSamples, scale, switchpoint)
@@ -321,11 +339,7 @@ class Detector:
     
     switchpoint_ceil = switchpoint
 
-    #actual wf gen
-    siggen_wf= signal.lfilter(np.concatenate(([0],self.num)), self.den, siggen_wf)
-    smax = np.amax(siggen_wf)
-    siggen_wf /= smax
-    siggen_wf *= scale
+
 
     #resample the siggen wf to the 10ns digitized data frequency w/ interpolaiton
     switchpoint_ceil= np.int( np.ceil(switchpoint) )
@@ -337,9 +351,6 @@ class Detector:
     
     self.processed_siggen_data.fill(0.)
 
-#    out[switchpoint_ceil:] = siggen_wf[:outputLength-switchpoint_ceil+1]
-#    out *= scale
-
     try:
       self.processed_siggen_data[switchpoint_ceil:outputLength] = siggen_interp_fn(sampled_idxs)
     except ValueError:
@@ -348,6 +359,17 @@ class Detector:
       print siggen_wf.size
       print sampled_idxs[-10:]
       return None
+      
+    #filter for the damped oscillation
+    self.processed_siggen_data[:outputLength]= signal.lfilter(self.num, self.den, self.processed_siggen_data[:outputLength])
+
+    #filter for the exponential decay
+    self.processed_siggen_data[:outputLength]= signal.lfilter([1., -1], [1., -self.rc_for_tf], self.processed_siggen_data[:outputLength])
+    
+    smax = np.amax(self.processed_siggen_data[:outputLength])
+    self.processed_siggen_data[:outputLength] /= smax
+    self.processed_siggen_data[:outputLength] *= scale
+    
     return self.processed_siggen_data[:outputLength]
 ########################################################################################################
   #For pickling a detector object
