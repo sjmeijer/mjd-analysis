@@ -319,4 +319,33 @@ def findTimePoint(data, percent, timePointIdx=0):
     exit(0)
 
 
+##################################
+# From Clara's /global/project/projectdirs/majorana/data/production/P3KJR_AoverE_160602_85.dat on pdsf
+channelAEDict = {
+582: "(abs(TSCurrent200nsMax/trapENF)-(-0.00000000819708*(trapENFCal)))/0.00464859",
+580:"(abs(TSCurrent50nsMax/trapENF)-(-0.00000002478864*(trapENFCal)))/0.00459782",
+578:"(abs(TSCurrent50nsMax/trapENF)-(-0.00000002231200*(trapENFCal)))/0.00705478",
+592:"(abs(TSCurrent200nsMax/trapENF)-(-0.00000001718770*(trapENFCal)))/0.00496213",
+594:"(abs(TSCurrent50nsMax/trapENF)-(-0.00000000195205*(trapENFCal)))/0.00679792",
+598:"(abs(TSCurrent100nsMax/trapENF)-(-0.00000001621977*(trapENFCal)))/0.00622601",
+600:"(abs(TSCurrent100nsMax/trapENF)-(-0.00000002458613*(trapENFCal)))/0.00601021",
+608:"(abs(TSCurrent50nsMax/trapENF)-(-0.00000001808628*(trapENFCal)))/0.00731791",
+610:"(abs(TSCurrent50nsMax/trapENF)-(-0.00000002479243*(trapENFCal)))/0.00710022",
+616:"(abs(TSCurrent200nsMax/trapENF)-(-0.00000010087226*(trapENFCal)))/0.00451685",
+626:"(abs(TSCurrent50nsMax/trapENF)-(-0.00000001891262*(trapENFCal)))/0.00679347",
+632:"(abs(TSCurrent100nsMax/trapENF)-(-0.00000001715065*(trapENFCal)))/0.00622425",
+640:"(abs(TSCurrent100nsMax/trapENF)-(-0.00000001044140*(trapENFCal)))/0.00661752",
+648:"(abs(TSCurrent200nsMax/trapENF)-(-0.00000001321028*(trapENFCal)))/0.00492125",
+664:"(abs(TSCurrent100nsMax/trapENF)-(-0.00000006104607*(trapENFCal)))/0.00554796",
+672:"(abs(TSCurrent200nsMax/trapENF)-(-0.00000000928838*(trapENFCal)))/0.00496773",
+690:"(abs(TSCurrent50nsMax/trapENF)-(-0.00000002878251*(trapENFCal)))/0.00689086",
+692:"(abs(TSCurrent100nsMax/trapENF)-(-0.00000001644495*(trapENFCal)))/0.00623492"
+}
+
+
+def getChannelAECut(channel):
+  return channelAEDict[channel]
+def getHighGainChannels():
+  return channelAEDict.keys()
+
 
