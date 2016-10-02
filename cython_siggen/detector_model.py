@@ -367,6 +367,10 @@ class Detector:
     self.processed_siggen_data[:outputLength]= signal.lfilter([1., -1], [1., -self.rc_for_tf], self.processed_siggen_data[:outputLength])
     
     smax = np.amax(self.processed_siggen_data[:outputLength])
+    
+    if smax == 0:
+      return None
+    
     self.processed_siggen_data[:outputLength] /= smax
     self.processed_siggen_data[:outputLength] *= scale
     
@@ -407,6 +411,15 @@ class Detector:
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
+
+  def ReflectPoint(self, r,z):
+    #algorithm shamelessly ripped from answer on http://stackoverflow.com/questions/3306838/algorithm-for-reflecting-a-point-across-a-line
+    m = self.detector_length / self.detector_radius
+    d = (r + m*z)/(1+m*m)
+    new_r = 2*d-r
+    new_z = 2*d*m - z
+
+    return (new_r, new_z)
 
 def find_nearest_idx(array,value):
     idx = np.searchsorted(array, value, side="left")

@@ -43,7 +43,7 @@ def lnprob_waveform(theta, *wf):
 def lnlike_detector(theta):
   '''assumes the data comes in w/ 10ns sampling period'''
 
-  temp, impGrad, pcRad, pcLen, zero_1, pole_1, pole_real, pole_imag = theta[-8:]
+  temp, impGrad, pcRad, pcLen,  b_over_a, c, d, rc_decay = theta[-8:]
 #  r_arr, phi_arr, z_arr, scale_arr, t0_arr = theta[:-10].reshape((5, len(wf_arr)))
   r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-8].reshape((6, len(wf_arr)))
 
@@ -66,9 +66,7 @@ def lnlike_detector(theta):
 #    print "bad like temp %f" % temp
     return -np.inf
   
-  zeros = [zero_1,1., -1 ]
-  poles = [ pole_real+pole_imag*1j, pole_real-pole_imag*1j, pole_1]
-  detector.SetTransferFunction(zeros, poles)
+  detector.SetTransferFunction(b_over_a, c, d, rc_decay)
   
   if temp != detector.temperature:
     detector.SetTemperature(temp)
@@ -106,7 +104,7 @@ def lnlike_waveform(theta, wf):
   data = wf.windowedWf
   model_err = wf.baselineRMS
 
-  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data), smoothing=smooth)
+  model = detector.MakeSimWaveform(r, phi, z, scale, t0, len(data), h_smoothing=smooth)
 #  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data))
 
   if model is None:

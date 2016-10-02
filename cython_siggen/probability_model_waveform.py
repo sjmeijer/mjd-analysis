@@ -61,7 +61,7 @@ def lnprior_waveform(r, phi, z, scale, t0,  smooth, ):
 
   #TODO: rename this so it isn't so confusing
   scale_prior = stats.norm.pdf(scale, loc=wf.wfMax, scale=0.1*wf.wfMax )
-  t0_prior = stats.norm.pdf(t0, loc=wf.t0Guess, scale=5. )
+  t0_prior = stats.norm.pdf(t0, loc=wf.t0Guess, scale=10. )
 
   return np.log(location_prior  * t0_prior * scale_prior )
 

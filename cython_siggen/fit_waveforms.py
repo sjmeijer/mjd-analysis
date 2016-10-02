@@ -15,44 +15,47 @@ from progressbar import ProgressBar, Percentage, Bar, ETA
 from multiprocessing import Pool
 from timeit import default_timer as timer
 
+
+
+#Prepare detector
+  
+fitSamples = 250
+timeStepSize = 1
+
+tempGuess = 79.310080
+gradGuess = 0.051005
+pcRadGuess = 2.499387
+pcLenGuess = 1.553464
+
+#Create a detector model
+detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
+det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize,)
+det.LoadFields("P42574A_fields_v3.npz")
+det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
+
+b_over_a = 0.107213
+c = -0.821158
+d = 0.828957
+rc = 76.710043
+det.SetTransferFunction(b_over_a, c, d, rc)
+
 def main(argv):
 
   numThreads = 8
 
-  runRange = (13420,13429)
-  channel = 626
-  aeCutVal = 0.01425
-  
-  fitSamples = 250
-  timeStepSize = 10
-  
-  wfFileName = "multisite_event_set_runs13385-13557"
-#  wfFileName = "P42574A_512waveforms_30risetimeculled"
-  if os.path.isfile(wfFileName + ".npz"):
-    data = np.load(wfFileName+ ".npz")
+  wfFileName = "ms_event_set_runs11530-11560.npz"
+
+  #wfFileName = "P42574A_512waveforms_%drisetimeculled.npz" % numWaveforms
+  if os.path.isfile(wfFileName):
+    data = np.load(wfFileName)
     wfs = data['wfs']
     numWaveforms = wfs.size
   else:
     print "No saved waveforms available.  Loading from Data"
     exit(0)
   
-  zero_1 = 0.470677
-  pole_1 = 0.999857
-  pole_real = 0.807248
-  pole_imag = 0.085347
-  tempGuess = 78.474793
-  gradGuess = 0.045049
-  pcRadGuess = 2.574859
-  pcLenGuess = 1.524812
-  
-  zeros = [zero_1, -1., 1. ]
-  poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
 
-  #Create a detector model
-  detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-  det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, poles=poles, zeros=zeros)
-  det.LoadFields("P42574A_fields_v3.npz")
-  det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
+  
   initializeDetector(det, )
 
 
@@ -105,6 +108,7 @@ def main(argv):
   p.close()
   print "Elapsed time: " + str(end-start)
 
+  wfFileName = wfFileName.split('.')[0]
   wfFileName += "_mcmcfit.npz"
   np.savez(wfFileName, wfs = wf_save_arr )
 
@@ -117,7 +121,7 @@ def nll(*args):
 
 def mcmc_waveform(wf):
   fitSamples = 250
-  wf.WindowWaveformTimepoint(fallPercentage=.99)
+  wf.WindowWaveformTimepoint(fallPercentage=.999, rmsMult=2)
   
   if wf.wfLength > fitSamples:
     #skip really long waveforms
@@ -126,30 +130,43 @@ def mcmc_waveform(wf):
   
   initializeWaveform(wf)
   
-  mcmc_startguess = [15., np.pi/8, 15., wf.wfMax, wf.t0Guess, 1.]
-  
-  result = op.minimize(nll, mcmc_startguess,  method="Nelder-Mead")
-  r, phi, z, scale, t0, smooth, = result["x"]
-  result2 = op.minimize(nll, [z, phi, r, scale, wf.t0Guess,1],  method="Nelder-Mead")
-  
-  if result['fun']/wf.wfLength and result2['fun']/wf.wfLength  > 100:
+ 
+  startGuess = [det.detector_radius/2, np.pi/8, det.detector_length/2, wf.wfMax, wf.t0Guess-5, 10]
+
+  try:
+    result = op.minimize(nll, startGuess,   method="Nelder-Mead")
+    #result = op.basinhopping(nll, startGuess,   T=1000,stepsize=15, minimizer_kwargs= {"method": "Nelder-Mead", "args":(wf)})
+    r, phi, z, scale, t0, smooth, = result["x"]
+    r_new, z_new = det.ReflectPoint(r,z)
+    r_new = np.amin( [z, np.floor(det.detector_radius)] )
+    z_new = np.amin( [r, np.floor(det.detector_length)] )
+
+    result2 = op.minimize(nll, [r_new, phi, z_new, scale, wf.t0Guess-5,10],  method="Nelder-Mead")
+   
+    if result['fun']/wf.wfLength and result2['fun']/wf.wfLength  > 500:
+      wf.lnprob = np.nan
+      return wf
+
+    #Do the MCMC
+    ndim, nwalkers = 6, 100
+    
+    pos0 = [startGuess + 1e-1*np.random.randn(ndim)*startGuess for i in range(nwalkers)]
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_waveform, )
+
+    iter, burnIn = 1000, 900
+    
+    for (idx,result) in enumerate(sampler.sample(pos0, iterations=iter, storechain=True)):
+      continue
+
+    lnprobs = sampler.lnprobability[:, burnIn:].reshape((-1))
+    median_prob = np.median(lnprobs)
+    wf.lnprob = median_prob
+    wf.samples = sampler.chain[:, burnIn:, :].reshape((-1, ndim))
+  except ValueError:
     wf.lnprob = np.nan
     return wf
 
-  #Do the MCMC
-  ndim, nwalkers = 6, 100
-  
-  pos0 = [mcmc_startguess + 1e-1*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
-  sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_waveform, )
-
-  iter, burnIn = 1000, 900
-  
-  for (idx,result) in enumerate(sampler.sample(pos0, iterations=iter, storechain=True)):
-    continue
-
-  lnprobs = sampler.lnprobability[:, burnIn:].reshape((-1))
-  median_prob = np.median(lnprobs)
-  wf.lnprob = median_prob
+#  wf.median_fit = np.median(samples[:,:6], axis=0)
   return wf
 
 if __name__=="__main__":

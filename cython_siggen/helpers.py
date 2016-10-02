@@ -98,6 +98,7 @@ def plotResidual(simWFArray, dataWF, figure=None, residAlpha=0.1):
   legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveform' )
 
   first_legend = ax0.legend(loc=4)
+  ax1.set_ylim(-20,20)
 
 ########################################################################
 

@@ -23,7 +23,7 @@ def main(argv):
   numThreads = 8
   
   ndim = 6*numWaveforms + 8
-  nwalkers = 5*ndim
+  nwalkers = 10*ndim
   
   iter=1000
   burnIn = 800
@@ -38,8 +38,8 @@ def main(argv):
   timeStepSize = 1. #ns
   
   #Prepare detector
-  tempGuess = 78.800320
-  gradGuess = 0.046664
+  tempGuess = 79.194609
+  gradGuess = 0.048953
   pcRadGuess = 2.498492
   pcLenGuess = 1.574738
 
@@ -49,10 +49,10 @@ def main(argv):
   det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   
-  b_over_a = 0.104739
-  c = -0.797782
-  d = 0.802075
-  rc = 74.441511
+  b_over_a = 0.119558
+  c = -0.804569
+  d = 0.809473
+  rc = 74.235542
   det.SetTransferFunction(b_over_a, c, d, rc)
   
   tempIdx = -8
@@ -67,14 +67,14 @@ def main(argv):
   #Create a decent start guess by fitting waveform-by-waveform
   
 #  wfFileName = "P42574A_512waveforms_%drisetimeculled.npz" % numWaveforms
-  wfFileName = "P42574A_6_fepset.npz"
+  wfFileName = "P42574A_3_fastandslow_oldwfs.npz"
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     results = data['results']
     wfs = data['wfs']
     
-    results = np.array([results[0], results[2],  results[4]])
-    wfs = np.array([wfs[0], wfs[2],  wfs[4]])
+#    results = np.array([results[0], results[2],  results[4]])
+#    wfs = np.array([wfs[0], wfs[2],  wfs[4]])
     numWaveforms = wfs.size
   else:
     print "No saved waveforms available.  Loading from Data"
@@ -86,13 +86,13 @@ def main(argv):
   z_arr = np.empty(numWaveforms)
   scale_arr = np.empty(numWaveforms)
   t0_arr = np.empty(numWaveforms)
-  smooth_arr = np.ones(numWaveforms)*7.
+  smooth_arr = np.ones(numWaveforms)*10.
   simWfArr = np.empty((1,numWaveforms, fitSamples))
 
   #Prepare the initial value arrays
   for (idx, wf) in enumerate(wfs):
     wf.WindowWaveformTimepoint(fallPercentage=.999, rmsMult=2)
-    r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx]  = results[idx]['x']
+    r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], __  = results[idx]['x']
 
   #Plot the waveforms to take a look at the initial guesses
   if True:

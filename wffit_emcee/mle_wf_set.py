@@ -21,9 +21,14 @@ dataSetName = "surfmjd"
 detectorName = "P3KJR"
 
 def main(argv):
-  runRanges = [(11511, 11530)]#11540)]
+
+  runRanges = [(11530, 11560)]#11540)]
+  #runRanges = [(13385, 13392)]#11540)]
   
-  numThreads = 4
+  #  total_cut = "( %s || %s) && channel == %d " % (energy_cut_sep, energy_cut_dep, channel)
+  
+
+  numThreads = 8
   scale_mult = 100.
 
   #calibration on
@@ -33,8 +38,14 @@ def main(argv):
   sep_energy = 2109
   dep_energy = 1597
   
+  ae_cut = "( (abs(TSCurrent50nsMax/trapENF)-(-0.00000001891262*(trapENFCal)))/0.00679347 >1)"
   energy_cut_sep = "(trapENFCal > %f && trapENFCal < %f)" % (sep_energy-side_padding,sep_energy+side_padding)
   energy_cut_dep = "(trapENFCal > %f && trapENFCal < %f)" % (dep_energy-side_padding,dep_energy+side_padding)
+  total_cut = "( %s || %s) && channel == %d  " % ( energy_cut_dep, energy_cut_sep, channel, )
+  
+  
+  wfFileName = "ms_event_set_runs%d-%d.npz" % (runRanges[0][0], runRanges[-1][-1])
+  
 
   if False: #if you want to check out the plots of the spectra
    #check the sptrcum from root, just to make sure it looks OK
@@ -77,17 +88,16 @@ def main(argv):
     chainGat.Project("hDEP", "trapENFCal", "channel == %d && %s" % (channel, energy_cut_dep));
     depHist.Draw()
     canvas.Update()
+    
+    print "found %d dep events" %  depHist.GetEntries()
+    print "found %d sep events" %  sepHist.GetEntries()
+    print "expecting %d entries..." % (depHist.GetEntries() + sepHist.GetEntries())
+  
     value = raw_input('  --> Make sure the hist is as you expect ')
     if value == 'q': exit(0)
-    print "expecting %d entries..." % (depHist.GetEntries() + sepHist.GetEntries())
-
-
-  total_cut = "( %s || %s) && channel == %d " % (energy_cut_sep, energy_cut_dep, channel)
-
-
-  wfFileName = "multisite_event_set_runs%d-%d.npz" % (runRanges[0][0], runRanges[-1][-1])
+  
   if not os.path.isfile(wfFileName):
-    wfs = helpers.GetWaveforms( runRanges,  channel, np.inf, total_cut)
+    wfs = helpers.GetWaveforms( runRanges,  channel, np.inf, total_cut,)
   else:
     data = np.load(wfFileName)
     wfs = data['wfs']
@@ -95,22 +105,19 @@ def main(argv):
   np.savez(wfFileName, wfs = wfs)
 
   print "Found %d waveforms" % wfs.size
+  
+  exit(0)
 
   args = []
   plt.figure()
   for (idx, wf) in enumerate(wfs):
     wf.WindowWaveformTimepoint(fallPercentage=.99)
-    args.append( [15., np.pi/8., 15., wf.wfMax/scale_mult, wf.t0Guess, 10.,  wfs[idx] ]  )
-  
-#    if wf.energy > 1800:
-#      plt.plot(wf.windowedWf, color="r")
-#    else:
-#      plt.plot(wf.windowedWf, color="g")
+    args.append( [15., np.pi/8., 15., wf.wfMax/scale_mult, wf.t0Guess, 10.,  wfs[idx], idx ]  )
+
+#    plt.plot(wf.windowedWf, color="r")
 #  plt.show()
 #  value = raw_input('  --> Make sure the hist is as you expect ')
 #  if value == 'q': exit(0)
-
-
 
   fitSamples = 200
   num =  [3478247474.8078203, 1.9351287044375424e+17, 6066014749714584.0]

@@ -26,12 +26,12 @@ def main(argv):
   aeCutVal = 0.01425
   numThreads = 8
   
-  fitSamples = 200
-  timeStepSize = 10
+  fitSamples = 250
+  timeStepSize = 1
   
-  wfFileName = "multisite_event_set_runs13385-13557.npz"
-#  numWaveforms = 16
-#  wfFileName = "P42574A_512waveforms_%drisetimeculled.npz" % numWaveforms
+  wfFileName = "fep_old_postpsa.npz"
+  numWaveforms = 30
+  #wfFileName = "P42574A_512waveforms_%drisetimeculled.npz" % numWaveforms
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     wfs = data['wfs']
@@ -41,37 +41,29 @@ def main(argv):
     exit(0)
   
   #Prepare detector
-  tempGuess = 78.421865
-  gradGuess = 0.047338
-  pcRadGuess = 2.550635
-  pcLenGuess = 1.546489
-  zero_1 = 0.453902
-  pole_1 = 0.999862
-  pole_real = 0.797921
-  pole_imag = 0.080834
-  
-  zeros = [zero_1, -1., 1. ]
-  poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
-  
-#  tempGuess = 78.103233
-#  gradGuess = 0.047049
-#  pcRadGuess = 2.541187
-#  pcLenGuess = 1.568158
+  tempGuess = 79.310080
+  gradGuess = 0.051005
+  pcRadGuess = 2.499387
+  pcLenGuess = 1.553464
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-  det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, poles=poles, zeros=zeros)
+  det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize,)
   det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
+  
+  b_over_a = 0.107213
+  c = -0.821158
+  d = 0.828957
+  rc = 76.710043
+  det.SetTransferFunction(b_over_a, c, d, rc)
+  
   initializeDetector(det, )
 
   #ML as a start
   nll = lambda *args: -lnlike_waveform(*args)
   
   for (idx,wf) in enumerate(wfs):
-#    if idx == 0: continue
-
-    if wf.energy > 1700: continue
 
     fig1 = plt.figure(1)
     plt.clf()
@@ -83,32 +75,37 @@ def main(argv):
     ax1.set_ylabel("Residual")
     
     
-    wf.WindowWaveformTimepoint(fallPercentage=.99)
+    wf.WindowWaveformTimepoint(fallPercentage=.999, rmsMult=2)
     initializeWaveform(wf)
     dataLen = wf.wfLength
     t_data = np.arange(dataLen) * 10
     
     ax0.plot(t_data, wf.windowedWf, color="r")
   
-    startGuess = [15., np.pi/8, 15., wf.wfMax, wf.t0Guess, 1]
-    init_wf = det.GetSimWaveform(15, np.pi/8, 15, wf.wfMax, wf.t0Guess, fitSamples)
+    startGuess = [det.detector_radius/2, np.pi/8, det.detector_length/2, wf.wfMax, wf.t0Guess-5, 10]
 
-    result = op.minimize(nll, startGuess,   method="Powell")
+    result = op.minimize(nll, startGuess,   method="Nelder-Mead")
     #result = op.basinhopping(nll, startGuess,   T=1000,stepsize=15, minimizer_kwargs= {"method": "Nelder-Mead", "args":(wf)})
     r, phi, z, scale, t0, smooth, = result["x"]
+    
+    r_new, z_new = det.ReflectPoint(r,z)
+    
+    print r, z
+    print r_new, z_new
+    
     r_new = np.amin( [z, np.floor(det.detector_radius)] )
     z_new = np.amin( [r, np.floor(det.detector_length)] )
-    print "Initial LN like is %f" %  (result['fun'])
+    print "Initial LN like is %f" %  (result['fun']/wf.wfLength)
     
 #    print r, phi, z, scale, t0, smooth
     
-    ml_wf = np.copy(det.GetSimWaveform(r, phi, z, scale, t0, fitSamples, smoothing=smooth, ))
+    ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
     ax0.plot(t_data, ml_wf[:dataLen], color="b")
     ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="b")
     
-    result2 = op.minimize(nll, [z, phi, r, scale, wf.t0Guess,1],  method="Powell")
+    result2 = op.minimize(nll, [r_new, phi, z_new, scale, wf.t0Guess-5,10],  method="Nelder-Mead")
     r, phi, z, scale, t0, smooth, = result2["x"]
-    inv_ml_wf = det.GetSimWaveform(r, phi, z, scale, t0, fitSamples, smoothing=smooth, )
+    inv_ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, )
     ax0.plot(t_data,inv_ml_wf[:dataLen], color="g")
 #    print r, phi, z, scale, t0, smooth
     ax1.plot(t_data,inv_ml_wf[:dataLen] -  wf.windowedWf, color="g")
@@ -117,13 +114,14 @@ def main(argv):
     ax1.set_ylim(-20,20)
 
 
-#    if result2['fun'] < result['fun']:
-#      mcmc_startguess = result2["x"]
-#    else:
-#      mcmc_startguess = result["x"]
+    if result2['fun'] < result['fun']:
+      mcmc_startguess = result2["x"]
+    else:
+      mcmc_startguess = result["x"]
 
-
-    print "Inverted LN like is %f" %  (result2['fun'])
+    wf.prior = mcmc_startguess
+    mcmc_startguess = startGuess
+    print "Inverted LN like is %f" %  (result2['fun']/wf.wfLength)
 
     value = raw_input('  --> Press q to quit, s to skip, any other key to continue\n')
     if value == 'q':
@@ -132,7 +130,7 @@ def main(argv):
       continue
 
     #Do the MCMC
-    ndim, nwalkers = 6, 200
+    ndim, nwalkers = 6, 100
     mcmc_startguess = startGuess#np.array([r, phi, z, scale, t0, smooth])
     
     pos0 = [mcmc_startguess + 1e-1*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
@@ -185,7 +183,7 @@ def main(argv):
     simWfs = np.empty((wfPlotNumber, fitSamples) )
 
     for idx, (r, phi, z, scale, t0, smooth, ) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
-      simWfs[idx,:] = det.GetSimWaveform(r, phi, z, scale, t0, fitSamples, smoothing = smooth,)
+      simWfs[idx,:] = det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing = smooth,)
 
     residFig = plt.figure(3)
     helpers.plotResidual(simWfs, wf.windowedWf, figure=residFig)
@@ -200,7 +198,7 @@ def main(argv):
     positionFig = plt.figure(5)
     plt.clf()
     xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
-    yedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
+    yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
     plt.hist2d(samples[:,0], samples[:,2],  norm=LogNorm(), bins=[ xedges,yedges  ])
     plt.colorbar()
     plt.xlabel("r from Point Contact (mm)")
@@ -226,6 +224,8 @@ def main(argv):
     print " phi = %f (%f,%f)" % (np.median(samples[:,1]), np.percentile(samples[:,1], 50-34), np.percentile(samples[:,1], 50+34))
     print " z = %f (%f,%f)" % (np.median(samples[:,2]), np.percentile(samples[:,2], 50-34), np.percentile(samples[:,2], 50+34))
     print " t0 = %f (%f,%f)" % (np.median(samples[:,4]), np.percentile(samples[:,4], 50-34), np.percentile(samples[:,4], 50+34))
+    
+    print np.median(samples[:,:6], axis=0)
 
 
 #    plt.show()
