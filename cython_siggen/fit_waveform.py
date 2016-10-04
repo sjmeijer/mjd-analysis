@@ -29,7 +29,8 @@ def main(argv):
   fitSamples = 250
   timeStepSize = 1
   
-  wfFileName = "fep_old_postpsa.npz"
+#  wfFileName = "fep_old_postpsa.npz"
+  wfFileName = "ms_event_set_runs11510-11530_mcmcfit.npz"
   numWaveforms = 30
   #wfFileName = "P42574A_512waveforms_%drisetimeculled.npz" % numWaveforms
   if os.path.isfile(wfFileName):
@@ -41,10 +42,10 @@ def main(argv):
     exit(0)
   
   #Prepare detector
-  tempGuess = 79.310080
-  gradGuess = 0.051005
-  pcRadGuess = 2.499387
-  pcLenGuess = 1.553464
+  tempGuess = 79.521935
+  gradGuess = 0.050133
+  pcRadGuess = 2.475948
+  pcLenGuess = 1.563903
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
@@ -52,10 +53,10 @@ def main(argv):
   det.LoadFields("P42574A_fields_v3.npz")
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   
-  b_over_a = 0.107213
-  c = -0.821158
-  d = 0.828957
-  rc = 76.710043
+  b_over_a = 0.108743
+  c = -0.813711
+  d = 0.821123
+  rc = 75.452810
   det.SetTransferFunction(b_over_a, c, d, rc)
   
   initializeDetector(det, )
@@ -64,6 +65,18 @@ def main(argv):
   nll = lambda *args: -lnlike_waveform(*args)
   
   for (idx,wf) in enumerate(wfs):
+    print "wf number %d" % idx
+    if idx < 77: continue
+    if wf.energy > 1800: continue
+    
+    lnprob = -1*wf.lnprob/wf.wfLength
+    if lnprob < 5: continue
+    
+    print "  ln prob is %f" % lnprob
+    
+    if wf.wfLength > fitSamples:
+      print "wtf?"
+      continue
 
     fig1 = plt.figure(1)
     plt.clf()
@@ -75,64 +88,105 @@ def main(argv):
     ax1.set_ylabel("Residual")
     
     
-    wf.WindowWaveformTimepoint(fallPercentage=.999, rmsMult=2)
+    wf.WindowWaveformTimepoint(fallPercentage=.995, rmsMult=2)
     initializeWaveform(wf)
     dataLen = wf.wfLength
     t_data = np.arange(dataLen) * 10
     
     ax0.plot(t_data, wf.windowedWf, color="r")
-  
-    startGuess = [det.detector_radius/2, np.pi/8, det.detector_length/2, wf.wfMax, wf.t0Guess-5, 10]
-
-    result = op.minimize(nll, startGuess,   method="Nelder-Mead")
-    #result = op.basinhopping(nll, startGuess,   T=1000,stepsize=15, minimizer_kwargs= {"method": "Nelder-Mead", "args":(wf)})
-    r, phi, z, scale, t0, smooth, = result["x"]
     
-    r_new, z_new = det.ReflectPoint(r,z)
-    
-    print r, z
-    print r_new, z_new
-    
-    r_new = np.amin( [z, np.floor(det.detector_radius)] )
-    z_new = np.amin( [r, np.floor(det.detector_length)] )
-    print "Initial LN like is %f" %  (result['fun']/wf.wfLength)
-    
-#    print r, phi, z, scale, t0, smooth
-    
-    ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
-    ax0.plot(t_data, ml_wf[:dataLen], color="b")
-    ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="b")
-    
-    result2 = op.minimize(nll, [r_new, phi, z_new, scale, wf.t0Guess-5,10],  method="Nelder-Mead")
-    r, phi, z, scale, t0, smooth, = result2["x"]
-    inv_ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, )
-    ax0.plot(t_data,inv_ml_wf[:dataLen], color="g")
-#    print r, phi, z, scale, t0, smooth
-    ax1.plot(t_data,inv_ml_wf[:dataLen] -  wf.windowedWf, color="g")
-    
-
-    ax1.set_ylim(-20,20)
-
-
-    if result2['fun'] < result['fun']:
-      mcmc_startguess = result2["x"]
-    else:
-      mcmc_startguess = result["x"]
-
-    wf.prior = mcmc_startguess
-    mcmc_startguess = startGuess
-    print "Inverted LN like is %f" %  (result2['fun']/wf.wfLength)
-
     value = raw_input('  --> Press q to quit, s to skip, any other key to continue\n')
     if value == 'q':
       exit(0)
     if value == 's':
       continue
+  
+    minresult = None
+    minlike = np.inf
+  
+    for r in np.linspace(0, np.floor(det.detector_radius), 5):
+      for z in np.linspace(0, np.floor(det.detector_length), 5):
+        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
+          if not det.IsInDetector(r,0,z): continue
+          startGuess = [r, np.pi/8, z, wf.wfMax, t0_guess, 10]
+          result = op.minimize(nll, startGuess,   method="Powell")
+          r, phi, z, scale, t0, smooth, = result["x"]
+          ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
+  #        if np.amax(ml_wf[:dataLen]) < 4000: continue
+          ax0.plot(t_data, ml_wf[:dataLen], color="b")
+          ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="b")
+    
+          if result['fun'] < minlike:
+            minlike = result['fun']
+            minresult = result
+  
+    ax1.set_ylim(-20,20)
+    r, phi, z, scale, t0, smooth, = minresult["x"]
+    print r, phi, z, scale, t0, smooth
+    ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
+    ax0.plot(t_data, ml_wf[:dataLen], color="g")
+    ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="g", lw=5)
+  
+    mcmc_startguess =  minresult["x"]
+    
+    value = raw_input('  --> Press q to quit, s to skip, any other key to continue\n')
+    if value == 'q':
+      exit(0)
+    if value == 's':
+      continue
+#
+#    startGuess = [det.detector_radius/2, np.pi/8, det.detector_length/2, wf.wfMax, wf.t0Guess-5, 10]
+#    #startGuess = [0.2, np.pi/8, det.detector_length/2, wf.wfMax, wf.t0Guess-5, 10]
+#
+#    result = op.minimize(nll, startGuess,   method="Nelder-Mead")
+#    #result = op.basinhopping(nll, startGuess,   niter=100, T=10000, stepsize=10, minimizer_kwargs= {"method": "Nelder-Mead"})
+#    r, phi, z, scale, t0, smooth, = result["x"]
+#    
+#    r_new, z_new = det.ReflectPoint(r,z)
+#    
+#    print r, z
+#    print r_new, z_new
+#    
+#    r_new = np.amin( [z, np.floor(det.detector_radius)] )
+#    z_new = np.amin( [r, np.floor(det.detector_length)] )
+#    print "Initial LN like is %f" %  (result['fun']/wf.wfLength)
+#    
+##    print r, phi, z, scale, t0, smooth
+#    
+#    ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
+#    ax0.plot(t_data, ml_wf[:dataLen], color="b")
+#    ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="b")
+#    
+#    result2 = op.minimize(nll, [det.detector_radius/2, phi, 0.2, scale, wf.t0Guess-5,10],  method="Powell")
+#    r, phi, z, scale, t0, smooth, = result2["x"]
+#    inv_ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, )
+#    ax0.plot(t_data,inv_ml_wf[:dataLen], color="g")
+##    print r, phi, z, scale, t0, smooth
+#    ax1.plot(t_data,inv_ml_wf[:dataLen] -  wf.windowedWf, color="g")
+#    
+#
+#    ax1.set_ylim(-20,20)
+#
+#
+#    if result2['fun'] < result['fun']:
+#      mcmc_startguess = result2["x"]
+#    else:
+#      mcmc_startguess = result["x"]
+#
+#    wf.prior = mcmc_startguess
+##    mcmc_startguess = startGuess
+#    print "Inverted LN like is %f" %  (result2['fun']/wf.wfLength)
+#
+#    value = raw_input('  --> Press q to quit, s to skip, any other key to continue\n')
+#    if value == 'q':
+#      exit(0)
+#    if value == 's':
+#      continue
 
     #Do the MCMC
     ndim, nwalkers = 6, 100
-    mcmc_startguess = startGuess#np.array([r, phi, z, scale, t0, smooth])
-    
+#    mcmc_startguess = startGuess#np.array([r, phi, z, scale, t0, smooth])
+
     pos0 = [mcmc_startguess + 1e-1*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
     p = Pool(numThreads, initializer=initializeWaveform, initargs=[ wf])
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_waveform, )
@@ -193,7 +247,12 @@ def main(argv):
     lnprobs = sampler.lnprobability[:, burnIn:].reshape((-1))
     median_prob = np.median(lnprobs)
     print "median lnprob is %f (length normalized: %f)" % (median_prob, median_prob/wf.wfLength)
-    plt.hist(lnprobs)
+#    print lnprobs
+#    lnprobs[np.where(np.isfinite(lnprobs) == 0)] = np.nan
+#    
+#    hist, bins = np.histogram(lnprobs/wf.wfLength, bins=np.linspace(-10,0,100))
+#    plt.plot(bins[:-1], hist, ls="steps-post")
+
     
     positionFig = plt.figure(5)
     plt.clf()
