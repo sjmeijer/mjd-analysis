@@ -22,10 +22,10 @@ from timeit import default_timer as timer
 fitSamples = 250
 timeStepSize = 1
 
-tempGuess = 79.310080
-gradGuess = 0.051005
-pcRadGuess = 2.499387
-pcLenGuess = 1.553464
+tempGuess = 79.204603
+gradGuess = 0.05
+pcRadGuess = 2.5
+pcLenGuess = 1.6
 
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
@@ -33,10 +33,10 @@ det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=
 det.LoadFields("P42574A_fields_v3.npz")
 det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
 
-b_over_a = 0.107213
-c = -0.821158
-d = 0.828957
-rc = 76.710043
+b_over_a = 0.107077
+c = -0.817381
+d = 0.825026
+rc = 76.551780
 det.SetTransferFunction(b_over_a, c, d, rc)
 
 def main(argv):
@@ -121,7 +121,7 @@ def nll(*args):
 
 def mcmc_waveform(wf):
   fitSamples = 250
-  wf.WindowWaveformTimepoint(fallPercentage=.999, rmsMult=2)
+  wf.WindowWaveformTimepoint(fallPercentage=.995, rmsMult=2)
   
   if wf.wfLength > fitSamples:
     #skip really long waveforms
@@ -130,20 +130,22 @@ def mcmc_waveform(wf):
   
   initializeWaveform(wf)
   
- 
-  startGuess = [det.detector_radius/2, np.pi/8, det.detector_length/2, wf.wfMax, wf.t0Guess-5, 10]
-
   try:
-    result = op.minimize(nll, startGuess,   method="Nelder-Mead")
-    #result = op.basinhopping(nll, startGuess,   T=1000,stepsize=15, minimizer_kwargs= {"method": "Nelder-Mead", "args":(wf)})
-    r, phi, z, scale, t0, smooth, = result["x"]
-    r_new, z_new = det.ReflectPoint(r,z)
-    r_new = np.amin( [z, np.floor(det.detector_radius)] )
-    z_new = np.amin( [r, np.floor(det.detector_length)] )
-
-    result2 = op.minimize(nll, [r_new, phi, z_new, scale, wf.t0Guess-5,10],  method="Nelder-Mead")
-   
-    if result['fun']/wf.wfLength and result2['fun']/wf.wfLength  > 500:
+    minresult = None
+    minlike = np.inf
+  
+    for r in np.linspace(10, np.floor(det.detector_radius)-10, 3):
+      for z in np.linspace(10, np.floor(det.detector_length)-10, 3):
+  #        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
+          if not det.IsInDetector(r,0,z): continue
+          startGuess = [r, np.pi/8, z, wf.wfMax, wf.t0Guess-5, 10]
+          result = op.minimize(nll, startGuess,   method="Nelder-Mead")
+          r, phi, z, scale, t0, smooth, = result["x"]
+          if result['fun'] < minlike:
+            minlike = result['fun']
+            minresult = result
+  
+    if minresult['fun']/wf.wfLength  > 500:
       wf.lnprob = np.nan
       return wf
 
@@ -161,6 +163,7 @@ def mcmc_waveform(wf):
     lnprobs = sampler.lnprobability[:, burnIn:].reshape((-1))
     median_prob = np.median(lnprobs)
     wf.lnprob = median_prob
+    wf.lnprobs = lnprobs
     wf.samples = sampler.chain[:, burnIn:, :].reshape((-1, ndim))
   except ValueError:
     wf.lnprob = np.nan
