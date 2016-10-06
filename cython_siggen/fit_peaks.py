@@ -11,18 +11,16 @@ from scipy import signal
 from scipy.optimize import curve_fit
 from scipy.special import erfc
 
-detectorName = "P3KJR"
+side_padding = 15
+sep_energy = 2109
+dep_energy = 1597
+binwidth = 1
 
 def main(argv):
 
   plt.ion()
   
-  side_padding = 15
-  sep_energy = 2109
-  dep_energy = 1597
-  binwidth = 0.5
-  
-  file_names = ["ms_event_set_runs11510-11530.npz", "ms_event_set_runs11530-11560.npz", "ms_event_set_runs11560-11570.npz"]
+  file_names = ["ms_event_set_runs11510-11520_mcmcfit.npz"]
   all_wfs = []
   for file_name in file_names:
     if os.path.isfile(file_name):
@@ -44,8 +42,9 @@ def main(argv):
 
   for (idx, wf) in enumerate(all_wfs):
     energy_arr[idx] = wf.energy
-#    like_arr[idx] = -1*wf.lnprob / wf.wfLength
+    like_arr[idx] = -1*wf.lnprob / wf.wfLength
 #    ae_arr[idx] = wf.ae
+#    print wf.ae
 
   #real cheap energy "cut" to differentiate peaks
   dep_idxs = np.where(energy_arr < 1800)
@@ -54,68 +53,45 @@ def main(argv):
   print "DEP events: %d" % dep_idxs[0].size
   print "SEP events: %d" % sep_idxs[0].size
 
-#  like_arr[ np.where( np.isfinite(like_arr) == 0) ] = np.nan
-#
-#  like_arr_dep = like_arr[dep_idxs]
-#  like_arr_sep = like_arr[sep_idxs]
+  like_arr[ np.where( np.isfinite(like_arr) == 0) ] = 10000
+  like_arr[ np.where( np.isnan(like_arr)) ] = 10000
+  like_arr_dep = like_arr[dep_idxs]
+  like_arr_sep = like_arr[sep_idxs]
 
 #  ae_arr_dep = ae_arr[dep_idxs]
-#  ae_arr_dep = ae_arr[sep_idxs]
+#  ae_arr_sep = ae_arr[sep_idxs]
   energy_arr_dep = energy_arr[dep_idxs]
   energy_arr_sep = energy_arr[sep_idxs]
 
-#
-#  sep_bins = np.arange(sep_energy-side_padding, sep_energy+side_padding+binwidth, binwidth)
-#  (sep_nocut,bins) = np.histogram(energy_arr_sep, bins=sep_bins)
-#  bins_centered = sep_bins[:-1] + binwidth/2
-#  
-#  plt.figure()
-#  plt.errorbar(bins_centered, sep_nocut, yerr=np.sqrt(sep_nocut), color="black", fmt='o')
-#
-#  p0 = [sep_energy, 1.5,  500, 0.002, 0.03, 1.5, -288, 0.14, ]
-#
-#  c, pcov = curve_fit(radford_peak, bins_centered, sep_nocut,
-#                p0 = p0,
-#                sigma = np.sqrt(sep_nocut),
-#                bounds = ( [sep_energy-side_padding, 0,      0,       0,     0, 0,      -np.inf, -np.inf],
-#                           [sep_energy+side_padding, np.inf, np.inf, np.inf, 0.5, np.inf, np.inf,  np.inf])
-#                )
-#
-#  x0, sigma, a, hstep, htail, tau, bg0, bg1 = c
-#  print "Fit Coefficients:"
-#  print x0, sigma, a, hstep, htail, tau, bg0, bg1
-##  a_nocut = c[2]
-#
-#  energies = np.linspace(sep_energy - side_padding, sep_energy + side_padding, 1000)
-#  plt.plot(energies, radford_peak(energies, *c), color="red")
-#
-#  plt.plot(energies, gaussian(energies, x0, sigma, a, htail) + bg(energies, bg0, bg1), color="blue")
-#  plt.plot(energies, low_energy_tail(energies, x0, sigma, a, htail, tau) + bg(energies, bg0, bg1), color="green")
-#  plt.plot(energies, step(energies, x0, sigma, a, hstep)+ bg(energies, bg0, bg1), color="purple")
-#  
-#  plt.xlim(sep_energy - side_padding, sep_energy + side_padding)
-#
-#  value = raw_input('  --> Press q to quit, any other key to continue\n')
-#  if value == 'q': exit(0)
-#
-########
-#  exit()
-#  #####
-
+  hist_max = 10
+  bins = np.linspace(0, hist_max, 25)
+  (hist_dep,___) = np.histogram(like_arr_dep, bins=bins)
+  (hist_sep,___) = np.histogram(like_arr_sep, bins=bins)
 
   plt.figure()
-  plt.hist(like_arr_dep[ np.where( like_arr_dep < 20) ], 80)
-  plt.figure()
-  plt.hist(like_arr_sep[ np.where( like_arr_sep < 20) ], 80)
+  plt.plot(bins[:-1], hist_dep, ls="steps-post", color="blue", label="DEP")
+  plt.plot(bins[:-1], hist_sep, ls="steps-post", color="red", label="SEP")
+  plt.xlabel( "normalized ln posterior" )
+  plt.legend(loc=1)
+  plt.savefig("mse_lnprob_hist.png")
+
+  value = raw_input('  --> Press q to quit, any other key to continue\n')
+  if value == 'q': exit(0)
+
+  cut_like = 100
+#  fit_peak(sep_energy, energy_arr_sep, like_arr_sep, cut_like,)# ae_arr_sep)
+  fit_peak(dep_energy, energy_arr_dep, like_arr_dep, cut_like,)# ae_arr_dep)
+
+  value = raw_input('  --> Press q to quit, any other key to continue\n')
+  if value == 'q': exit(0)
+
   
-  
-  cut_like = 2.5
+
   dep_pass = energy_arr_dep[ np.where( like_arr_dep < cut_like) ]
   sep_pass = energy_arr_sep[ np.where( like_arr_sep < cut_like) ]
 
 
   #DEP hists
-  binwidth = 0.5
 
   dep_bins = np.arange(1597-15, 1597+15+binwidth, binwidth)
   (dep_nocut,bins) = np.histogram(energy_arr_dep, bins=dep_bins)
@@ -124,16 +100,88 @@ def main(argv):
   plt.plot(bins[:-1], dep_nocut, ls='steps-post', color="black")
   plt.plot(bins[:-1], dep_cut, ls='steps-post', color="blue")
 
+  plt.savefig("mse_dep_peak_%0.2fcutoff.png" % cut_like)
+
   sep_bins = np.arange(2109-15, 2109+15+binwidth, binwidth)
   (sep_nocut,bins) = np.histogram(energy_arr_sep, bins=sep_bins)
   (sep_cut,bins) = np.histogram(sep_pass, bins=sep_bins)
   plt.figure()
   plt.plot(bins[:-1], sep_nocut, ls='steps-post', color="black")
-  plt.plot(bins[:-1], sep_cut, ls='steps-post', color="blue")
+  plt.plot(bins[:-1], sep_cut, ls='steps-post', color="red")
+
+  plt.savefig("mse_sep_peak_%0.2fcutoff.png" % cut_like)
 
   value = raw_input('  --> Press q to quit, any other key to continue\n')
   if value == 'q': exit(0)
 
+
+def fit_peak(energy, energy_array, like_array, cut_like, ae_arr=None):
+  bins = np.arange(energy-side_padding, energy+side_padding+binwidth, binwidth)
+  (hist_nocut,___) = np.histogram(energy_array, bins=bins)
+  bins_centered = bins[:-1] + binwidth/2
+  
+  plt.figure()
+  energies = np.linspace(energy - side_padding, energy + side_padding, 1000)
+  plt.errorbar(bins_centered, hist_nocut, yerr=np.sqrt(hist_nocut), color="black", fmt='o')
+
+  p0 = [energy, 1.5,  500, 20,  ]
+  
+#  plt.plot(energies, gaussian_with_background(energies, *p0), color="black", label="Before Cut")
+#  value = raw_input('  --> Press q to quit, any other key to continue\n')
+#  if value == 'q': exit(0)
+
+  c, pcov = curve_fit(gaussian_with_background, bins_centered, hist_nocut,
+                p0 = p0,
+                sigma = np.sqrt(hist_nocut),
+                bounds = ( [energy-side_padding, 0,      0,        0, ],
+                           [energy+side_padding, np.inf, np.inf,   np.inf,  ])
+                )
+
+  x0, sigma, a_nocut, bg0,  = c
+  print "Fit Coefficients:"
+  print x0, sigma, a_nocut, bg0,
+#  a_nocut = c[2]
+
+
+  plt.plot(energies, gaussian_with_background(energies, *c), color="black", label="Before Cut")
+  
+  
+  energies_pass = energy_array[ np.where( like_array < cut_like) ]
+  (hist_cut,___) = np.histogram(energies_pass, bins=bins)
+  c, pcov = curve_fit(gaussian_with_background, bins_centered, hist_cut,
+                p0 = c,
+                sigma = np.sqrt(hist_cut),
+                bounds = ( [c[0]-1E-6, c[1]-1E-6,      0,   0,],
+                           [c[0]+1E-6, c[1]+1E-6, np.inf,   np.inf,  ])
+                )
+  
+  a_cut = c[2]
+  
+  print "Total reduction: %0.2f%%" % (a_cut/a_nocut*100)
+  
+  plt.errorbar(bins_centered, hist_cut, yerr=np.sqrt(hist_cut), color="red", fmt='o')
+  plt.plot(energies, gaussian_with_background(energies, *c), color="red", label="After Cut (%0.2f%%)" % (a_cut/a_nocut*100))
+  
+  if ae_arr is not None:
+    energies_aepass = energy_array[ np.where( ae_arr > 2.4) ]
+    (hist_ae,___) = np.histogram(energies_aepass, bins=bins)
+    plt.errorbar(bins_centered, hist_ae, yerr=np.sqrt(hist_ae), color="blue", fmt='o')
+    
+
+#  plt.plot(energies, gaussian(energies, x0, sigma, a, htail) + bg(energies, bg0, bg1), color="blue")
+#  plt.plot(energies, low_energy_tail(energies, x0, sigma, a, htail, tau) + bg(energies, bg0, bg1), color="green")
+#  plt.plot(energies, step(energies, x0, sigma, a, hstep)+ bg(energies, bg0, bg1), color="purple")
+
+  plt.xlim(energy - side_padding, energy + side_padding)
+  plt.legend(loc=2)
+
+
+
+def gaussian_with_background(x, x0, sigma, a,  bg0, ):
+#    bg_term = bg(x, bg0, bg1)
+    gauss_term = gaussian(x, x0, sigma, a, htail=0)
+
+    return gauss_term + bg0
 
 def radford_peak(x, x0, sigma, a, hstep, htail, tau, bg0, bg1):
     bg_term = bg0 + x*bg1
