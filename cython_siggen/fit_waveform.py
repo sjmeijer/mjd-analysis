@@ -42,21 +42,21 @@ def main(argv):
     exit(0)
   
   #Prepare detector
-  tempGuess = 79.521935
-  gradGuess = 0.050133
-  pcRadGuess = 2.475948
-  pcLenGuess = 1.563903
+  tempGuess = 79.204603
+  gradGuess = 0.05
+  pcRadGuess = 2.5
+  pcLenGuess = 1.6
 
   #Create a detector model
   detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
   det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize,)
   det.LoadFields("P42574A_fields_v3.npz")
-  det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
-  
-  b_over_a = 0.108743
-  c = -0.813711
-  d = 0.821123
-  rc = 75.452810
+  det.SetFields(pcRadGuess, pcLenGuess, gradGuess, "full")
+
+  b_over_a = 0.107077
+  c = -0.817381
+  d = 0.825026
+  rc = 76.551780
   det.SetTransferFunction(b_over_a, c, d, rc)
   
   initializeDetector(det, )
@@ -66,7 +66,7 @@ def main(argv):
   
   for (idx,wf) in enumerate(wfs):
     print "wf number %d" % idx
-    if idx < 77: continue
+    if idx < 130: continue
     if wf.energy > 1800: continue
     
     lnprob = -1*wf.lnprob/wf.wfLength
@@ -88,7 +88,7 @@ def main(argv):
     ax1.set_ylabel("Residual")
     
     
-    wf.WindowWaveformTimepoint(fallPercentage=.995, rmsMult=2)
+    wf.WindowWaveformTimepoint(fallPercentage=.999, rmsMult=2)
     initializeWaveform(wf)
     dataLen = wf.wfLength
     t_data = np.arange(dataLen) * 10
@@ -104,18 +104,24 @@ def main(argv):
     minresult = None
     minlike = np.inf
   
-    for r in np.linspace(0, np.floor(det.detector_radius), 5):
-      for z in np.linspace(0, np.floor(det.detector_length), 5):
-        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
+    for r in np.linspace(4, np.floor(det.detector_radius)-3, 6):
+      for z in np.linspace(4, np.floor(det.detector_length)-3, 6):
+#        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
           if not det.IsInDetector(r,0,z): continue
-          startGuess = [r, np.pi/8, z, wf.wfMax, t0_guess, 10]
-          result = op.minimize(nll, startGuess,   method="Powell")
+          startGuess = [r, np.pi/8, z, wf.wfMax, wf.t0Guess-5, 10]
+          result = op.minimize(nll, startGuess,   method="Nelder-Mead")
           r, phi, z, scale, t0, smooth, = result["x"]
           ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
-  #        if np.amax(ml_wf[:dataLen]) < 4000: continue
-          ax0.plot(t_data, ml_wf[:dataLen], color="b")
-          ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="b")
-    
+          if ml_wf is None:
+            print r, z
+            continue
+          
+          try:
+            ax0.plot(t_data, ml_wf[:dataLen], color="b")
+            ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="b")
+          except ValueError:
+            print r, z
+            print ml_wf
           if result['fun'] < minlike:
             minlike = result['fun']
             minresult = result
