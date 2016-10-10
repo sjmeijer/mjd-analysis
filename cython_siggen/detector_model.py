@@ -100,9 +100,9 @@ class Detector:
     
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
 ###########################################################################################################################
-  def SetFields(self, pcRad, pcLen, impurityGrad, method="full"):
+  def SetFields(self, pcRad, pcLen, impurityGrad, method="nearest"):
     if method=="nearest":
-      print "WARNING: DOING A CHEAP FIELD SET"
+#      print "WARNING: DOING A CHEAP FIELD SET"
       return self.SetFieldsByNearest(pcRad, pcLen, impurityGrad)
     else:
       return self.SetFieldsFullInterp(pcRad, pcLen, impurityGrad)
@@ -231,7 +231,7 @@ class Detector:
     
     RC_in_us*= 1E-6
   
-    self.rc_for_tf = np.exp(-1./1E9/RC_in_us)
+    self.rc_for_tf = np.exp(-1./1E8/RC_in_us)
   
   def SetTransferFunctionByTF(self, num, den):
     #should already be discrete params
