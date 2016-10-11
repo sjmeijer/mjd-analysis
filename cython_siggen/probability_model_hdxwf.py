@@ -19,27 +19,26 @@ def initializeDetectorAndWaveform(det, wf_init):
 
 def lnprob_waveform(theta):
   '''Bayes theorem'''
-  r, phi, z, scale, t0, smooth,temp, zero_1 = theta
+  r, phi, z, scale, t0, smooth,temp, b_over_a, c, d, rc  = theta
   lp = lnprior_waveform(r, phi, z, scale, t0, smooth , )
   if not np.isfinite(lp):
     return -np.inf
   return lp + lnlike_waveform(theta, )
 
 def lnlike_waveform(theta):
-  r_det, phi, z_det, scale, t0, smooth, temp, zero_1,  = theta
+  r_det, phi, z_det, scale, t0, smooth, temp,  b_over_a, c, d, rc   = theta
 #  r, phi, z, scale, t0,  = theta
 
-  pole_1 = 0.999848
-  pole_real = 0.798211
-  pole_imag = 0.079924
+  if temp < 40 or temp > 120: return -np.inf
 
-  zeros = [zero_1, -1., 1. ]
-  poles = [pole_1, pole_real+pole_imag*1j, pole_real-pole_imag*1j, ]
-  detector.SetTransferFunction(zeros, poles)
-  
+#  if collection_rc < 0: return -np.inf
+#  detector.collection_rc = collection_rc
+
+#  rc=72
+
+  detector.SetTransferFunction(b_over_a, c, d, rc)
   detector.SetTemperature(temp)
   
-
 #  r_det = np.cos(theta) * r
 #  z_det = np.sin(theta) * r
 
