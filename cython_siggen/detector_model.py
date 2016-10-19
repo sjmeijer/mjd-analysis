@@ -225,13 +225,18 @@ class Detector:
     
     self.siggenInst.SetTemperature(h_temp, e_temp)
 ###########################################################################################################################
-  def SetTransferFunction(self, b_over_a, c, d, RC_in_us):
+  def SetTransferFunction(self, b_over_a, c, d, RC1_in_us, RC2_in_us, rc1_frac):
     self.num = [1., b_over_a, 0.]
     self.den = [1., 2.*c, d**2]
     
-    RC_in_us*= 1E-6
+    RC1_in_us*= 1E-6
+    self.rc1_for_tf = np.exp(-1./1E8/RC1_in_us)
   
-    self.rc_for_tf = np.exp(-1./1E8/RC_in_us)
+    RC2_in_us*= 1E-6
+    self.rc2_for_tf = np.exp(-1./1E8/RC2_in_us)
+  
+    self.rc1_frac = rc1_frac
+  
   
   def SetTransferFunctionByTF(self, num, den):
     #should already be discrete params
@@ -364,7 +369,10 @@ class Detector:
     self.processed_siggen_data[:outputLength]= signal.lfilter(self.num, self.den, self.processed_siggen_data[:outputLength])
 
     #filter for the exponential decay
-    self.processed_siggen_data[:outputLength]= signal.lfilter([1., -1], [1., -self.rc_for_tf], self.processed_siggen_data[:outputLength])
+    rc2_num_term = self.rc1_for_tf*self.rc1_frac - self.rc1_for_tf - self.rc2_for_tf*self.rc1_frac
+    self.processed_siggen_data[:outputLength]= signal.lfilter([1., -1], [1., -self.rc1_for_tf], self.processed_siggen_data[:outputLength])
+    self.processed_siggen_data[:outputLength]= signal.lfilter([1., rc2_num_term], [1., -self.rc2_for_tf], self.processed_siggen_data[:outputLength])
+    
     
     smax = np.amax(self.processed_siggen_data[:outputLength])
     
