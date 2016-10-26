@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import scipy.optimize as op
 import numpy as np
 import emcee
+from emcee.utils import MPIPool
 from scipy import signal
 
 import helpers
