@@ -93,20 +93,6 @@ def main():
     wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2,)
     r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx]  = results[idx]['x']
 #    t0_arr[idx] -= 15
-  #Plot the waveforms to take a look at the initial guesses
-  if True:
-    plt.ion()
-    fig = plt.figure()
-    for (idx,wf) in enumerate(wfs):
-      
-      print "WF number %d:" % idx
-      print "  >>r: %f\n  >>phi %f\n  >>z %f\n  >>e %f\n  >>t0 %f\n >>smooth %f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx])
-      ml_wf = det.MakeSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples, h_smoothing = smooth_arr[idx])
-      plt.plot(ml_wf, color="b")
-      plt.plot(wf.windowedWf, color="r")
-    value = raw_input('  --> Press q to quit, any other key to continue\n')
-    plt.ioff()
-    if value == 'q': exit(0)
 
   #Initialize the multithreading
 #  p = Pool(numThreads, initializer=initializeDetectorAndWaveforms, initargs=[det, wfs])
