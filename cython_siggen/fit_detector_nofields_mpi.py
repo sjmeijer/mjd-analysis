@@ -100,8 +100,8 @@ def main():
 
   initializeDetectorAndWaveforms(det, wfs)
   p = MPIPool()
-  if not pool.is_master():
-    pool.wait()
+  if not p.is_master():
+    p.wait()
     sys.exit(0)
 
   #Do the MCMC
