@@ -26,9 +26,8 @@ def main():
   ndim = 6*numWaveforms + 7
   nwalkers = 25*ndim
   
-  iter=100
-  burnIn = 90
-  wfPlotNumber = 10
+  iter=10000
+  burnIn = 9000
   
 ######################
 
