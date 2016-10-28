@@ -229,11 +229,11 @@ class Detector:
     self.num = [1., b_over_a, 0.]
     self.den = [1., 2.*c, d**2]
     
-    RC1_in_us*= 1E-6
-    self.rc1_for_tf = np.exp(-1./1E8/RC1_in_us)
+    RC1= 1E-6 * (RC1_in_us)
+    self.rc1_for_tf = np.exp(-1./1E8/RC1)
   
-    RC2_in_us*= 1E-6
-    self.rc2_for_tf = np.exp(-1./1E8/RC2_in_us)
+    RC2 = 1E-6 * (RC2_in_us)
+    self.rc2_for_tf = np.exp(-1./1E8/RC2)
   
     self.rc1_frac = rc1_frac
   
