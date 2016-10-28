@@ -100,12 +100,53 @@ class Detector:
     
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
 ###########################################################################################################################
-  def SetFields(self, pcRad, pcLen, impurityGrad, method="nearest"):
+  def LoadFieldsGrad(self, fieldFileName):
+    self.fieldFileName = fieldFileName
+  
+    with np.load(fieldFileName) as data:
+      data = np.load(fieldFileName)
+      wpArray  = data['wpArray']
+      efld_rArray = data['efld_rArray']
+      efld_zArray = data['efld_zArray']
+      gradList = data['gradList']
+    
+    self.gradList = gradList
+
+    r_space = np.arange(0, wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4'))
+    z_space = np.arange(0, wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4'))
+
+    self.wpArray = wpArray
+    self.efld_rArray = efld_rArray
+    self.efld_zArray = efld_zArray
+
+    self.efld_r_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, ), efld_rArray, )
+    self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList,), efld_zArray,)
+    
+    (self.rr, self.zz) = np.meshgrid(r_space, z_space)
+
+  def SetFields(self, pcRad, pcLen, impurityGrad, method="full"):
     if method=="nearest":
 #      print "WARNING: DOING A CHEAP FIELD SET"
       return self.SetFieldsByNearest(pcRad, pcLen, impurityGrad)
     else:
       return self.SetFieldsFullInterp(pcRad, pcLen, impurityGrad)
+
+  def SetFieldsGradInterp(self, impurityGrad):
+
+    self.impurityGrad = impurityGrad
+    rr = self.rr
+    zz = self.zz
+    efld_r_function = self.efld_r_function
+    efld_z_function = self.efld_z_function
+
+    gradgrad = np.ones_like(rr) * impurityGrad
+    
+    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), ], dtype=np.dtype('f4') ).T
+
+    new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+    new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+  
+    self.siggenInst.SetFields(new_ef_r, new_ef_z, self.wpArray)
 
   def SetFieldsFullInterp(self, pcRad, pcLen, impurityGrad):
     self.pcRad = pcRad
@@ -181,21 +222,21 @@ class Detector:
 #    points_wp =  np.array([rr.flatten() , zz.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
 #    new_wp[min_distance_r*10:len(r_space)+min_distance_r*10,  min_distance_z*10:len(z_space)+min_distance_z*10] =  wp_function( points_wp ).reshape(rr.shape).T
 
-#    min_distance_r = 1.5
-#    min_distance_z = 1.5
-#    r_space = np.around(np.arange(min_distance_r, 5 , 0.1, dtype=np.dtype('f4')),1)
-#    z_space = np.around(np.arange(min_distance_z, 5 , 0.1, dtype=np.dtype('f4')),1)
-#    rr, zz = np.meshgrid(r_space, z_space)
-#    radrad = np.ones_like(rr) * pcRad
-#    lenlen = np.ones_like(rr) * pcLen
-#    gradgrad = np.ones_like(rr) * impurityGrad
-#    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
-#    new_ef_r[min_distance_r*10:len(r_space)+min_distance_r*10,  min_distance_z*10:len(z_space)+min_distance_z*10] = efld_r_function( points_ef ).reshape(rr.shape).T
-#    
-    min_distance_r = 1.5
-    min_distance_z = 1.5
+    min_distance_r = 0
+    min_distance_z = 0
+    r_space = np.around(np.arange(min_distance_r, self.wpArray.shape[0]/10 , 0.1, dtype=np.dtype('f4')),1)
+    z_space = np.around(np.arange(min_distance_z, self.wpArray.shape[1]/10 , 0.1, dtype=np.dtype('f4')),1)
+    rr, zz = np.meshgrid(r_space, z_space)
+    radrad = np.ones_like(rr) * pcRad
+    lenlen = np.ones_like(rr) * pcLen
+    gradgrad = np.ones_like(rr) * impurityGrad
+    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
+    new_ef_r[min_distance_r*10:len(r_space)+min_distance_r*10,  min_distance_z*10:len(z_space)+min_distance_z*10] = efld_r_function( points_ef ).reshape(rr.shape).T
+    
+    min_distance_r = 0#1.5
+    min_distance_z = 0#1.5
     r_space = np.around(np.arange(min_distance_r, self.wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4')),1)
-    z_space = np.around(np.arange(min_distance_z, 15 , 0.1, dtype=np.dtype('f4')),1)
+    z_space = np.around(np.arange(min_distance_z, self.wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4')),1)
     rr, zz = np.meshgrid(r_space, z_space)
     radrad = np.ones_like(rr) * pcRad
     lenlen = np.ones_like(rr) * pcLen
@@ -204,8 +245,18 @@ class Detector:
     new_ef_z[np.int(min_distance_r*10):len(r_space)+np.int(min_distance_r*10),  np.int(min_distance_z*10):len(z_space)+np.int(min_distance_z*10)] =  efld_z_function( points_ef ).reshape(rr.shape).T
     
 #    import matplotlib.pyplot as plt
-#    plt.imshow(new_wp[r_idxs,:][:,z_idxs].T - np.array( wp_function( points_wp ).reshape(rr.shape).T).T , origin='lower')
+##    plt.imshow(np.abs(new_wp.T - self.wpArray[:,:,rad_idx, len_idx][:,:,0].T) , origin='lower'
+#    plt.imshow(np.sqrt(np.add(new_ef_r.T**2, new_ef_z.T**2)) , origin='lower')
 #    plt.colorbar()
+#    
+#    plt.figure()
+#    plt.imshow(np.abs(new_ef_z.T - self.efld_zArray[:,:,grad_idx,rad_idx, len_idx][:,:,0].T)  , origin='lower')
+#    plt.colorbar()
+#    
+#    plt.figure()
+#    plt.imshow(np.abs(new_ef_r.T - self.efld_rArray[:,:,grad_idx,rad_idx, len_idx][:,:,0].T) , origin='lower')
+#    plt.colorbar()
+#    
 #    plt.show()
 #    exit()
 
