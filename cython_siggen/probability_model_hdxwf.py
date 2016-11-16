@@ -19,26 +19,48 @@ def initializeDetectorAndWaveform(det, wf_init):
 
 def lnprob_waveform(theta):
   '''Bayes theorem'''
-  r, phi, z, scale, t0, smooth,temp, b_over_a, c, d, rc  = theta
+  r, phi, z, scale, t0, smooth, temp,  b_over_a, c,d, rc1, rc2, rcfrac, grad  = theta
   lp = lnprior_waveform(r, phi, z, scale, t0, smooth , )
+  if rcfrac > 1: return -np.inf
+  if rc1 < 0 or rc2 <0: return -np.inf
   if not np.isfinite(lp):
     return -np.inf
+  
+  gradList  = detector.gradList
+#  pcRadList =  detector.pcRadList
+#  pcLenList =  detector.pcLenList
+#  
+#  if pcRad < pcRadList[0] or pcRad > pcRadList[-1]:
+#    return -np.inf
+#  if pcLen < pcLenList[0] or pcLen > pcLenList[-1]:
+#    return -np.inf
+  if grad < gradList[0] or grad > gradList[-1]:
+    return -np.inf
+#  if temp <40 or temp > 120:
+#    return -np.inf
+
   return lp + lnlike_waveform(theta, )
 
 def lnlike_waveform(theta):
-  r_det, phi, z_det, scale, t0, smooth, temp,  b_over_a, c, d, rc   = theta
+  r_det, phi, z_det, scale, t0, smooth, temp,  b_over_a, c,d, rc1, rc2, rcfrac, grad  = theta
 #  r, phi, z, scale, t0,  = theta
-
-  if temp < 40 or temp > 120: return -np.inf
 
 #  if collection_rc < 0: return -np.inf
 #  detector.collection_rc = collection_rc
 
 #  rc=72
 
-  detector.SetTransferFunction(b_over_a, c, d, rc)
+  if rcfrac > 1: return -np.inf
+
+  detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
   detector.SetTemperature(temp)
   
+  if detector.impurityGrad != grad:
+#      print "   actually setting the grad!!"
+      detector.SetFieldsGradInterp(grad)
+#  if detector.pcRad != pcRad or detector.pcLen != pcLen or detector.impurityGrad != impGrad:
+#    detector.SetFields(pcRad, pcLen, impGrad)
+
 #  r_det = np.cos(theta) * r
 #  z_det = np.sin(theta) * r
 
