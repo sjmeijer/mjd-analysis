@@ -100,7 +100,7 @@ class Detector:
     
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
 ###########################################################################################################################
-  def LoadFieldsGrad(self, fieldFileName):
+  def LoadFieldsGrad(self, fieldFileName, pcLen, pcRad):
     self.fieldFileName = fieldFileName
   
     with np.load(fieldFileName) as data:
@@ -111,6 +111,8 @@ class Detector:
       gradList = data['gradList']
     
     self.gradList = gradList
+    self.pcLen = pcLen
+    self.pcRad = pcRad
 
     r_space = np.arange(0, wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4'))
     z_space = np.arange(0, wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4'))
@@ -145,7 +147,11 @@ class Detector:
 
     new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
     new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
-  
+
+#    grad_idx = find_nearest_idx(self.gradList, impurityGrad)
+#    new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx][:,:,0])
+#    new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx][:,:,0])
+
     self.siggenInst.SetFields(new_ef_r, new_ef_z, self.wpArray)
 
   def SetFieldsFullInterp(self, pcRad, pcLen, impurityGrad):
@@ -347,8 +353,8 @@ class Detector:
     if hole_wf is None:
       return None
 
-    if h_smoothing is not None:
-      ndimage.filters.gaussian_filter1d(hole_wf, h_smoothing, output=hole_wf)
+#    if h_smoothing is not None:
+#      ndimage.filters.gaussian_filter1d(hole_wf, h_smoothing, output=hole_wf)
 
 #    #currently just correct cloud size for holes
 #    if cloud_size > 0:
@@ -368,10 +374,13 @@ class Detector:
     if electron_wf is  None:
       return None
 
-    if h_smoothing is not None:
-      ndimage.filters.gaussian_filter1d(electron_wf, h_smoothing, output=electron_wf)
-  
+#    if h_smoothing is not None:
+#      ndimage.filters.gaussian_filter1d(electron_wf, h_smoothing, output=electron_wf)
+
     self.raw_siggen_data += electron_wf[::ratio]
+    
+    if h_smoothing is not None:
+      ndimage.filters.gaussian_filter1d(self.raw_siggen_data, h_smoothing/ratio, output=self.raw_siggen_data)
 
     sim_wf = self.ProcessWaveform(self.raw_siggen_data, numSamples, scale, switchpoint)
     return sim_wf
