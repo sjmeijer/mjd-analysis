@@ -38,6 +38,8 @@ class Detector:
     self.zz = None
     self.wp_pp = None
     
+    self.trapping_rc = None
+    
     #stuff for waveform interpolation
     #round here to fix floating point accuracy problem
     data_to_siggen_size_ratio = np.around(10. / self.time_step_size,3)
@@ -363,12 +365,12 @@ class Detector:
     self.raw_siggen_data += hole_wf[::ratio]
     
     #charge trapping (for holes only), currently not being used
-#    if self.collection_rc is not None:
-#      collection_rc = self.collection_rc * 1E-6
-#      collection_rc_exp = np.exp(-1./1E8/collection_rc)
-#      self.raw_siggen_data= signal.lfilter([1., -1], [1., -collection_rc_exp], self.raw_siggen_data)
-#      holes_collected_idx = np.argmax(self.raw_siggen_data)
-#      self.raw_siggen_data[holes_collected_idx:] = self.raw_siggen_data[holes_collected_idx]
+    if self.trapping_rc is not None:
+      trapping_rc = self.trapping_rc * 1E-6
+      trapping_rc_exp = np.exp(-1./1E8/trapping_rc)
+      self.raw_siggen_data= signal.lfilter([1., -1], [1., -trapping_rc_exp], self.raw_siggen_data)
+      holes_collected_idx = np.argmax(self.raw_siggen_data)
+      self.raw_siggen_data[holes_collected_idx:] = self.raw_siggen_data[holes_collected_idx]
 
     electron_wf = self.MakeRawSiggenWaveform(r, phi, z, -1)
     if electron_wf is  None:
