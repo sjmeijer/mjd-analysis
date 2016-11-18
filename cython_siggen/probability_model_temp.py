@@ -36,13 +36,14 @@ def lnprob(theta):
 def lnlike_detector(theta):
   '''assumes the data comes in w/ 10ns sampling period'''
 
-  temp, b_over_a, c, d, rc1, rc2, rcfrac = theta[-7:]
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-7].reshape((6, len(wf_arr)))
+  temp, trapping_rc, b_over_a, c, d, rc1, rc2, rcfrac = theta[-8:]
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-8].reshape((6, len(wf_arr)))
 
   if temp <40 or temp > 120:
     return -np.inf
   
   detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
+  detector.trapping_rc = trapping_rc
   
   if temp != detector.temperature:
     detector.SetTemperature(temp)
@@ -94,8 +95,8 @@ def lnprior(theta):
      Normal prior on energy scale with sigma = 0.1 * wfMax
   '''
   
-  temp, b_over_a, c, d, rc1, rc2, rcfrac = theta[-7:]
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-7].reshape((6, len(wf_arr)))
+  temp, trapping_rc, b_over_a, c, d, rc1, rc2, rcfrac = theta[-8:]
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-8].reshape((6, len(wf_arr)))
 
   if temp <40 or temp > 120:
 #    print "bad prior temp %f" % temp
@@ -104,6 +105,7 @@ def lnprior(theta):
     temp_prior = stats.norm.pdf(temp, loc=78., scale=5. )
   if rcfrac > 1: return -np.inf
   if rc1 < 0 or rc2 <0: return -np.inf
+  if trapping_rc < 0: return -np.inf
 
   totalPrior = 0
   for (wf_idx) in np.arange(r_arr.size):

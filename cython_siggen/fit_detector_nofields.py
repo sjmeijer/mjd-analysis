@@ -16,17 +16,20 @@ from progressbar import ProgressBar, Percentage, Bar, ETA
 from timeit import default_timer as timer
 from multiprocessing import Pool
 
+import probability_model_waveform as mlw
+nll = lambda *args: -mlw.lnlike_waveform(*args)
+
 def main():
 ##################
 #These change a lot
-  numWaveforms = 12
+  numWaveforms = 11
   numThreads = 8
   
-  ndim = 6*numWaveforms + 7
-  nwalkers = 25*ndim
+  ndim = 6*numWaveforms + 8
+  nwalkers = 50*ndim
   
-  iter=10000
-  burnIn = 9000
+  iter=5000
+  burnIn = 4800
   wfPlotNumber = 50
   
 ######################
@@ -35,12 +38,12 @@ def main():
 
 #  plt.ion()
 
-  fitSamples = 350
+  fitSamples = 200
   timeStepSize = 1. #ns
   
   #Prepare detector
   tempGuess = 79.310080
-  gradGuess = 0.05
+  gradGuess = 0.04
   pcRadGuess = 2.5
   pcLenGuess = 1.6
 
@@ -51,15 +54,20 @@ def main():
   det.SetFields(pcRadGuess, pcLenGuess, gradGuess)
   
   b_over_a = 0.107213
-  c = -0.821158
-  d = 0.828957
+  c = -0.815152
+  d = 0.822696
   rc1 = 74.4
   rc2 = 1.79
   rcfrac = 0.992
+  trapping_rc = 120#us
   det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
+  det.trapping_rc = trapping_rc
   
-  tempIdx = -7
-  #and the remaining 4 are for the transfer function
+  mlw.initializeDetector(det, )
+  
+  tempIdx = -8
+  trapIdx = -7
+  #and the remaining 6 are for the transfer function
   fig_size = (20,10)
   
   #Create a decent start guess by fitting waveform-by-waveform
@@ -70,6 +78,10 @@ def main():
     data = np.load(wfFileName)
     results = data['results']
     wfs = data['wfs']
+    
+    wfs = np.delete(wfs, [2])
+    results = np.delete(results, [2])
+#    results = results[::3]
     
 #    wfs = wfs[::3]
 #    results = results[::3]
@@ -89,9 +101,14 @@ def main():
   simWfArr = np.empty((1,numWaveforms, fitSamples))
 
   #Prepare the initial value arrays
+#  plt.ion()
+#  fig = plt.figure()
   for (idx, wf) in enumerate(wfs):
-    wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2,)
+    wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2,)
     r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx]  = results[idx]['x']
+#    plt.plot(wf.windowedWf)
+#    value = raw_input('  --> Press q to quit, any other key to continue\n')
+
 #    t0_arr[idx] -= 15
   #Plot the waveforms to take a look at the initial guesses
   if True:
@@ -100,13 +117,35 @@ def main():
     for (idx,wf) in enumerate(wfs):
       
       print "WF number %d:" % idx
+      mlw.initializeWaveform(wf)
+      
+      minresult = None
+      minlike = np.inf
+  
+      for r in np.linspace(4, np.floor(det.detector_radius)-3, 6):
+        for z in np.linspace(4, np.floor(det.detector_length)-3, 6):
+  #        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
+            if not det.IsInDetector(r,0,z): continue
+            startGuess = [r, np.pi/8, z, wf.wfMax, wf.t0Guess-5, 10]
+            result = op.minimize(nll, startGuess,   method="Nelder-Mead")
+            r, phi, z, scale, t0, smooth, = result["x"]
+            ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
+            if ml_wf is None:
+              print r, z
+              continue
+            if result['fun'] < minlike:
+              minlike = result['fun']
+              minresult = result
+      
+      r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx]  = minresult['x']
+      
       print "  >>r: %f\n  >>phi %f\n  >>z %f\n  >>e %f\n  >>t0 %f\n >>smooth %f" % (r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], smooth_arr[idx])
       ml_wf = det.MakeSimWaveform(r_arr[idx], phi_arr[idx], z_arr[idx], scale_arr[idx], t0_arr[idx], fitSamples, h_smoothing = smooth_arr[idx])
       plt.plot(ml_wf, color="b")
       plt.plot(wf.windowedWf, color="r")
-    value = raw_input('  --> Press q to quit, any other key to continue\n')
+#    value = raw_input('  --> Press q to quit, any other key to continue\n')
     plt.ioff()
-    if value == 'q': exit(0)
+#    if value == 'q': exit(0)
 
   #Initialize the multithreading
   p = Pool(numThreads, initializer=initializeDetectorAndWaveforms, initargs=[det, wfs])
@@ -114,7 +153,7 @@ def main():
 
   #Do the MCMC
   mcmc_startguess = np.hstack((r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:], smooth_arr[:],       # waveform-specific params
-                              tempGuess, b_over_a, c, d, rc1, rc2, rcfrac)) # detector-specific
+                              tempGuess, trapping_rc, b_over_a, c, d, rc1, rc2, rcfrac)) # detector-specific
 
   #number of walkers _must_ be even
   if nwalkers % 2:
@@ -134,6 +173,7 @@ def main():
     pos[5*numWaveforms:6*numWaveforms] = np.clip(pos[5*numWaveforms:6*numWaveforms], 0, 20.)
 
     pos[tempIdx] = np.clip(pos[tempIdx], 40, 120)
+    pos[trapIdx] = np.clip(pos[trapIdx], 0, np.inf)
     pos[rcfracidx] = np.clip(pos[rcfracidx], 0, 1)
     pos[rc2idx] = np.clip(pos[rc2idx], 0, np.inf)
     pos[rc1idx] = np.clip(pos[rc1idx], 0, np.inf)
@@ -198,13 +238,14 @@ def main():
   #and for the transfer function
   stepsFigTF = plt.figure(7, figsize=fig_size)
   plt.clf()
-  tf0 = stepsFigTF.add_subplot(711)
-  tf1 = stepsFigTF.add_subplot(712, sharex=ax0)
-  tf2 = stepsFigTF.add_subplot(713, sharex=ax0)
-  tf3 = stepsFigTF.add_subplot(714, sharex=ax0)
-  tf4 = stepsFigTF.add_subplot(715, sharex=ax0)
-  tf5 = stepsFigTF.add_subplot(716, sharex=ax0)
-  tf6 = stepsFigTF.add_subplot(717, sharex=ax0)
+  tf0 = stepsFigTF.add_subplot(811)
+  tf1 = stepsFigTF.add_subplot(812, sharex=ax0)
+  tf2 = stepsFigTF.add_subplot(813, sharex=ax0)
+  tf3 = stepsFigTF.add_subplot(814, sharex=ax0)
+  tf4 = stepsFigTF.add_subplot(815, sharex=ax0)
+  tf5 = stepsFigTF.add_subplot(816, sharex=ax0)
+  tf6 = stepsFigTF.add_subplot(817, sharex=ax0)
+  tf7 = stepsFigTF.add_subplot(818, sharex=ax0)
 
   tf0.set_ylabel('b_over_a')
   tf1.set_ylabel('c')
@@ -213,6 +254,7 @@ def main():
   tf4.set_ylabel('rc2')
   tf5.set_ylabel('rcfrac')
   tf6.set_ylabel('temp')
+  tf7.set_ylabel('trapping')
 
   for i in range(nwalkers):
     tf0.plot(sampler.chain[i,:,-6], "b", alpha=0.3) #2
@@ -222,6 +264,7 @@ def main():
     tf4.plot(sampler.chain[i,:,-2], "b", alpha=0.3) #3
     tf5.plot(sampler.chain[i,:,-1], "b", alpha=0.3) #3
     tf6.plot(sampler.chain[i,:,tempIdx], "b", alpha=0.3) #3
+    tf7.plot(sampler.chain[i,:,trapIdx], "b", alpha=0.3) #3
 
   plt.savefig("emcee_tfchain_%dwfs.png" % numWaveforms)
 
@@ -229,6 +272,7 @@ def main():
   samples = sampler.chain[:, burnIn:, :].reshape((-1, ndim))
 
   print "temp is %f" % np.median(samples[:,tempIdx])
+  print "trapping is %f" % np.median(samples[:,trapIdx])
   print "b_over_a is %f" % np.median(samples[:,-6])
   print "c is %f" % np.median(samples[:,-5])
   print "d is %f" % np.median(samples[:,-4])
@@ -241,9 +285,11 @@ def main():
 
   for idx, (theta) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
     temp  = theta[tempIdx]
+    trapping_rc  = theta[trapIdx]
     b_over_a, c, d, rc1, rc2, rcfrac = theta[-6:]
-    r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr  = theta[:-7].reshape((6, numWaveforms))
+    r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr  = theta[:-8].reshape((6, numWaveforms))
     det.SetTemperature(temp)
+    det.trapping_rc = trapping_rc
     
     det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
 
