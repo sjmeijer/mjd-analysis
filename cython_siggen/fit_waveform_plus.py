@@ -36,6 +36,7 @@ def main(argv):
   if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     wfs = data['wfs']
+    results = data['results']
     numWaveforms = wfs.size
   
   else:
@@ -44,7 +45,7 @@ def main(argv):
   
   
   tempGuess = 79.071172
-  gradGuess = 0.05
+  gradGuess = 0.04
   pcRadGuess = 2.5
   pcLenGuess = 1.6
 
@@ -56,15 +57,18 @@ def main(argv):
   det.SetFieldsGradInterp(gradGuess)
   
   b_over_a = 0.107213
-  c = -0.821158
-  d = 0.828957
+  c = -0.815152
+  d = 0.822696
   rc1 = 74.4
   rc2 = 1.79
   rcfrac = 0.992
+  trapping_rc = 40#us
   det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
-  
-#  collection_rc = 4
-#  det.collection_rc = collection_rc
+#  det.trapping_rc = trapping_rc #us
+  det.trapping_rc = trapping_rc
+
+#  trapping_rc = 4
+#  det.trapping_rc = trapping_rc
 
   initializeDetector(det, )
   pmw.initializeDetector(det, )
@@ -78,7 +82,7 @@ def main(argv):
 #  plt.ioff()
 
   for (wf_idx,wf) in enumerate(wfs):
-    if wf_idx <= 10: continue
+    if wf_idx <= 9: continue
 
     if wf.energy < 1700: continue
     
@@ -99,28 +103,33 @@ def main(argv):
     ax1.set_ylabel("Residual")
     
     ax0.plot(t_data, wf.windowedWf, color="r")
-    minresult = None
-    minlike = np.inf
+#    minresult = None
+#    minlike = np.inf
+##
+#    for r in np.linspace(4, np.floor(det.detector_radius)-3, 3):
+#      for z in np.linspace(4, np.floor(det.detector_length)-3, 3):
+##        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
+#          if not det.IsInDetector(r,0,z): continue
+#          startGuess = [r, np.pi/8, z, wf.wfMax, wf.t0Guess-5, 10]
+#          result = op.minimize(nll_wf, startGuess,   method="Nelder-Mead")
+#          r, phi, z, scale, t0, smooth, = result["x"]
+#          ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
+#          if ml_wf is None:
+#            print r, z
+#            continue
+#          if result['fun'] < minlike:
+#            minlike = result['fun']
+#            minresult = result
 #
-    for r in np.linspace(4, np.floor(det.detector_radius)-3, 3):
-      for z in np.linspace(4, np.floor(det.detector_length)-3, 3):
-#        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
-          if not det.IsInDetector(r,0,z): continue
-          startGuess = [r, np.pi/8, z, wf.wfMax, wf.t0Guess-5, 10]
-          result = op.minimize(nll_wf, startGuess,   method="Nelder-Mead")
-          r, phi, z, scale, t0, smooth, = result["x"]
-          ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
-          if ml_wf is None:
-            print r, z
-            continue
-          if result['fun'] < minlike:
-            minlike = result['fun']
-            minresult = result
-#
-    ax1.set_ylim(-20,20)
-    r, phi, z, scale, t0, smooth, = minresult["x"]
-    print r, phi, z, scale, t0, smooth
-#    r, phi, z, scale, t0, smooth = [7.25894086195, 0.32870896222, 7.07575510687, 6409.27531924, 23.955460672, 23.4334175104]
+#    ax1.set_ylim(-20,20)
+#    r, phi, z, scale, t0, smooth, = minresult["x"]
+#    print r, phi, z, scale, t0, smooth
+
+    r, phi, z, scale, t0, smooth  = results[wf_idx]['x']
+    startGuess = [r, phi, z, scale, t0, smooth]
+    result = op.minimize(nll_wf, startGuess,   method="Powell")
+    r, phi, z, scale, t0, smooth = result['x']
+
     ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
     ax0.plot(t_data, ml_wf[:dataLen], color="g")
     ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="g",)
@@ -130,10 +139,10 @@ def main(argv):
       exit(0)
     if value == 's': continue
 
-    mcmc_startguess = [r, phi, z, scale, t0, smooth, tempGuess,  b_over_a, c, d, rc1, rc2, rcfrac, gradGuess]#gradGuess, pcRadGuess, pcLenGuess   ]
+    mcmc_startguess = [r, phi, z, scale, t0, smooth, tempGuess,  b_over_a, trapping_rc, gradGuess]#gradGuess, pcRadGuess, pcLenGuess   ]
 #    mcmc_startguess = [r, phi, z, scale, t0, smooth, tempGuess, omega, decay, rc1, rc2, rcfrac, ]
     #Do the MCMC
-    ndim, nwalkers = 14, 14*2*3
+    ndim, nwalkers = 10, 10*2
 #    mcmc_startguess = startGuess#np.array([r, phi, z, scale, t0, smooth])
 
     pos0 = [mcmc_startguess + 1e-2*np.random.randn(ndim)*mcmc_startguess for i in range(nwalkers)]
@@ -141,30 +150,31 @@ def main(argv):
 #    pcRadIdx = -2
 #    pcLenIdx = -1
 
-    rc1idx = -4
-    rc2idx = -3
-    rcfracidx = -2
-    
-    for pos in pos0:
-      pos[rcfracidx] = np.clip(pos[rcfracidx], 0, 1)
-      pos[rc2idx] = np.clip(pos[rc2idx], 0, np.inf)
-      pos[rc1idx] = np.clip(pos[rc1idx], 0, np.inf)
-      
-      pos[gradIdx] = np.clip(pos[gradIdx], det.gradList[0], det.gradList[-1])
-#      pos[pcRadIdx] = np.clip(pos[pcRadIdx], det.pcRadList[0], det.pcRadList[-1])
-#      pos[pcLenIdx] = np.clip(pos[pcLenIdx], det.pcLenList[0], det.pcLenList[-1])
+#    rc1idx = -4
+#    rc2idx = -3
+#    rcfracidx = -2
 
-      prior = lnprob_waveform(pos,)
-      if not np.isfinite(prior) :
-        print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
-        print pos
-        exit(0)
-    
+#    for pos in pos0:
+##      pos[rcfracidx] = np.clip(pos[rcfracidx], 0, 1)
+##      pos[rc2idx] = np.clip(pos[rc2idx], 0, np.inf)
+##      pos[rc1idx] = np.clip(pos[rc1idx], 0, np.inf)
+#
+#      pos[gradIdx] = np.clip(pos[gradIdx], det.gradList[0], det.gradList[-1])
+##      pos[pcRadIdx] = np.clip(pos[pcRadIdx], det.pcRadList[0], det.pcRadList[-1])
+##      pos[pcLenIdx] = np.clip(pos[pcLenIdx], det.pcLenList[0], det.pcLenList[-1])
+#
+#      prior = lnprob_waveform(pos,)
+#      if not np.isfinite(prior) :
+#        print "BAD PRIOR WITH START GUESS YOURE KILLING ME SMALLS"
+#        print pos
+#        exit(0)
+
     p = Pool(numThreads, initializer=initializeWaveform, initargs=[ wf])
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_waveform, )
 
 
-    iter, burnIn = 4000, 3800
+    iter, burnIn = 2000, 1800
+    wfPlotNumber = 100
     
     bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=iter).start()
     for (i,result) in enumerate(sampler.sample(pos0, iterations=iter, storechain=True)):
@@ -175,7 +185,7 @@ def main(argv):
     #samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
 
     #########  Plots for MC Steps
-    stepsFig = plt.figure(2)
+    stepsFig = plt.figure(2, figsize= (20,10))
     plt.clf()
     plotnum = 600
     ax0 = stepsFig.add_subplot(plotnum+11)
@@ -206,33 +216,34 @@ def main(argv):
     plt.savefig("hdxwf%d_wf_params.png"%wf_idx)
 
     stepsFig2 = plt.figure(11, figsize = (20,10))
-    plotnum = 800
+    plotnum = 400
     ax6 = stepsFig2.add_subplot(plotnum+11)
     ax7 = stepsFig2.add_subplot(plotnum+12, sharex=ax6)
     ax8 = stepsFig2.add_subplot(plotnum+13, sharex=ax6)
     ax9 = stepsFig2.add_subplot(plotnum+14, sharex=ax6)
-    ax10 = stepsFig2.add_subplot(plotnum+15, sharex=ax6)
-    ax11 = stepsFig2.add_subplot(plotnum+16, sharex=ax6)
-    ax12 = stepsFig2.add_subplot(plotnum+17, sharex=ax6)
-    ax13 = stepsFig2.add_subplot(plotnum+18, sharex=ax6)
+#    ax10 = stepsFig2.add_subplot(plotnum+15, sharex=ax6)
+#    ax11 = stepsFig2.add_subplot(plotnum+16, sharex=ax6)
+#    ax12 = stepsFig2.add_subplot(plotnum+17, sharex=ax6)
+#    ax13 = stepsFig2.add_subplot(plotnum+18, sharex=ax6)
 
     ax6.set_ylabel('temp')
     ax7.set_ylabel('b_ov_a')
     ax8.set_ylabel('c')
-    ax9.set_ylabel('d')
-    ax10.set_ylabel('rc1')
-    ax11.set_ylabel('rc2')
-    ax12.set_ylabel('rcfrac')
-    ax13.set_ylabel('grad')
+#    ax9.set_ylabel('d')
+#    ax10.set_ylabel('rc1')
+#    ax11.set_ylabel('rc2')
+#    ax12.set_ylabel('rcfrac')
+    ax8.set_ylabel('trapping')
+    ax9.set_ylabel('grad')
     for i in range(nwalkers):
       ax6.plot(sampler.chain[i,:,6], "b", alpha=0.3)
       ax7.plot(sampler.chain[i,:,7], "b", alpha=0.3)
       ax8.plot(sampler.chain[i,:,8], "b", alpha=0.3)
       ax9.plot(sampler.chain[i,:,9], "b", alpha=0.3)
-      ax10.plot(sampler.chain[i,:,10], "b", alpha=0.3)
-      ax11.plot(sampler.chain[i,:,11], "b", alpha=0.3)
-      ax12.plot(sampler.chain[i,:,12], "b", alpha=0.3)
-      ax13.plot(sampler.chain[i,:,-1], "b", alpha=0.3)
+#      ax10.plot(sampler.chain[i,:,10], "b", alpha=0.3)
+#      ax11.plot(sampler.chain[i,:,11], "b", alpha=0.3)
+#      ax12.plot(sampler.chain[i,:,12], "b", alpha=0.3)
+#      ax13.plot(sampler.chain[i,:,-1], "b", alpha=0.3)
 
     plt.savefig("hdxwf%d_tf_params.png"%wf_idx)
     
@@ -241,48 +252,49 @@ def main(argv):
     
     stepsFigTF = plt.figure(12, figsize = (20,10))
 
-    tf0 = stepsFigTF.add_subplot(811)
-    tf1 = stepsFigTF.add_subplot(812, )
-    tf2 = stepsFigTF.add_subplot(813, )
-    tf3 = stepsFigTF.add_subplot(814, )
-    tf4 = stepsFigTF.add_subplot(815, )
-    tf5 = stepsFigTF.add_subplot(816, )
-    tf6 = stepsFigTF.add_subplot(817,)
-    tf7 = stepsFigTF.add_subplot(818,)
+    tf0 = stepsFigTF.add_subplot(plotnum+11)
+    tf1 = stepsFigTF.add_subplot(plotnum+12, )
+    tf2 = stepsFigTF.add_subplot(plotnum+13, )
+    tf3 = stepsFigTF.add_subplot(plotnum+14, )
+#    tf4 = stepsFigTF.add_subplot(815, )
+#    tf5 = stepsFigTF.add_subplot(816, )
+#    tf6 = stepsFigTF.add_subplot(817,)
+#    tf7 = stepsFigTF.add_subplot(818,)
 
-    tf0.set_ylabel('b_ov_a')
-    tf1.set_ylabel('c')
-    tf2.set_ylabel('d')
-    tf3.set_ylabel('rc1')
-    tf4.set_ylabel('rc2')
-    tf5.set_ylabel('rcfrac')
-    tf6.set_ylabel('temp')
-    tf7.set_ylabel('grad')
+    tf0.set_ylabel('temp')
+#    tf1.set_ylabel('c')
+#    tf2.set_ylabel('d')
+#    tf3.set_ylabel('rc1')
+#    tf4.set_ylabel('rc2')
+#    tf5.set_ylabel('rcfrac')
+    tf1.set_ylabel('b_ov_a')
+    tf2.set_ylabel('trapping')
+    tf3.set_ylabel('grad')
 
     num_bins = 300
-    [n, b, p] = tf0.hist(samples[:,-7], bins=num_bins)
+    [n, b, p] = tf0.hist(samples[:,-4], bins=num_bins)
     print "b_over_a mode is %f" % b[np.argmax(n)]
 
-    [n, b, p] = tf1.hist(samples[:,-6],bins=num_bins)
+    [n, b, p] = tf1.hist(samples[:,-3],bins=num_bins)
     print "c mode is %f" % b[np.argmax(n)]
 
-    [n, b, p] = tf2.hist(samples[:,-5],bins=num_bins)
+    [n, b, p] = tf2.hist(samples[:,-2],bins=num_bins)
     print "d mode is %f" % b[np.argmax(n)]
 
-    [n, b, p] = tf3.hist(samples[:,-4],bins=num_bins)
+    [n, b, p] = tf3.hist(samples[:,-1],bins=num_bins)
     print "rc_decay1 mode is %f" % b[np.argmax(n)]
-
-    [n, b, p] = tf4.hist(samples[:,-3],bins=num_bins)
-    print "rc_decay2 mode is %f" % b[np.argmax(n)]
-
-    [n, b, p] = tf5.hist(samples[:,-2],bins=num_bins)
-    print "rc_frac mode is %f" % b[np.argmax(n)]
-
-    [n, b, p] = tf6.hist(samples[:,-8],bins=num_bins)
-    print "temp mode is %f" % b[np.argmax(n)]
-    
-    [n, b, p] = tf6.hist(samples[:,-1],bins=num_bins)
-    print "grad mode is %f" % b[np.argmax(n)]
+#
+#    [n, b, p] = tf4.hist(samples[:,-3],bins=num_bins)
+#    print "rc_decay2 mode is %f" % b[np.argmax(n)]
+#
+#    [n, b, p] = tf5.hist(samples[:,-2],bins=num_bins)
+#    print "rc_frac mode is %f" % b[np.argmax(n)]
+#
+#    [n, b, p] = tf6.hist(samples[:,-8],bins=num_bins)
+#    print "temp mode is %f" % b[np.argmax(n)]
+#    
+#    [n, b, p] = tf6.hist(samples[:,-1],bins=num_bins)
+#    print "grad mode is %f" % b[np.argmax(n)]
 
     plt.savefig("hdxwf%d_tf_hist.png"%wf_idx)
     
@@ -304,17 +316,17 @@ def main(argv):
 
     #pull the samples after burn-in
     
-    wfPlotNumber = 100
     simWfs = np.empty((wfPlotNumber, fitSamples) )
 
-    for idx, (r, phi, z, scale, t0, smooth, temp,  b_over_a, c, d, rc1, rc2, rcfrac, grad) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
+    for idx, (r, phi, z, scale, t0, smooth, temp,  b_over_a, trapping_rc, grad) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
 #    for idx, (r, phi, z, scale, t0, smooth, temp,  omega,decay, rc1, rc2, rcfrac, ) in enumerate(samples[np.random.randint(len(samples), size=wfPlotNumber)]):
 
       det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
       det.SetTemperature(temp)
+      det.trapping_rc = trapping_rc
       det.SetFieldsGradInterp(grad)
 #      det.SetFields(pcRad, pcLen, impGrad)
-#      det.collection_rc = collection_rc
+#      det.trapping_rc = trapping_rc
       simWfs[idx,:] = det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth)
 
     residFig = plt.figure(3)

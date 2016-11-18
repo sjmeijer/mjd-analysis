@@ -19,10 +19,12 @@ def initializeDetectorAndWaveform(det, wf_init):
 
 def lnprob_waveform(theta):
   '''Bayes theorem'''
-  r, phi, z, scale, t0, smooth, temp,  b_over_a, c,d, rc1, rc2, rcfrac, grad  = theta
+  r, phi, z, scale, t0, smooth, temp,  b_over_a,  trapping_rc, grad  = theta
   lp = lnprior_waveform(r, phi, z, scale, t0, smooth , )
-  if rcfrac > 1: return -np.inf
-  if rc1 < 0 or rc2 <0: return -np.inf
+#  if rcfrac > 1: return -np.inf
+#  if rc1 < 0 or rc2 <0: return -np.inf
+
+  if trapping_rc < 0: return -np.inf
   if not np.isfinite(lp):
     return -np.inf
   
@@ -42,11 +44,18 @@ def lnprob_waveform(theta):
   return lp + lnlike_waveform(theta, )
 
 def lnlike_waveform(theta):
-  r_det, phi, z_det, scale, t0, smooth, temp,  b_over_a, c,d, rc1, rc2, rcfrac, grad  = theta
+  r_det, phi, z_det, scale, t0, smooth, temp,  b_over_a,  trapping_rc, grad  = theta
+  c = -0.815152
+  d = 0.822696
+  rc1 = 74.4
+  rc2 = 1.79
+  rcfrac = 0.992
+  
+  
 #  r, phi, z, scale, t0,  = theta
 
 #  if collection_rc < 0: return -np.inf
-#  detector.collection_rc = collection_rc
+  detector.collection_rc = trapping_rc
 
 #  rc=72
 
