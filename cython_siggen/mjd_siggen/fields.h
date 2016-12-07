@@ -40,11 +40,14 @@ int wpotential(point pt, float *wp, MJD_Siggen_Setup *setup);
    and -1 for failure
 */
 int drift_velocity(point pt, float q, vector *velocity, MJD_Siggen_Setup *setup);
+int drift_velocity_ben(point pt, float q, vector *velocity, MJD_Siggen_Setup *setup);
 
 int read_fields(MJD_Siggen_Setup *setup);
 
 /*set detector temperature. 77F (no correction) is the default
    MIN_TEMP & MAX_TEMP defines allowed range*/
 void set_temp(float temp, MJD_Siggen_Setup *setup);
+
+void set_hole_params(float h_100_mu0, float h_100_beta, float h_100_e0, float h_111_mu0, float h_111_beta, float h_111_e0, MJD_Siggen_Setup *setup);
 
 #endif /*#ifndef _FIELDS_H*/

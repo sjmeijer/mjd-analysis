@@ -49,17 +49,30 @@ cdef class Siggen:
     self.fSiggenData.dpath_e = <csiggen.point *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
     self.fSiggenData.dpath_h = <csiggen.point *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
     
+    self.fSiggenData.v_params = <csiggen.velocity_params *> PyMem_Malloc(sizeof(csiggen.velocity_params));
+#    self.fSiggenData.v_params.h_100_mu0 =66333.
+#    self.fSiggenData.v_params.h_100_beta = 0.744
+#    self.fSiggenData.v_params.h_100_e0 = 181
+#    self.fSiggenData.v_params.h_111_mu0 = 107270
+#    self.fSiggenData.v_params.h_111_beta = 0.580
+#    self.fSiggenData.v_params.h_111_e0 = 100
+
     self.sum = <float *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(float));
     self.tmp = <float *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(float));
 
     self.ReadVelocityTable()
     self.SetTemperature(self.fSiggenData.xtal_temp)
     
+    #default params are reggiani
+    csiggen.set_hole_params(66333., 0.744, 181., 107270., 0.580, 100., &self.fSiggenData)
+
   def __dealloc__(self):
     if self.fSiggenData.dpath_e is not NULL:
       PyMem_Free(self.fSiggenData.dpath_e)
     if self.fSiggenData.dpath_h is not NULL:
       PyMem_Free(self.fSiggenData.dpath_h)
+    if self.fSiggenData.v_params is not NULL:
+      PyMem_Free(self.fSiggenData.v_params)
     if self.fVelocityFileData is not NULL:
       PyMem_Free(self.fVelocityFileData)
     if self.fVelocityTempData is not NULL:
@@ -175,6 +188,13 @@ cdef class Siggen:
   cpdef set_time_step_number(self, int waveformLength):
     self.fSiggenData.ntsteps_out = waveformLength;
     self.fSiggenData.time_steps_calc = waveformLength * np.int(self.fSiggenData.step_time_out/self.fSiggenData.step_time_calc);
+
+  cpdef set_velocity_type(self, int veloType):
+      self.fSiggenData.velocity_type = veloType;
+
+  cpdef set_hole_params(self, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0):
+      csiggen.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, &self.fSiggenData)
+
 
   cdef c_read_velocity_table(self):
     #read in the drift velocity table
@@ -326,6 +346,8 @@ cdef class Siggen:
   
     siggenConfig = {}
     siggenConfig["verbosity"]  = self.fSiggenData.verbosity;              # 0 = terse, 1 = normal, 2 = chatty/verbose
+    siggenConfig["velocity_type"]  = self.fSiggenData.velocity_type;
+
 
     # geometry
     siggenConfig["xtal_length"]  = self.fSiggenData.xtal_length;          # z length
@@ -395,7 +417,7 @@ cdef class Siggen:
   def SetConfiguration(self, siggenConfig):
   
     self.fSiggenData.verbosity = siggenConfig["verbosity"];              # 0 = terse, 1 = normal, 2 = chatty/verbose
-
+    self.fSiggenData.velocity_type = siggenConfig["velocity_type"];
     # geometry
     self.fSiggenData.xtal_length = siggenConfig["xtal_length"];          # z length
     self.fSiggenData.xtal_radius = siggenConfig["xtal_radius"];          # radius
@@ -458,3 +480,207 @@ cdef class Siggen:
     self.fSiggenData.dv_dE = siggenConfig["dv_dE"];     # derivative of drift velocity with field ((mm/ns) / (V/cm))
     self.fSiggenData.v_over_E = siggenConfig["v_over_E"];  # ratio of drift velocity to field ((mm/ns) / (V/cm))
     self.fSiggenData.final_charge_size = siggenConfig["final_charge_size"];     # in mm
+
+
+
+cdef public int drift_velocity_python(csiggen.point pt, csiggen.cyl_pt e, csiggen.point field_norm, float q, csiggen.vector *velo, csiggen.MJD_Siggen_Setup *setup):
+
+    absfield = np.sqrt( e.r**2 + e.z**2)
+    phi_0 = np.arctan2(field_norm.y,field_norm.x)
+    theta_0 = np.arccos(field_norm.z  )
+
+    if q>0:
+      #holes holes holes
+
+#      theta_0 = 2*np.pi - theta_0
+#      if field.z < 0 and theta_0 < np.pi/2:
+#        theta_0 = np.pi + theta_0
+
+#      if phi_0<0: phi_0 = 2*np.pi + phi_0
+
+      (v_r, v_theta, v_phi) = find_hole_velo(absfield, theta_0, phi_0)
+
+      r = np.sqrt( pt.x**2 + pt.y**2 + pt.z**2 )
+      phi = np.arctan2(pt.y,pt.x)
+      theta = np.arccos(pt.z / r )
+
+      r = absfield
+      theta = theta_0
+      phi = phi_0
+
+#      print "calc spherical: (%f, %f, %f)" % (v_r, v_theta, v_phi)
+
+      v_x = np.sin(theta)*np.cos(phi) * v_r + np.cos(theta)*np.cos(phi) * v_theta - np.sin(theta)*np.sin(phi) * v_phi
+      v_y = np.sin(theta)*np.sin(phi) * v_r + np.cos(theta)*np.sin(phi) * v_theta + np.sin(theta)*np.cos(phi) * v_phi
+      v_z = np.cos(theta) * v_r - np.sin(theta) * v_theta
+      
+      velo.x = np.around(v_x,5)
+      velo.y = np.around(v_y,5)
+      velo.z = np.around(v_z,5)
+
+#      beta = theta_0#phi #+ np.pi/4 + np.pi/4
+#      alpha = phi_0
+#
+#      R_y = np.matrix( [ [np.cos(beta), 0, np.sin(beta)], [0, 1., 0], [-np.sin(beta), 0, np.cos(beta)]]  )
+#      R_z = np.matrix( [[np.cos(alpha), -np.sin(alpha), 0], [np.sin(alpha), np.cos(alpha), 0], [0,0,1.] ] )
+#      R_j = np.dot(R_z, R_y)
+#      
+#      v_prime = np.array([v_r, v_theta, v_phi])
+#      v = np.array(np.dot(R_j, v_prime))
+
+#      v_x = np.sin(theta)*np.cos(phi) * v[0][0] + r*np.cos(theta)*np.cos(phi) * v[0][1] - r *np.sin(theta)*np.sin(phi) * v[0][2]
+#      v_y = np.sin(theta)*np.sin(phi) * v[0][0] + r*np.cos(theta)*np.sin(phi) * v[0][1] + r *np.sin(theta)*np.cos(phi) * v[0][2]
+#      v_z = np.cos(theta) * v[0][0] - r *np.sin(theta) * v[0][2]
+
+      
+#      if pt.z == 15:
+#        print "calculating position: (%f, %f, %f)" % (pt.x , pt.y , pt.z)
+#        print "  e: (%f, %f, %f)" % (e.r , e.phi , e.z)
+#        print "  absfield: %f" % absfield
+#        print "  field norm: (%f, %f, %f)" % (field_norm.x , field_norm.y , field_norm.z)
+#        print "  phi_0: %0.2f pi" % (phi_0 / np.pi)
+#        print "  theta_0: %0.2f pi" % (theta_0 / np.pi)
+#
+#        print "  phi: %0.2f pi" % (phi / np.pi)
+#        print "  theta: %0.2f pi" % (theta / np.pi)
+#        
+#        print "  v_x: %f or %f or %f" % (v_r, v_x, v[0][0])
+#        print "  v_y: %f or %f or %f" % (v_theta, v_y, v[0][1])
+#        print "  v_z: %f or %f or %f" % (v_phi, v_z, v[0][2])
+
+#      print v.shape
+#      print v[0][0]
+#      print v[0][1]
+#      print v[0][1]
+#      print v[0][2]
+
+#      velo.x = v_x
+#      velo.y = v_y
+#      velo.z = v_z
+
+#      velo.x = v[0][0]
+#      velo.y = v[0][1]
+#      velo.z = v[0][2]
+
+      return 0
+
+    else: #electrons
+      (v_x, v_y, v_z) = find_electron_velo(absfield, theta_0, phi_0)
+      velo.x = v_x
+      velo.y = v_y
+      velo.z = v_z
+
+      return 0
+
+
+def find_hole_velo(field, theta, phi ):
+  
+    #these are the reggiani numbers
+    v_100 = drift_velo_model(field, 66333., 0.744, 181.)
+    v_111 = drift_velo_model(field, 107270., 0.580, 100.)
+  
+    if v_100 == 0: return 0.
+    v_rel = v_111 / v_100
+
+    k_0 = 9.2652 - 26.3467*v_rel + 29.6137*v_rel**2 -12.3689 * v_rel**3
+    
+    lambda_k0 = -0.01322 * k_0 + 0.41145*k_0**2 - 0.23657 * k_0**3 + 0.04077*k_0**4
+    omega_k0 = 0.006550*k_0 - 0.19946*k_0**2 + 0.09859*k_0**3 - 0.01559*k_0**4
+  
+    v_r = v_100 * (1- lambda_k0*(np.sin(theta)**4*np.sin(2*phi)**2 + np.sin(2*theta)**2 ) )
+    v_theta = v_100 * omega_k0 * (2*np.sin(theta)**3*np.cos(theta)*np.sin(2*phi)**2 + np.sin(4*theta) )
+    v_phi = v_100 * omega_k0 * np.sin(theta)**3*np.sin(4*phi)
+
+    return (v_r, v_theta, v_phi)
+
+
+def find_electron_velo(field_0, theta, phi):
+  
+  field = np.array([field_0*np.sin(theta)*np.cos(phi), field_0*np.sin(theta)*np.sin(phi), field_0*np.cos(theta)])
+
+  eta_0 = 0.496
+  b = 0.0296
+  e_ref = 1200
+#find_drift_velocity_bruyneel(field, 38609, 0.805, 511., -171)
+
+#  eta_0 = 0.422
+#  b = 0.201
+#  e_ref = 1200.
+  eta = eta_0 + b * np.log( field/e_ref )
+  
+  m_l = 1.64
+  m_t = 0.0819
+  gamma_0 = 2.888
+  
+  j_0 = np.diag(np.array([m_t**-1,m_l**-1,m_t**-1]))
+  
+  E_star = np.empty((4,3))
+  inv_nu = np.empty(4)
+  
+  alphas = np.empty((4,3,3))
+  
+  for i in range(1,5):
+    beta = np.arccos(np.sqrt(2./3))
+    alpha = (i-1) * np.pi / 2. + np.pi/4
+    
+    
+    R_x = np.matrix( [ [1., 0, 0], [0, np.cos(beta), np.sin(beta)], [0, -np.sin(beta), np.cos(beta)]]  )
+    R_z = np.matrix( [[np.cos(alpha), np.sin(alpha), 0], [-np.sin(alpha), np.cos(alpha), 0], [0,0,1.] ] )
+    
+    R_j = np.dot(R_x, R_z)
+#    R_j = R_j.round(10)
+
+#    print R_x
+#    print R_z
+
+    alpha_i = np.dot(R_j.T, np.dot(j_0, R_j))
+    
+    alphas[i-1, :,:] = alpha_i
+    
+#    print R_j
+    alpha_i = alpha_i.round(10)
+#    print alpha_i
+#    print np.sqrt(alpha_i)
+
+    from scipy import linalg
+
+    E_star[i-1,:] = np.dot(linalg.sqrtm(alpha_i), field)
+#    print E_star[i-1,:]
+
+    e_star_i_norm = np.linalg.norm(E_star[i-1,:])
+    
+    eta_star_i = eta_0 + b * np.log( e_star_i_norm/e_ref )
+    
+#    print eta_star_i
+
+    inv_nu[i-1] = np.power(e_star_i_norm, eta_star_i)**-1
+  
+  sum_nu = np.sum(inv_nu)
+  
+  v_d = np.empty((4,3))
+  
+  for i in range(1,5):
+    E_star_i = E_star[i-1,:]
+    e_star_i_norm = np.linalg.norm(E_star[i-1,:])
+    
+    v_100_i = drift_velo_model(e_star_i_norm/gamma_0, 38609, 0.805, 511., -171) #
+    #v_100_i = drift_velo_model(e_star_i_norm/gamma_0, 40180., 0.72, 493., 589)
+#    print v_100_i
+    mu_star_i = v_100_i / gamma_0 / e_star_i_norm
+    
+    n_i = inv_nu[i-1] / sum_nu
+    
+#    print E_star_i
+#    print e_star_i_norm
+
+    v_d[i-1] = n_i * mu_star_i * np.dot(alphas[i-1, :,:], field)
+
+  v_d = -1*np.around(np.sum(v_d, axis=0),5)
+  return v_d
+
+
+def drift_velo_model(E, mu_0, beta, E_0, mu_n = 0):
+
+  v = (mu_0 * E) / np.power(1+(E/E_0)**beta, 1./beta) - mu_n*E
+
+  return v * 10 * 1E-9

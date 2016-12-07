@@ -40,8 +40,20 @@ cdef extern from "mjd_siggen/mjd_siggen.h":
     float hcorr;
     float ecorr;
 
+  cdef struct velocity_params:
+    float h_100_mu0;
+    float h_100_beta;
+    float h_100_e0;
+    float h_111_mu0;
+    float h_111_beta;
+    float h_111_e0;
+
+  ctypedef velocity_params velocity_params
+
+
   ctypedef struct MJD_Siggen_Setup:
     int verbosity;              # 0 = terse, 1 = normal, 2 = chatty/verbose
+    int velocity_type;          # 0 = david, 1 = ben
 
     # geometry
     float xtal_length;          # z length
@@ -96,9 +108,10 @@ cdef extern from "mjd_siggen/mjd_siggen.h":
     int   rlen, zlen;           # dimensions of efld and wpot arrays
     int   v_lookup_len;
     velocity_lookup* v_lookup;
+    velocity_params* v_params;
     cyl_pt** efld;
     float** wpot;
-    
+
     # data for calc_signal.c
     point *dpath_e
     point *dpath_h;      # electron and hole drift paths
@@ -130,5 +143,6 @@ cdef extern from "mjd_siggen/fields.h":
   int drift_velocity(point pt, float q, vector *velocity, MJD_Siggen_Setup *setup);
   int read_fields(MJD_Siggen_Setup *setup);
   void set_temp(float temp, MJD_Siggen_Setup *setup);
+  void set_hole_params(float h_100_mu0, float h_100_beta, float h_100_e0, float h_111_mu0, float h_111_beta, float h_111_e0, MJD_Siggen_Setup *setup);
 
   

@@ -53,10 +53,20 @@ struct velocity_lookup{
   float ecorr;
 };
 
+typedef struct {
+  float h_100_mu0;
+  float h_100_beta;
+  float h_100_e0;
+  float h_111_mu0;
+  float h_111_beta;
+  float h_111_e0;
+} velocity_params;
+
 /* setup parameters data structure */
 typedef struct {
   // general
   int verbosity;              // 0 = terse, 1 = normal, 2 = chatty/verbose
+  int velocity_type;          // 0 = David, 1 = Ben
 
   // geometry
   float xtal_length;          // z length
@@ -111,9 +121,10 @@ typedef struct {
   int   rlen, zlen;           // dimensions of efld and wpot arrays
   int   v_lookup_len;
   struct velocity_lookup *v_lookup;
+  velocity_params* v_params;
   cyl_pt **efld;
   float  **wpot;
-  
+
   // data for calc_signal.c
   point *dpath_e, *dpath_h;      // electron and hole drift paths
   float initial_vel, final_vel;  // initial and final drift velocities for charges collected to PC

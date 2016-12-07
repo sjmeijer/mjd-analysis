@@ -19,6 +19,9 @@
 #include "detector_geometry.h"
 #include "calc_signal.h"
 
+//#include <Python.h>
+//#include "../siggen.h"
+
 #define MAX_FNAME_LEN 512
 
 static int nearest_field_grid_index(cyl_pt pt, cyl_int_pt *ipt, MJD_Siggen_Setup *setup);
@@ -28,6 +31,9 @@ static int setup_efield(MJD_Siggen_Setup *setup);
 static int setup_wp(MJD_Siggen_Setup *setup);
 static int setup_velo(MJD_Siggen_Setup *setup);
 static int efield_exists(cyl_pt pt, MJD_Siggen_Setup *setup);
+
+static int find_hole_velo(float field, float theta, float phi, point* v_spher, MJD_Siggen_Setup* setup );
+static float drift_velo_model(float E, float mu_0, float beta, float E_0);
 
 /* field_setup
    given a field directory file, read electic field and weighting
@@ -135,6 +141,36 @@ int wpotential(point pt, float *wp, MJD_Siggen_Setup *setup){
    and -1 for failure
    anisotropic drift: crystal axes are assumed to be (x,y,z)
 */
+
+//int drift_velocity_ben(point pt, float q, vector *velo, MJD_Siggen_Setup *setup){
+//  point  cart_en;
+//  cyl_pt e, en, cyl;
+//  cyl_int_pt ipt;
+//  float abse;
+//  
+//  cyl.r = sqrt(pt.x*pt.x + pt.y*pt.y);
+//  cyl.z = pt.z;
+//  cyl.phi = 0;
+//  if (nearest_field_grid_index(cyl, &ipt, setup) < 0) return -1;
+//  e = efield(cyl, ipt, setup);
+//  abse = vector_norm_cyl(e, &en);
+//  if (cyl.r > 0.001) {
+//    cart_en.x = en.r * pt.x/cyl.r;
+//    cart_en.y = en.r * pt.y/cyl.r;
+//  } else {
+//    cart_en.x = cart_en.y = 0;
+//  }
+//  cart_en.z = en.z;
+//
+//  //So the (cartesian) field is in cart_en, and we want the velo at (cartesian) point pt
+////  Py_Initialize();
+////  initsiggen();
+////  drift_velocity_python(pt, cart_en, q, velo, setup);
+////  printf("velo: %f, %f,%f \n", velo->x, velo->y, velo->z);
+////  Py_Finalize();
+//  return 0;
+//}
+
 int drift_velocity(point pt, float q, vector *velo, MJD_Siggen_Setup *setup){
   point  cart_en;
   cyl_pt e, en, cyl;
@@ -165,6 +201,25 @@ int drift_velocity(point pt, float q, vector *velo, MJD_Siggen_Setup *setup){
     cart_en.x = cart_en.y = 0;
   }
   cart_en.z = en.z;
+  
+  if (q == 1){
+  if (setup->velocity_type == 1){
+//    drift_velocity_python(pt, e, cart_en, q, velo, setup);
+//    printf("velo: %f, %f,%f \n", velo->x, velo->y, velo->z);
+    float phi = atan2(cart_en.y,cart_en.x);
+    float theta = acos(cart_en.z  );
+    point velo_local;
+    
+    find_hole_velo(abse, theta, phi, &velo_local, setup);
+    
+    velo->x = sin(theta)*cos(phi) * velo_local.x + cos(theta)*cos(phi) * velo_local.y - sin(theta)*sin(phi) * velo_local.z;
+    velo->y = sin(theta)*sin(phi) * velo_local.x + cos(theta)*sin(phi) * velo_local.y + sin(theta)*cos(phi) * velo_local.z;
+    velo->z = cos(theta) * velo_local.x - sin(theta) * velo_local.y;
+//    printf("velo: %f, %f,%f \n", velo->x, velo->y, velo->z);
+
+    return 0;
+  }
+  }
 
   /* find location in table to interpolate from */
   for (i = 0; i < setup->v_lookup_len - 2 && abse > setup->v_lookup[i+1].e; i++);
@@ -638,4 +693,47 @@ void set_temp(float temp, MJD_Siggen_Setup *setup){
     /* re-read velocities and correct them to the new temperature value */
     setup_velo(setup);
   }
+}
+
+static int find_hole_velo(float field, float theta, float phi, point* v_spher, MJD_Siggen_Setup* setup ){
+  
+    //these are the reggiani numbers
+  
+    float v_100 = drift_velo_model(field, setup->v_params->h_100_mu0, setup->v_params->h_100_beta, setup->v_params->h_100_e0);
+    float v_111 = drift_velo_model(field, setup->v_params->h_111_mu0, setup->v_params->h_111_beta, setup->v_params->h_111_e0);
+  
+    if (v_100 == 0){
+      v_spher->x = 0;
+      v_spher->y = 0;
+      v_spher->z = 0;
+      return 0;
+    }
+
+    float v_rel = v_111 / v_100;
+
+    float k_0 = 9.2652 - 26.3467*v_rel + 29.6137*pow(v_rel,2) -12.3689 * pow(v_rel,3);
+    
+    float lambda_k0 = -0.01322 * k_0 + 0.41145*pow(k_0,2) - 0.23657 * pow(k_0,3) + 0.04077*pow(k_0,4);
+    float omega_k0 = 0.006550*k_0 - 0.19946*pow(k_0,2) + 0.09859*pow(k_0,3) - 0.01559*pow(k_0,4);
+  
+    v_spher->x = v_100 * (1- lambda_k0*( pow(sin(theta),4) * pow(sin(2*phi),2) + pow(sin(2*theta),2) ) );
+    v_spher->y = v_100 * omega_k0 * (2*pow(sin(theta),3)*cos(theta)*pow(sin(2*phi),2) + sin(4*theta) );
+    v_spher->z = v_100 * omega_k0 * pow(sin(theta),3)*sin(4*phi);
+  
+    return 1;
+}
+static float drift_velo_model(float E, float mu_0, float beta, float E_0){
+  float v;
+  v = (mu_0 * E) / pow(1+pow(E/E_0,beta), 1./beta);
+  return v * 10 * 1E-9;
+}
+
+
+void set_hole_params(float h_100_mu0, float h_100_beta, float h_100_e0, float h_111_mu0, float h_111_beta, float h_111_e0, MJD_Siggen_Setup *setup){
+  setup->v_params->h_100_mu0 = h_100_mu0;
+  setup->v_params->h_100_beta = h_100_beta;
+  setup->v_params->h_100_e0 = h_100_e0;
+  setup->v_params->h_111_mu0 = h_111_mu0;
+  setup->v_params->h_111_beta = h_111_beta;
+  setup->v_params->h_111_e0 = h_111_e0;
 }

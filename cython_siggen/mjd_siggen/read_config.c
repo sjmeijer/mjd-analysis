@@ -47,6 +47,7 @@ int read_config(char *config_file_name, MJD_Siggen_Setup *setup) {
     "use_diffusion",
     "energy",
     "verbosity_level",
+    "velocity_type",
     "max_iterations",
     "write_field",
     "write_WP",
@@ -95,6 +96,7 @@ int read_config(char *config_file_name, MJD_Siggen_Setup *setup) {
 	  } else if (!strncmp("time_steps_calc", key_word[i], l) ||
 		     !strncmp("use_diffusion", key_word[i], l) ||
 		     !strncmp("verbosity_level", key_word[i], l) ||
+         !strncmp("velocity_type", key_word[i], l) ||
 		     !strncmp("max_iterations", key_word[i], l) ||
 		     !strncmp("write_field", key_word[i], l) ||
 		     !strncmp("write_WP", key_word[i], l) ||
@@ -115,6 +117,8 @@ int read_config(char *config_file_name, MJD_Siggen_Setup *setup) {
 	}
 	if (strstr(key_word[i], "verbosity_level")) {
 	  setup->verbosity = ii;
+  } else if (strstr(key_word[i], "velocity_type")) {
+	  setup->velocity_type = ii;
 	} else if (strstr(key_word[i], "xtal_length")) {
 	  setup->xtal_length = fi;
 	} else if (strstr(key_word[i], "xtal_radius")) {
