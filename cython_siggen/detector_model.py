@@ -138,21 +138,21 @@ class Detector:
   def SetFieldsGradInterp(self, impurityGrad):
 
     self.impurityGrad = impurityGrad
-    rr = self.rr
-    zz = self.zz
-    efld_r_function = self.efld_r_function
-    efld_z_function = self.efld_z_function
+#    rr = self.rr
+#    zz = self.zz
+#    efld_r_function = self.efld_r_function
+#    efld_z_function = self.efld_z_function
+#
+#    gradgrad = np.ones_like(rr) * impurityGrad
+#    
+#    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), ], dtype=np.dtype('f4') ).T
+#
+#    new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+#    new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
 
-    gradgrad = np.ones_like(rr) * impurityGrad
-    
-    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), ], dtype=np.dtype('f4') ).T
-
-    new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
-    new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
-
-#    grad_idx = find_nearest_idx(self.gradList, impurityGrad)
-#    new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx][:,:,0])
-#    new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx][:,:,0])
+    grad_idx = find_nearest_idx(self.gradList, impurityGrad)
+    new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx][:,:,0])
+    new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx][:,:,0])
 
     self.siggenInst.SetFields(new_ef_r, new_ef_z, self.wpArray)
 
@@ -481,6 +481,7 @@ class Detector:
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
+    det.siggenInst.set_velocity_type(1)
 
   def ReflectPoint(self, r,z):
     #algorithm shamelessly ripped from answer on http://stackoverflow.com/questions/3306838/algorithm-for-reflecting-a-point-across-a-line

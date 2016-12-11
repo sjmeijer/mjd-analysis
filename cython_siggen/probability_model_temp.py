@@ -36,17 +36,18 @@ def lnprob(theta):
 def lnlike_detector(theta):
   '''assumes the data comes in w/ 10ns sampling period'''
 
-  temp, trapping_rc, b_over_a, c, d, rc1, rc2, rcfrac = theta[-8:]
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-8].reshape((6, len(wf_arr)))
+  trapping_rc, b_over_a, c, d, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, = theta[-13:]
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-13].reshape((6, len(wf_arr)))
 
-  if temp <40 or temp > 120:
-    return -np.inf
-  
+#  if temp <40 or temp > 120:
+#    return -np.inf
+
   detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
+  detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
   detector.trapping_rc = trapping_rc
   
-  if temp != detector.temperature:
-    detector.SetTemperature(temp)
+#  if temp != detector.temperature:
+#    detector.SetTemperature(temp)
 
   totalLike = 0
   for (wf_idx) in np.arange(r_arr.size):
@@ -95,14 +96,14 @@ def lnprior(theta):
      Normal prior on energy scale with sigma = 0.1 * wfMax
   '''
   
-  temp, trapping_rc, b_over_a, c, d, rc1, rc2, rcfrac = theta[-8:]
-  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-8].reshape((6, len(wf_arr)))
+  trapping_rc, b_over_a, c, d, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, = theta[-13:]
+  r_arr, phi_arr, z_arr, scale_arr, t0_arr, smooth_arr = theta[:-13].reshape((6, len(wf_arr)))
 
-  if temp <40 or temp > 120:
-#    print "bad prior temp %f" % temp
-    return -np.inf
-  else:
-    temp_prior = stats.norm.pdf(temp, loc=78., scale=5. )
+#  if temp <40 or temp > 120:
+##    print "bad prior temp %f" % temp
+#    return -np.inf
+#  else:
+#    temp_prior = stats.norm.pdf(temp, loc=78., scale=5. )
   if rcfrac > 1: return -np.inf
   if rc1 < 0 or rc2 <0: return -np.inf
   if trapping_rc < 0: return -np.inf
@@ -118,7 +119,7 @@ def lnprior(theta):
 
     totalPrior += wf_like
 
-  return totalPrior + np.log(temp_prior)
+  return totalPrior
 
 def lnprior_waveform(r, phi, z, scale, t0,   wf, smooth):
   if not detector.IsInDetector(r, phi, z):
@@ -131,7 +132,7 @@ def lnprior_waveform(r, phi, z, scale, t0,   wf, smooth):
 
   #TODO: rename this so it isn't so confusing
   scale_prior = stats.norm.pdf(scale, loc=wf.wfMax, scale=0.1*wf.wfMax )
-  t0_prior = stats.norm.pdf(t0, loc=wf.t0Guess, scale=3. )
+  t0_prior = 1.#stats.norm.pdf(t0, loc=wf.t0Guess, scale=3. )
 
   return np.log(location_prior * location_prior * t0_prior )
 

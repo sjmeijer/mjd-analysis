@@ -203,22 +203,26 @@ int drift_velocity(point pt, float q, vector *velo, MJD_Siggen_Setup *setup){
   cart_en.z = en.z;
   
   if (q == 1){
-  if (setup->velocity_type == 1){
-//    drift_velocity_python(pt, e, cart_en, q, velo, setup);
-//    printf("velo: %f, %f,%f \n", velo->x, velo->y, velo->z);
-    float phi = atan2(cart_en.y,cart_en.x);
-    float theta = acos(cart_en.z  );
-    point velo_local;
-    
-    find_hole_velo(abse, theta, phi, &velo_local, setup);
-    
-    velo->x = sin(theta)*cos(phi) * velo_local.x + cos(theta)*cos(phi) * velo_local.y - sin(theta)*sin(phi) * velo_local.z;
-    velo->y = sin(theta)*sin(phi) * velo_local.x + cos(theta)*sin(phi) * velo_local.y + sin(theta)*cos(phi) * velo_local.z;
-    velo->z = cos(theta) * velo_local.x - sin(theta) * velo_local.y;
-//    printf("velo: %f, %f,%f \n", velo->x, velo->y, velo->z);
+    if (setup->velocity_type == 1){
+  //    drift_velocity_python(pt, e, cart_en, q, velo, setup);
+  //    printf("velo: %f, %f,%f \n", velo->x, velo->y, velo->z);
+//      printf("velo params: %f, %f, %f\n",  setup->v_params->h_100_mu0, setup->v_params->h_100_beta, setup->v_params->h_100_e0);
+      float phi = atan2(cart_en.y,cart_en.x);
+      float theta = acos(cart_en.z  );
+      point velo_local;
+      
+      find_hole_velo(abse, theta, phi, &velo_local, setup);
+      
+      velo->x = sin(theta)*cos(phi) * velo_local.x + cos(theta)*cos(phi) * velo_local.y - sin(theta)*sin(phi) * velo_local.z;
+      velo->y = sin(theta)*sin(phi) * velo_local.x + cos(theta)*sin(phi) * velo_local.y + sin(theta)*cos(phi) * velo_local.z;
+      velo->z = cos(theta) * velo_local.x - sin(theta) * velo_local.y;
+  //    printf("velo: %f, %f,%f \n", velo->x, velo->y, velo->z);
 
-    return 0;
-  }
+      return 0;
+    }
+    else{
+     printf("warning!  using david's hole velo calculation!\n");
+    }
   }
 
   /* find location in table to interpolate from */

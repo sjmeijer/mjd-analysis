@@ -19,16 +19,19 @@ def initializeDetectorAndWaveform(det, wf_init):
 
 def lnprob_waveform(theta):
   '''Bayes theorem'''
-  r, phi, z, scale, t0, smooth, temp,  b_over_a,  trapping_rc, grad  = theta
+  r, phi, z, scale, t0, smooth,  b_over_a, c, d, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,    = theta
   lp = lnprior_waveform(r, phi, z, scale, t0, smooth , )
 #  if rcfrac > 1: return -np.inf
 #  if rc1 < 0 or rc2 <0: return -np.inf
 
-  if trapping_rc < 0: return -np.inf
-  if not np.isfinite(lp):
-    return -np.inf
-  
-  gradList  = detector.gradList
+#  if trapping_rc < 0: return -np.inf
+#  if not np.isfinite(lp):
+#    return -np.inf
+
+#  gradList  = detector.gradList
+#    if grad < gradList[0] or grad > gradList[-1]:
+#    return -np.inf
+
 #  pcRadList =  detector.pcRadList
 #  pcLenList =  detector.pcLenList
 #  
@@ -36,17 +39,16 @@ def lnprob_waveform(theta):
 #    return -np.inf
 #  if pcLen < pcLenList[0] or pcLen > pcLenList[-1]:
 #    return -np.inf
-  if grad < gradList[0] or grad > gradList[-1]:
-    return -np.inf
+
 #  if temp <40 or temp > 120:
 #    return -np.inf
 
   return lp + lnlike_waveform(theta, )
 
 def lnlike_waveform(theta):
-  r_det, phi, z_det, scale, t0, smooth, temp,  b_over_a,  trapping_rc, grad  = theta
-  c = -0.815152
-  d = 0.822696
+  r, phi, z, scale, t0, smooth,  b_over_a, c, d, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, = theta
+#  c = -0.815152
+#  d = 0.822696
   rc1 = 74.4
   rc2 = 1.79
   rcfrac = 0.992
@@ -55,18 +57,19 @@ def lnlike_waveform(theta):
 #  r, phi, z, scale, t0,  = theta
 
 #  if collection_rc < 0: return -np.inf
-  detector.collection_rc = trapping_rc
+#  detector.trapping_rc = trapping_rc
 
 #  rc=72
 
   if rcfrac > 1: return -np.inf
 
   detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
-  detector.SetTemperature(temp)
-  
-  if detector.impurityGrad != grad:
-#      print "   actually setting the grad!!"
-      detector.SetFieldsGradInterp(grad)
+  detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
+#  detector.SetTemperature(temp)
+
+#  if detector.impurityGrad != grad:
+##      print "   actually setting the grad!!"
+#      detector.SetFieldsGradInterp(grad)
 #  if detector.pcRad != pcRad or detector.pcLen != pcLen or detector.impurityGrad != impGrad:
 #    detector.SetFields(pcRad, pcLen, impGrad)
 
@@ -77,13 +80,13 @@ def lnlike_waveform(theta):
     return -np.inf
   if smooth < 0:
      return -np.inf
-  if not detector.IsInDetector(r_det, phi, z_det):
+  if not detector.IsInDetector(r, phi, z):
     return -np.inf
 
   data = wf.windowedWf
   model_err = wf.baselineRMS
 
-  model = detector.MakeSimWaveform(r_det, phi, z_det, scale, t0, len(data), h_smoothing=smooth)
+  model = detector.MakeSimWaveform(r, phi, z, scale, t0, len(data), h_smoothing=smooth)
 #  model = detector.GetSimWaveform(r, phi, z, scale, t0, len(data))
 
   if model is None:
