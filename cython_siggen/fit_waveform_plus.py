@@ -87,7 +87,7 @@ def main(argv):
 #  plt.ioff()
 
   for (wf_idx,wf) in enumerate(wfs):
-    if wf_idx <= 4: continue
+    if wf_idx <= 2: continue
 
     if wf.energy < 1700: continue
     
@@ -108,32 +108,32 @@ def main(argv):
     ax1.set_ylabel("Residual")
     
     ax0.plot(t_data, wf.windowedWf, color="r")
-#    minresult = None
-#    minlike = np.inf
-##
-#    for r in np.linspace(4, np.floor(det.detector_radius)-3, 3):
-#      for z in np.linspace(4, np.floor(det.detector_length)-3, 3):
-##        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
-#          if not det.IsInDetector(r,0,z): continue
-#          startGuess = [r, np.pi/8, z, wf.wfMax, wf.t0Guess-5, 10]
-#          result = op.minimize(nll_wf, startGuess,   method="Nelder-Mead")
-#          r, phi, z, scale, t0, smooth, = result["x"]
-#          ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
-#          if ml_wf is None:
-#            print r, z
-#            continue
-#          if result['fun'] < minlike:
-#            minlike = result['fun']
-#            minresult = result
+    minresult = None
+    minlike = np.inf
 #
-#    ax1.set_ylim(-20,20)
-#    r, phi, z, scale, t0, smooth, = minresult["x"]
-#    print r, phi, z, scale, t0, smooth
+    for r in np.linspace(4, np.floor(det.detector_radius)-3, 3):
+      for z in np.linspace(4, np.floor(det.detector_length)-3, 3):
+#        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
+          if not det.IsInDetector(r,0,z): continue
+          startGuess = [r, np.pi/8, z, wf.wfMax, wf.t0Guess-5, 10]
+          result = op.minimize(nll_wf, startGuess,   method="Nelder-Mead")
+          r, phi, z, scale, t0, smooth, = result["x"]
+          ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
+          if ml_wf is None:
+            print r, z
+            continue
+          if result['fun'] < minlike:
+            minlike = result['fun']
+            minresult = result
 
-    r, phi, z, scale, t0, smooth  = results[wf_idx]['x']
-    startGuess = [r, phi, z, scale, t0, smooth]
-    result = op.minimize(nll_wf, startGuess,   method="Powell")
-    r, phi, z, scale, t0, smooth = result['x']
+    ax1.set_ylim(-20,20)
+    r, phi, z, scale, t0, smooth, = minresult["x"]
+    print r, phi, z, scale, t0, smooth
+
+#    r, phi, z, scale, t0, smooth  = results[wf_idx]['x']
+#    startGuess = [r, phi, z, scale, t0, smooth]
+#    result = op.minimize(nll_wf, startGuess,   method="Powell")
+#    r, phi, z, scale, t0, smooth = result['x']
 
     ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
     ax0.plot(t_data, ml_wf[:dataLen], color="g")
@@ -181,7 +181,7 @@ def main(argv):
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_waveform, )
 
 
-    iter, burnIn = 2000, 1800
+    iter, burnIn = 10000, 9900
     wfPlotNumber = 100
     
     bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=iter).start()
