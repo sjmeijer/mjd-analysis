@@ -138,21 +138,21 @@ class Detector:
   def SetFieldsGradInterp(self, impurityGrad):
 
     self.impurityGrad = impurityGrad
-#    rr = self.rr
-#    zz = self.zz
-#    efld_r_function = self.efld_r_function
-#    efld_z_function = self.efld_z_function
-#
-#    gradgrad = np.ones_like(rr) * impurityGrad
-#    
-#    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), ], dtype=np.dtype('f4') ).T
-#
-#    new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
-#    new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+    rr = self.rr
+    zz = self.zz
+    efld_r_function = self.efld_r_function
+    efld_z_function = self.efld_z_function
 
-    grad_idx = find_nearest_idx(self.gradList, impurityGrad)
-    new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx][:,:,0])
-    new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx][:,:,0])
+    gradgrad = np.ones_like(rr) * impurityGrad
+    
+    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), ], dtype=np.dtype('f4') ).T
+
+    new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+    new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+
+#    grad_idx = find_nearest_idx(self.gradList, impurityGrad)
+#    new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx][:,:,0])
+#    new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx][:,:,0])
 
     self.siggenInst.SetFields(new_ef_r, new_ef_z, self.wpArray)
 
@@ -274,7 +274,8 @@ class Detector:
 ###########################################################################################################################
   def ReinitializeDetector(self):
     self.SetTemperature(self.temperature)
-    self.SetFields(self.pcRad, self.pcLen, self.impurityGrad)
+#    self.SetFields(self.pcRad, self.pcLen, self.impurityGrad)
+    self.SetFieldsGradInterp( self.impurityGrad)
 ###########################################################################################################################
   def SetTemperature(self, h_temp, e_temp=0):
     self.temperature = h_temp
