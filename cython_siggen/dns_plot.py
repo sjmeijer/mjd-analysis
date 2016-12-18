@@ -22,9 +22,9 @@ from detector_model import *
 from probability_model_hdxwf import *
 from probability_model_waveform import *
 
-from dns_wf_model import *
+#from dns_wf_model import *
 
-fitSamples = 130
+fitSamples = 300
 timeStepSize = 1
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -52,8 +52,8 @@ det.SetFieldsGradInterp(gradGuess)
 b_over_a = 0.107213
 c = -0.815152
 d = 0.822696
-rc1 = 74.4
-rc2 = 1.79
+rc1 = 80.013468
+rc2 = 2.078342
 rcfrac = 0.992
 trapping_rc = 120#us
 det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
@@ -64,12 +64,16 @@ det.trapping_rc = trapping_rc
 det.siggenInst.set_velocity_type(1)
 h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = 66333., 0.744, 181., 107270., 0.580, 100.
 
+tf_first_idx = 8
+velo_first_idx = 14
+trap_idx = 18
+
 
 def main(argv):
-  wf = wfs[3]
-  wf.WindowWaveformTimepoint(fallPercentage=.995, rmsMult=2)
+  wf = wfs[8]
+  wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2)
   
-  fig1 = plt.figure(1)
+  fig1 = plt.figure(1, figsize=(20,10))
   plt.clf()
   gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
   ax0 = plt.subplot(gs[0])
@@ -82,13 +86,55 @@ def main(argv):
   t_data = np.arange(dataLen) * 10
   ax0.plot(t_data, wf.windowedWf, color="r")
   
-  data = np.loadtxt("posterior_sample.txt", dtype={'names': ('r', 'phi', 'z', 'scale', 't0', 'smooth'), 'formats': ('f4', 'f4', 'f4', 'f4', 'f4', 'f4')})
+#  data = np.loadtxt("posterior_sample.txt")
+  data = np.loadtxt("sample.txt")
+
+  print "found %d samples" % len(data)
   
-  for (r, phi, z, scale, t0, smooth) in data:
+  for params in data[-400:]:
+#  for params in data:
+#      print params
+      rad, phi, theta, scale, t0, smooth = params[:6]
+      m, b = params[6:8]
+      b_over_a, c, d, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
+      
+      r = rad * np.cos(theta)
+      z = rad * np.sin(theta)
+      
+#      print rc1, rc2, rcfrac
+
+      det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
+      
+      h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
+      det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
+      
+
+
+      print "new waveform:"
+      print "  wf params: ",
+      print  r, phi, z, scale, t0, smooth, m, b
+      print "  tf params: ",
+      print b_over_a, c, d, rc1, rc2, rcfrac
+      print "  velo params: ",
+      print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
+      
+      det.trapping_rc = params[18]     
+      print "  charge trapping: ",
+      print params[18]
+
       ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  fitSamples, h_smoothing = smooth)
+      
+      baseline_trend = np.linspace(b, m*fitSamples+b, fitSamples)
+      ml_wf += baseline_trend
+      
+      if ml_wf is None:
+        continue
+
       ax0.plot(t_data, ml_wf[:dataLen], color="g", alpha=0.1)
       ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="g",alpha=0.1)
 
+#  ax0.set_ylim(0, wf.wfMax*1.1)
+  ax1.set_ylim(-20, 20)
   plt.show()
 
 

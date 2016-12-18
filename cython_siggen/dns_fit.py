@@ -18,12 +18,11 @@ from scipy import signal
 
 import helpers
 from detector_model import *
-from probability_model_hdxwf import *
-from probability_model_waveform import *
+import probability_model_waveform as pmw
 
 from dns_wf_model import *
 
-fitSamples = 130
+fitSamples = 300
 timeStepSize = 1
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -62,13 +61,40 @@ det.trapping_rc = trapping_rc
 #do my own hole mobility model based on bruy
 det.siggenInst.set_velocity_type(1)
 h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = 66333., 0.744, 181., 107270., 0.580, 100.
+det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
 
+
+nll_wf = lambda *args: -pmw.lnlike_waveform(*args)
 
 def main(argv):
-  wf = wfs[3]
-  wf.WindowWaveformTimepoint(fallPercentage=.995, rmsMult=2)
+  wf = wfs[8]
+  wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2)
   initializeDetector(det, )
-  initializeWaveform(wf)
+  pmw.initializeDetector(det, )
+  pmw.initializeWaveform(wf)
+  
+  minresult = None
+  minlike = np.inf
+  
+  for r in np.linspace(4, np.floor(det.detector_radius)-3, 3):
+    for z in np.linspace(4, np.floor(det.detector_length)-3, 5):
+  #        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
+      if not det.IsInDetector(r,0,z): continue
+      startGuess = [r, np.pi/8, z, wf.wfMax, wf.t0Guess-5, 10]
+      result = op.minimize(nll_wf, startGuess,   method="Nelder-Mead")
+      r, phi, z, scale, t0, smooth, = result["x"]
+      ml_wf = np.copy(det.MakeSimWaveform(r, phi, z, scale, t0, fitSamples, h_smoothing=smooth, ))
+      if ml_wf is None:
+        print r, z
+        continue
+      if result['fun'] < minlike:
+        minlike = result['fun']
+        minresult = result
+  
+  initializeWaveform(wf, minresult['x'])
+  
+  print "Best fit w:aveform",
+  print "  " + str(minresult['x'])
 
   # Create a model object and a sampler
   model = Model()
@@ -77,8 +103,8 @@ def main(argv):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=30, num_steps=1000, new_level_interval=10000,
-                        num_per_step=10000, thread_steps=100,
+  gen = sampler.sample(max_num_levels=200, num_steps=10000, new_level_interval=1000,
+                        num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
   # Do the sampling (one iteration here = one particle save)
