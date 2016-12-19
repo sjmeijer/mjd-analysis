@@ -11,7 +11,7 @@ from siggen import Siggen
 
 class Detector:
   def __init__(self, siggen_config_file, temperature=0, timeStep=None, numSteps=None,):
-  
+
     self.conf_file = siggen_config_file
 
     if timeStep is None or numSteps is None:
@@ -20,13 +20,13 @@ class Detector:
       self.siggenInst =  Siggen(siggen_config_file, timeStep, numSteps)
       self.num_steps = np.int(numSteps)
       self.time_step_size = timeStep
-    
+
       print "Time step size is %d" % self.time_step_size
       print "There will be %d steps in output" % self.num_steps
-    
+
     (self.detector_radius, self.detector_length) = self.siggenInst.GetDimensions()
 
-  
+
     if temperature > 0:
       self.SetTemperature(temperature)
 
@@ -37,9 +37,9 @@ class Detector:
     self.rr = None
     self.zz = None
     self.wp_pp = None
-    
+
     self.trapping_rc = None
-    
+
     #stuff for waveform interpolation
     #round here to fix floating point accuracy problem
     data_to_siggen_size_ratio = np.around(10. / self.time_step_size,3)
@@ -56,17 +56,19 @@ class Detector:
       print "Error: Ben was too lazy to code in support for resolution this high"
       exit(0)
     self.data_to_siggen_size_ratio = np.int(data_to_siggen_size_ratio)
-    
+
     #Holders for wf simulation
     self.calc_length = self.siggenInst.GetCalculationLength()
-    
+
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.processed_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
+    print "thru detector init"
+
 ###########################################################################################################################
   def LoadFields(self, fieldFileName):
     self.fieldFileName = fieldFileName
-  
+
     with np.load(fieldFileName) as data:
       data = np.load(fieldFileName)
       wpArray  = data['wpArray']
@@ -75,7 +77,7 @@ class Detector:
       gradList = data['gradList']
       pcRadList = data['pcRadList']
       pcLenList = data['pcLenList']
-    
+
     self.gradList = gradList
     self.pcRadList = pcRadList
     self.pcLenList = pcLenList
@@ -99,22 +101,24 @@ class Detector:
     self.wp_function = interpolate.RegularGridInterpolator((r_space, z_space, pcRadList, pcLenList), wpArray, )
     self.efld_r_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList, pcLenList), efld_rArray, )
     self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, pcRadList, pcLenList), efld_zArray,)
-    
+
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
 ###########################################################################################################################
   def LoadFieldsGrad(self, fieldFileName, pcLen, pcRad):
     self.fieldFileName = fieldFileName
-  
+
     with np.load(fieldFileName) as data:
       data = np.load(fieldFileName)
       wpArray  = data['wpArray']
       efld_rArray = data['efld_rArray']
       efld_zArray = data['efld_zArray']
       gradList = data['gradList']
-    
+
     self.gradList = gradList
     self.pcLen = pcLen
     self.pcRad = pcRad
+
+    self.siggenInst.ReadEFieldsFromArray(efld_rArray, efld_zArray, wpArray )
 
     r_space = np.arange(0, wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4'))
     z_space = np.arange(0, wpArray.shape[1]/10. , 0.1, dtype=np.dtype('f4'))
@@ -125,7 +129,7 @@ class Detector:
 
     self.efld_r_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList, ), efld_rArray, )
     self.efld_z_function = interpolate.RegularGridInterpolator((r_space, z_space, gradList,), efld_zArray,)
-    
+
     (self.rr, self.zz) = np.meshgrid(r_space, z_space)
 
   def SetFields(self, pcRad, pcLen, impurityGrad, method="full"):
@@ -138,23 +142,31 @@ class Detector:
   def SetFieldsGradInterp(self, impurityGrad):
 
     self.impurityGrad = impurityGrad
-    rr = self.rr
-    zz = self.zz
-    efld_r_function = self.efld_r_function
-    efld_z_function = self.efld_z_function
 
-    gradgrad = np.ones_like(rr) * impurityGrad
-    
-    points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), ], dtype=np.dtype('f4') ).T
+    gradIdx = np.argwhere(self.gradList == impurityGrad)
+    self.SetFieldsGradIdx(gradIdx)
+    #     rr = self.rr
+    #     zz = self.zz
+    #     efld_r_function = self.efld_r_function
+    #     efld_z_function = self.efld_z_function
+    #
+    #     gradgrad = np.ones_like(rr) * impurityGrad
+    #
+    #     points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), ], dtype=np.dtype('f4') ).T
+    #
+    #     new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+    #     new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
+    #
+    # #    grad_idx = find_nearest_idx(self.gradList, impurityGrad)
+    # #    new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx][:,:,0])
+    # #    new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx][:,:,0])
+    #
+    #     self.siggenInst.SetFields(new_ef_r, new_ef_z, self.wpArray)
 
-    new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
-    new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
 
-#    grad_idx = find_nearest_idx(self.gradList, impurityGrad)
-#    new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx][:,:,0])
-#    new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx][:,:,0])
+  def SetFieldsGradIdx(self, gradIdx):
+      self.siggenInst.SetActiveEfld(gradIdx)
 
-    self.siggenInst.SetFields(new_ef_r, new_ef_z, self.wpArray)
 
   def SetFieldsFullInterp(self, pcRad, pcLen, impurityGrad):
     self.pcRad = pcRad
@@ -166,18 +178,18 @@ class Detector:
     wp_function = self.wp_function
     efld_r_function = self.efld_r_function
     efld_z_function = self.efld_z_function
-    
+
     radrad = np.ones_like(rr) * pcRad
     lenlen = np.ones_like(rr) * pcLen
     gradgrad = np.ones_like(rr) * impurityGrad
-    
+
     points_wp =  np.array([rr.flatten() , zz.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
     points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
 
     new_wp = np.array(wp_function( points_wp ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
     new_ef_r = np.array(efld_r_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
     new_ef_z = np.array(efld_z_function( points_ef ).reshape(rr.shape).T, dtype=np.dtype('f4'), order="C")
-  
+
     self.siggenInst.SetPointContact( pcRad, pcLen )
     self.siggenInst.SetFields(new_ef_r, new_ef_z, new_wp)
 
@@ -189,15 +201,15 @@ class Detector:
     grad_idx = find_nearest_idx(self.gradList, impurityGrad)
     rad_idx = find_nearest_idx(self.pcRadList, pcRad)
     len_idx = find_nearest_idx(self.pcLenList, pcLen)
-    
+
     new_wp = np.copy(self.wpArray[:,:,rad_idx, len_idx][:,:,0])
     new_ef_r = np.copy(self.efld_rArray[:,:,grad_idx,rad_idx, len_idx][:,:,0])
     new_ef_z = np.copy(self.efld_zArray[:,:,grad_idx,rad_idx, len_idx][:,:,0])
-    
+
     wp_function = self.wp_function
     efld_r_function = self.efld_r_function
     efld_z_function = self.efld_z_function
-    
+
 #    grad_idx = np.searchsorted(self.gradList, impurityGrad, side="left")
 #    rad_idx = np.searchsorted(self.pcRadList, pcRad, side="left")
 #    len_idx = np.searchsorted(self.pcLenList, pcLen, side="left")
@@ -209,10 +221,10 @@ class Detector:
 #    wpArray[np.where(wpArray==0)] = np.nan
 #    div= np.divide(np.subtract(wpArray, wpArrayNext), wpArray)
 #    import matplotlib.pyplot as plt
-#    
+#
 #    div_true = np.zeros_like(div)
 #    div_true[np.where(div > 0.01)] = 1
-#    
+#
 #    plt.imshow(div_true.T, origin='lower')
 #    plt.colorbar()
 #    plt.show()
@@ -240,7 +252,7 @@ class Detector:
     gradgrad = np.ones_like(rr) * impurityGrad
     points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
     new_ef_r[min_distance_r*10:len(r_space)+min_distance_r*10,  min_distance_z*10:len(z_space)+min_distance_z*10] = efld_r_function( points_ef ).reshape(rr.shape).T
-    
+
     min_distance_r = 0#1.5
     min_distance_z = 0#1.5
     r_space = np.around(np.arange(min_distance_r, self.wpArray.shape[0]/10. , 0.1, dtype=np.dtype('f4')),1)
@@ -251,26 +263,26 @@ class Detector:
     gradgrad = np.ones_like(rr) * impurityGrad
     points_ef =  np.array([rr.flatten() , zz.flatten(), gradgrad.flatten(), radrad.flatten(), lenlen.flatten()], dtype=np.dtype('f4') ).T
     new_ef_z[np.int(min_distance_r*10):len(r_space)+np.int(min_distance_r*10),  np.int(min_distance_z*10):len(z_space)+np.int(min_distance_z*10)] =  efld_z_function( points_ef ).reshape(rr.shape).T
-    
+
 #    import matplotlib.pyplot as plt
 ##    plt.imshow(np.abs(new_wp.T - self.wpArray[:,:,rad_idx, len_idx][:,:,0].T) , origin='lower'
 #    plt.imshow(np.sqrt(np.add(new_ef_r.T**2, new_ef_z.T**2)) , origin='lower')
 #    plt.colorbar()
-#    
+#
 #    plt.figure()
 #    plt.imshow(np.abs(new_ef_z.T - self.efld_zArray[:,:,grad_idx,rad_idx, len_idx][:,:,0].T)  , origin='lower')
 #    plt.colorbar()
-#    
+#
 #    plt.figure()
 #    plt.imshow(np.abs(new_ef_r.T - self.efld_rArray[:,:,grad_idx,rad_idx, len_idx][:,:,0].T) , origin='lower')
 #    plt.colorbar()
-#    
+#
 #    plt.show()
 #    exit()
 
     self.siggenInst.SetPointContact( pcRad, pcLen )
     self.siggenInst.SetFields(new_ef_r, new_ef_z, new_wp)
-  
+
 ###########################################################################################################################
   def ReinitializeDetector(self):
     self.SetTemperature(self.temperature)
@@ -279,25 +291,25 @@ class Detector:
 ###########################################################################################################################
   def SetTemperature(self, h_temp, e_temp=0):
     self.temperature = h_temp
-    
+
     if e_temp == 0:
       e_temp = h_temp
-    
+
     self.siggenInst.SetTemperature(h_temp, e_temp)
 ###########################################################################################################################
   def SetTransferFunction(self, b_over_a, c, d, RC1_in_us, RC2_in_us, rc1_frac):
     self.num = [1., b_over_a, 0.]
     self.den = [1., 2.*c, d**2]
-    
+
     RC1= 1E-6 * (RC1_in_us)
     self.rc1_for_tf = np.exp(-1./1E8/RC1)
-  
+
     RC2 = 1E-6 * (RC2_in_us)
     self.rc2_for_tf = np.exp(-1./1E8/RC2)
-  
+
     self.rc1_frac = rc1_frac
-  
-  
+
+
   def SetTransferFunctionByTF(self, num, den):
     #should already be discrete params
     (self.num, self.den) = (num, den)
@@ -343,13 +355,13 @@ class Detector:
       print "found zero wf at r=%0.2f, phi=%0.2f, z=%0.2f (calcflag is %d)" % (r, phi, z, calcFlag)
       return None
     return self.raw_siggen_data
-    
+
 ###########################################################################################################################
   def MakeSimWaveform(self, r,phi,z,scale, switchpoint,  numSamples, h_smoothing = None):
-  
+
     self.raw_siggen_data.fill(0.)
     ratio = np.int(self.calc_length / self.num_steps)
-    
+
 #    print "ratio is %d" % ratio
 
     hole_wf = self.MakeRawSiggenWaveform(r, phi, z, 1)
@@ -364,7 +376,7 @@ class Detector:
 #      self.siggenInst.ChargeCloudCorrect(hole_wf, cloud_size)
 
     self.raw_siggen_data += hole_wf[::ratio]
-    
+
     #charge trapping (for holes only), currently not being used
     if self.trapping_rc is not None:
       trapping_rc = self.trapping_rc * 1E-6
@@ -381,30 +393,30 @@ class Detector:
 #      ndimage.filters.gaussian_filter1d(electron_wf, h_smoothing, output=electron_wf)
 
     self.raw_siggen_data += electron_wf[::ratio]
-    
+
     if h_smoothing is not None:
       ndimage.filters.gaussian_filter1d(self.raw_siggen_data, h_smoothing/ratio, output=self.raw_siggen_data)
 
     sim_wf = self.ProcessWaveform(self.raw_siggen_data, numSamples, scale, switchpoint)
     return sim_wf
-    
+
   def MakeRawSiggenWaveform(self, r,phi,z, charge):
     #Has CALCULATION, not OUTPUT, step length (ie, usually 1ns instead of 10ns binning)
     x = r * np.sin(phi)
     y = r * np.cos(phi)
     self.raw_charge_data.fill(0.)
-  
+
     calcFlag = self.siggenInst.MakeSignal(x, y, z, self.raw_charge_data, charge);
     if calcFlag == -1:
       return None
 
     return self.raw_charge_data
-    
+
 ########################################################################################################
   def ProcessWaveform(self, siggen_wf, outputLength, scale, switchpoint):
     '''Use interpolation instead of rounding'''
     siggen_len = self.num_steps #+ self.zeroPadding
-    
+
     switchpoint_ceil = switchpoint
 
 
@@ -416,7 +428,7 @@ class Detector:
     siggen_start_idx = (switchpoint_ceil - switchpoint) * self.data_to_siggen_size_ratio
 
     sampled_idxs = np.arange(samples_to_fill)*self.data_to_siggen_size_ratio + siggen_start_idx
-    
+
     self.processed_siggen_data.fill(0.)
 
     try:
@@ -427,7 +439,7 @@ class Detector:
       print siggen_wf.size
       print sampled_idxs[-10:]
       return None
-      
+
     #filter for the damped oscillation
     self.processed_siggen_data[:outputLength]= signal.lfilter(self.num, self.den, self.processed_siggen_data[:outputLength])
 
@@ -435,16 +447,16 @@ class Detector:
     rc2_num_term = self.rc1_for_tf*self.rc1_frac - self.rc1_for_tf - self.rc2_for_tf*self.rc1_frac
     self.processed_siggen_data[:outputLength]= signal.lfilter([1., -1], [1., -self.rc1_for_tf], self.processed_siggen_data[:outputLength])
     self.processed_siggen_data[:outputLength]= signal.lfilter([1., rc2_num_term], [1., -self.rc2_for_tf], self.processed_siggen_data[:outputLength])
-    
-    
+
+
     smax = np.amax(self.processed_siggen_data[:outputLength])
-    
+
     if smax == 0:
       return None
-    
+
     self.processed_siggen_data[:outputLength] /= smax
     self.processed_siggen_data[:outputLength] *= scale
-    
+
     return self.processed_siggen_data[:outputLength]
 ########################################################################################################
   #For pickling a detector object
@@ -455,7 +467,7 @@ class Detector:
 
     #manually do a deep copy of the velo data
     self.siggenSetup = self.siggenInst.GetSafeConfiguration()
-  
+
     state = self.__dict__.copy()
     # Remove the unpicklable entries.
     del state['rr']
@@ -478,7 +490,7 @@ class Detector:
     # reopen it and read from it until the line count is restored.
 
     self.siggenInst =  Siggen(savedConfig=self.siggenSetup)
-  
+
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
@@ -502,5 +514,3 @@ def find_nearest_idx(array,value):
 #  def __del__(self):
 #    del self.wp_pp
 #    del self.siggenInst
-
-  

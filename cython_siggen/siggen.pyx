@@ -3,7 +3,7 @@
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 
 from libc.stdlib cimport malloc, free
-from libc.string cimport strcpy
+from libc.string cimport strcpy, memset
 
 import numpy as np
 import cython
@@ -19,19 +19,21 @@ cdef class Siggen:
   cdef csiggen.MJD_Siggen_Setup fSiggenData
   cdef csiggen.velocity_lookup* fVelocityFileData #as read straight out of the drift velo file
   cdef csiggen.velocity_lookup* fVelocityTempData #temperature-adjuisted values for use in siggen
-  
+
+  cdef csiggen.cyl_pt *** efld_ptr_arr
+
   cdef csiggen.cyl_pt** pEfld;
   cdef float** pWpot;
-  
+
   #helper arrays for siggen calcs
   cdef float* sum
   cdef float* tmp
-  
+
 #  cdef csiggen.point* pDpath_e
 #  cdef csiggen.point* pDpath_h
 
   def __init__(self, conffilename="", timeStepLength=-1., numTimeSteps=-1, savedConfig=None):
-    
+
     if savedConfig is not None:
       self.SetConfiguration(savedConfig)
       self.reinit_from_saved_state()
@@ -40,7 +42,19 @@ cdef class Siggen:
       csiggen.set_hole_params(66333., 0.744, 181., 107270., 0.580, 100., &self.fSiggenData)
 
     else:
+
       csiggen.read_config(conffilename, &self.fSiggenData);
+
+      self.fSiggenData.rmin  = 0;
+      self.fSiggenData.rmax  = self.fSiggenData.xtal_radius;
+      self.fSiggenData.rstep = self.fSiggenData.xtal_grid;
+      self.fSiggenData.zmin  = 0;
+      self.fSiggenData.zmax  = self.fSiggenData.xtal_length;
+      self.fSiggenData.zstep = self.fSiggenData.xtal_grid;
+
+      self.fSiggenData.rlen = np.int((self.fSiggenData.rmax - self.fSiggenData.rmin)/self.fSiggenData.rstep) + 1;
+      self.fSiggenData.zlen = np.int((self.fSiggenData.zmax - self.fSiggenData.zmin)/self.fSiggenData.zstep) + 1;
+
       csiggen.field_setup(&self.fSiggenData);
 
       if timeStepLength ==-1. or numTimeSteps ==-1:
@@ -49,10 +63,10 @@ cdef class Siggen:
         self.set_time_step_length(timeStepLength)
 #        self.set_calc_time_step_length(timeStepLength)
         self.set_time_step_number(numTimeSteps)
-    
+
     self.fSiggenData.dpath_e = <csiggen.point *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
     self.fSiggenData.dpath_h = <csiggen.point *> PyMem_Malloc(self.fSiggenData.time_steps_calc*sizeof(csiggen.point));
-    
+
     self.fSiggenData.v_params = <csiggen.velocity_params *> PyMem_Malloc(sizeof(csiggen.velocity_params));
 #    self.fSiggenData.v_params.h_100_mu0 =66333.
 #    self.fSiggenData.v_params.h_100_beta = 0.744
@@ -66,9 +80,10 @@ cdef class Siggen:
 
     self.ReadVelocityTable()
     self.SetTemperature(self.fSiggenData.xtal_temp)
-    
+
     #default params are reggiani
     csiggen.set_hole_params(66333., 0.744, 181., 107270., 0.580, 100., &self.fSiggenData)
+
 
   def __dealloc__(self):
     if self.fSiggenData.dpath_e is not NULL:
@@ -89,7 +104,9 @@ cdef class Siggen:
       PyMem_Free(self.sum)
     if self.tmp is not NULL:
       PyMem_Free(self.tmp)
-    
+
+    # if self.
+
   cdef reinit_from_saved_state(self):
     #init the WP and E-fld
     cdef csiggen.cyl_pt **efld;
@@ -97,7 +114,7 @@ cdef class Siggen:
     for i in range(self.fSiggenData.rlen):
       efld[i] = <csiggen.cyl_pt *> PyMem_Malloc(self.fSiggenData.zlen*sizeof(csiggen.cyl_pt));
     self.fSiggenData.efld = efld;
-    
+
     cdef float** wpot;
     wpot = <float **> malloc(self.fSiggenData.rlen*sizeof(float*));
     for i in range(self.fSiggenData.rlen):
@@ -106,14 +123,14 @@ cdef class Siggen:
 
     self.pEfld = efld;
     self.pWpot = wpot;
-  
+
   cdef c_get_signal(self, float x, float y, float z, float* signal):
     print "Getting signal at (%0.2f, %0.2f, %0.2f)" % (x,y,z)
     cdef csiggen.point pt
     pt.x = x
     pt.y = y
     pt.z = z
-  
+
     return csiggen.get_signal( pt, signal, &self.fSiggenData)
 
   def GetSignal(self, float x, float y, float z, np.ndarray[float, ndim=1, mode="c"] input not None):
@@ -139,8 +156,8 @@ cdef class Siggen:
 
   def MakeSignal(self, float x, float y, float z, np.ndarray[float, ndim=1, mode="c"] input not None, float charge):
     return  self.c_make_signal(x,y,z, &input[0], charge)
-    
-    
+
+
   def ChargeCloudCorrect(self, np.ndarray[float, ndim=1, mode="c"] input not None, charge_cloud_size):
     self.c_charge_cloud_correction(&input[0], charge_cloud_size)
 
@@ -151,7 +168,7 @@ cdef class Siggen:
       tsteps = self.fSiggenData.time_steps_calc
       sum = self.sum
       tmp = self.tmp
-  
+
       dt = np.int( (1.5 + charge_cloud_size / (self.fSiggenData.step_time_calc * self.fSiggenData.initial_vel)) )
       if (self.fSiggenData.initial_vel < 0.00001): dt = 0
 
@@ -164,7 +181,7 @@ cdef class Siggen:
         for j in range(tsteps):
           sum[j] = 1.0;
           tmp[j] = signal[j];
-        
+
         for k in np.arange(l, 2*dt, l):
           x = k/w;
           y = np.exp(-x*x);
@@ -173,7 +190,7 @@ cdef class Siggen:
             tmp[j] += signal[j+k] * y;
             sum[j+k] += y;
             tmp[j+k] += signal[j] * y;
-          
+
           for j in range(tsteps):
             signal[j] = tmp[j]/sum[j];
 
@@ -246,9 +263,9 @@ cdef class Siggen:
 
   def ReadCorrectedVelocity(self):
     for i in range(self.fSiggenData.v_lookup_len):
-    
+
       if i >3: continue
-    
+
       print "Row number %d" % i
       print self.fVelocityTempData[i].e
       print self.fVelocityTempData[i].e100
@@ -283,6 +300,50 @@ cdef class Siggen:
 
   @cython.boundscheck(False)
   @cython.wraparound(False)
+  def ReadEFieldsFromArray(self, efld_rArray, efld_zArray, wpot_array):
+      number_eflds = efld_rArray.shape[2]
+    #   self.efld_ptr_arr = np.empty(number_eflds, dtype=np.obj)
+      self.malloc_efld_array(number_eflds)
+      self.malloc_wp()
+
+      for  (i) in range(self.fSiggenData.rlen):
+          for (j) in range(self.fSiggenData.zlen):
+            self.pWpot[i][j] = wpot_array[i,j]
+      self.fSiggenData.wpot = self.pWpot
+
+      for grad_idx in range(number_eflds):
+        new_ef_r = efld_rArray[:,:,grad_idx]
+        new_ef_z = efld_zArray[:,:,grad_idx]
+        for  (i) in range(self.fSiggenData.rlen):
+            for (j) in range(self.fSiggenData.zlen):
+              self.efld_ptr_arr[grad_idx][i][j].r = new_ef_r[i,j]
+              self.efld_ptr_arr[grad_idx][i][j].phi = 0.;
+              self.efld_ptr_arr[grad_idx][i][j].z = new_ef_z[i,j]
+
+
+  def SetActiveEfld(self, grad_idx):
+    self.fSiggenData.efld = self.efld_ptr_arr[grad_idx]
+
+  cdef malloc_efld_array(self, number_eflds):
+    # cdef csiggen.cyl_pt *** efld_ptr_arr
+    self.efld_ptr_arr = <csiggen.cyl_pt ***> PyMem_Malloc(number_eflds*sizeof(csiggen.cyl_pt**));
+
+    cdef csiggen.cyl_pt ** efld
+    for i in range(number_eflds):
+        self.efld_ptr_arr[i] = <csiggen.cyl_pt **> PyMem_Malloc(self.fSiggenData.rlen*sizeof(csiggen.cyl_pt*));
+        for j in range(self.fSiggenData.rlen):
+            self.efld_ptr_arr[i][j] = <csiggen.cyl_pt *> PyMem_Malloc(self.fSiggenData.zlen*sizeof(csiggen.cyl_pt));
+
+  cdef malloc_wp(self):
+    cdef float ** wpot
+    wpot =  <float **> PyMem_Malloc(self.fSiggenData.rlen*sizeof(float*));
+    for j in range(self.fSiggenData.rlen):
+        wpot[j] = <float *> PyMem_Malloc(self.fSiggenData.zlen*sizeof(float));
+        # memset(wpot, 0, self.fSiggenData.zlen*sizeof(float));
+    self.pWpot = wpot
+
+  @cython.boundscheck(False)
+  @cython.wraparound(False)
   def SetFields(self, new_ef_r, new_ef_z, new_wp):
     for  (i) in range(self.fSiggenData.rlen):
       for (j) in range(self.fSiggenData.zlen):
@@ -312,16 +373,16 @@ cdef class Siggen:
     return self.fSiggenData.xtal_temp
   def GetDimensions(self):
     return ( self.fSiggenData.xtal_radius, self.fSiggenData.xtal_length)
-  
+
   def FindDriftVelocity(self, float x, float y, float z):
     self.c_find_drift_velocity( x, y, z)
-  
+
   cdef c_find_drift_velocity(self, float x, float y, float z):
     cdef csiggen.point pt
     pt.x = x
     pt.y = y
     pt.z = z
-    
+
     cdef csiggen.vector v
     csiggen.drift_velocity( pt, -1., &v, &self.fSiggenData)
     print "x: %f" % v.x
@@ -349,7 +410,7 @@ cdef class Siggen:
 
 
   def GetSafeConfiguration(self):
-  
+
     siggenConfig = {}
     siggenConfig["verbosity"]  = self.fSiggenData.verbosity;              # 0 = terse, 1 = normal, 2 = chatty/verbose
     siggenConfig["velocity_type"]  = self.fSiggenData.velocity_type;
@@ -385,7 +446,7 @@ cdef class Siggen:
 
     siggenConfig["drift_name"] = str(self.fSiggenData.drift_name);
 
-    # signal calculation 
+    # signal calculation
     siggenConfig["xtal_temp"]  = self.fSiggenData.xtal_temp;            # crystal temperature in Kelvin
     siggenConfig["preamp_tau"]  = self.fSiggenData.preamp_tau;           # integration time constant for preamplifier, in ns
     siggenConfig["time_steps_calc"]  = self.fSiggenData.time_steps_calc;      # number of time steps used in calculations
@@ -406,22 +467,22 @@ cdef class Siggen:
     siggenConfig["zmin"]  = self.fSiggenData.zmin;
     siggenConfig["zmax"]  = self.fSiggenData.zmax;
     siggenConfig["zstep"]  = self.fSiggenData.zstep;
-    
+
     siggenConfig["rlen"]  = self.fSiggenData.rlen;
     siggenConfig["zlen"]  = self.fSiggenData.zlen;           # dimensions of efld and wpot arrays
     siggenConfig["v_lookup_len"]  = self.fSiggenData.v_lookup_len;
-    
+
     # data for calc_signal.c
     siggenConfig["initial_vel"]  = self.fSiggenData.initial_vel;
     siggenConfig["final_vel"]  = self.fSiggenData.final_vel;  # initial and final drift velocities for charges collected to PC
     siggenConfig["dv_dE"]  = self.fSiggenData.dv_dE;     # derivative of drift velocity with field ((mm/ns) / (V/cm))
     siggenConfig["v_over_E"]  = self.fSiggenData.v_over_E;  # ratio of drift velocity to field ((mm/ns) / (V/cm))
     siggenConfig["final_charge_size"]  = self.fSiggenData.final_charge_size;     # in mm
-    
+
     return siggenConfig;
 
   def SetConfiguration(self, siggenConfig):
-  
+
     self.fSiggenData.verbosity = siggenConfig["verbosity"];              # 0 = terse, 1 = normal, 2 = chatty/verbose
     self.fSiggenData.velocity_type = siggenConfig["velocity_type"];
     # geometry
@@ -454,7 +515,7 @@ cdef class Siggen:
 
     strcpy(self.fSiggenData.drift_name,  siggenConfig["drift_name"]);
 
-    # signal calculation 
+    # signal calculation
     self.fSiggenData.xtal_temp = siggenConfig["xtal_temp"];            # crystal temperature in Kelvin
     self.fSiggenData.preamp_tau = siggenConfig["preamp_tau"];           # integration time constant for preamplifier, in ns
     self.fSiggenData.time_steps_calc = siggenConfig["time_steps_calc"];      # number of time steps used in calculations
@@ -475,11 +536,11 @@ cdef class Siggen:
     self.fSiggenData.zmin = siggenConfig["zmin"];
     self.fSiggenData.zmax = siggenConfig["zmax"];
     self.fSiggenData.zstep = siggenConfig["zstep"];
-    
+
     self.fSiggenData.rlen = siggenConfig["rlen"];
     self.fSiggenData.zlen = siggenConfig["zlen"];           # dimensions of efld and wpot arrays
     self.fSiggenData.v_lookup_len = siggenConfig["v_lookup_len"];
-    
+
     # data for calc_signal.c
     self.fSiggenData.initial_vel = siggenConfig["initial_vel"];
     self.fSiggenData.final_vel = siggenConfig["final_vel"];  # initial and final drift velocities for charges collected to PC
@@ -519,7 +580,7 @@ cdef public int drift_velocity_python(csiggen.point pt, csiggen.cyl_pt e, csigge
       v_x = np.sin(theta)*np.cos(phi) * v_r + np.cos(theta)*np.cos(phi) * v_theta - np.sin(theta)*np.sin(phi) * v_phi
       v_y = np.sin(theta)*np.sin(phi) * v_r + np.cos(theta)*np.sin(phi) * v_theta + np.sin(theta)*np.cos(phi) * v_phi
       v_z = np.cos(theta) * v_r - np.sin(theta) * v_theta
-      
+
       velo.x = np.around(v_x,5)
       velo.y = np.around(v_y,5)
       velo.z = np.around(v_z,5)
@@ -530,7 +591,7 @@ cdef public int drift_velocity_python(csiggen.point pt, csiggen.cyl_pt e, csigge
 #      R_y = np.matrix( [ [np.cos(beta), 0, np.sin(beta)], [0, 1., 0], [-np.sin(beta), 0, np.cos(beta)]]  )
 #      R_z = np.matrix( [[np.cos(alpha), -np.sin(alpha), 0], [np.sin(alpha), np.cos(alpha), 0], [0,0,1.] ] )
 #      R_j = np.dot(R_z, R_y)
-#      
+#
 #      v_prime = np.array([v_r, v_theta, v_phi])
 #      v = np.array(np.dot(R_j, v_prime))
 
@@ -538,7 +599,7 @@ cdef public int drift_velocity_python(csiggen.point pt, csiggen.cyl_pt e, csigge
 #      v_y = np.sin(theta)*np.sin(phi) * v[0][0] + r*np.cos(theta)*np.sin(phi) * v[0][1] + r *np.sin(theta)*np.cos(phi) * v[0][2]
 #      v_z = np.cos(theta) * v[0][0] - r *np.sin(theta) * v[0][2]
 
-      
+
 #      if pt.z == 15:
 #        print "calculating position: (%f, %f, %f)" % (pt.x , pt.y , pt.z)
 #        print "  e: (%f, %f, %f)" % (e.r , e.phi , e.z)
@@ -549,7 +610,7 @@ cdef public int drift_velocity_python(csiggen.point pt, csiggen.cyl_pt e, csigge
 #
 #        print "  phi: %0.2f pi" % (phi / np.pi)
 #        print "  theta: %0.2f pi" % (theta / np.pi)
-#        
+#
 #        print "  v_x: %f or %f or %f" % (v_r, v_x, v[0][0])
 #        print "  v_y: %f or %f or %f" % (v_theta, v_y, v[0][1])
 #        print "  v_z: %f or %f or %f" % (v_phi, v_z, v[0][2])
@@ -580,19 +641,19 @@ cdef public int drift_velocity_python(csiggen.point pt, csiggen.cyl_pt e, csigge
 
 
 def find_hole_velo(field, theta, phi ):
-  
+
     #these are the reggiani numbers
     v_100 = drift_velo_model(field, 66333., 0.744, 181.)
     v_111 = drift_velo_model(field, 107270., 0.580, 100.)
-  
+
     if v_100 == 0: return 0.
     v_rel = v_111 / v_100
 
     k_0 = 9.2652 - 26.3467*v_rel + 29.6137*v_rel**2 -12.3689 * v_rel**3
-    
+
     lambda_k0 = -0.01322 * k_0 + 0.41145*k_0**2 - 0.23657 * k_0**3 + 0.04077*k_0**4
     omega_k0 = 0.006550*k_0 - 0.19946*k_0**2 + 0.09859*k_0**3 - 0.01559*k_0**4
-  
+
     v_r = v_100 * (1- lambda_k0*(np.sin(theta)**4*np.sin(2*phi)**2 + np.sin(2*theta)**2 ) )
     v_theta = v_100 * omega_k0 * (2*np.sin(theta)**3*np.cos(theta)*np.sin(2*phi)**2 + np.sin(4*theta) )
     v_phi = v_100 * omega_k0 * np.sin(theta)**3*np.sin(4*phi)
@@ -601,7 +662,7 @@ def find_hole_velo(field, theta, phi ):
 
 
 def find_electron_velo(field_0, theta, phi):
-  
+
   field = np.array([field_0*np.sin(theta)*np.cos(phi), field_0*np.sin(theta)*np.sin(phi), field_0*np.cos(theta)])
 
   eta_0 = 0.496
@@ -613,26 +674,26 @@ def find_electron_velo(field_0, theta, phi):
 #  b = 0.201
 #  e_ref = 1200.
   eta = eta_0 + b * np.log( field/e_ref )
-  
+
   m_l = 1.64
   m_t = 0.0819
   gamma_0 = 2.888
-  
+
   j_0 = np.diag(np.array([m_t**-1,m_l**-1,m_t**-1]))
-  
+
   E_star = np.empty((4,3))
   inv_nu = np.empty(4)
-  
+
   alphas = np.empty((4,3,3))
-  
+
   for i in range(1,5):
     beta = np.arccos(np.sqrt(2./3))
     alpha = (i-1) * np.pi / 2. + np.pi/4
-    
-    
+
+
     R_x = np.matrix( [ [1., 0, 0], [0, np.cos(beta), np.sin(beta)], [0, -np.sin(beta), np.cos(beta)]]  )
     R_z = np.matrix( [[np.cos(alpha), np.sin(alpha), 0], [-np.sin(alpha), np.cos(alpha), 0], [0,0,1.] ] )
-    
+
     R_j = np.dot(R_x, R_z)
 #    R_j = R_j.round(10)
 
@@ -640,9 +701,9 @@ def find_electron_velo(field_0, theta, phi):
 #    print R_z
 
     alpha_i = np.dot(R_j.T, np.dot(j_0, R_j))
-    
+
     alphas[i-1, :,:] = alpha_i
-    
+
 #    print R_j
     alpha_i = alpha_i.round(10)
 #    print alpha_i
@@ -654,28 +715,28 @@ def find_electron_velo(field_0, theta, phi):
 #    print E_star[i-1,:]
 
     e_star_i_norm = np.linalg.norm(E_star[i-1,:])
-    
+
     eta_star_i = eta_0 + b * np.log( e_star_i_norm/e_ref )
-    
+
 #    print eta_star_i
 
     inv_nu[i-1] = np.power(e_star_i_norm, eta_star_i)**-1
-  
+
   sum_nu = np.sum(inv_nu)
-  
+
   v_d = np.empty((4,3))
-  
+
   for i in range(1,5):
     E_star_i = E_star[i-1,:]
     e_star_i_norm = np.linalg.norm(E_star[i-1,:])
-    
+
     v_100_i = drift_velo_model(e_star_i_norm/gamma_0, 38609, 0.805, 511., -171) #
     #v_100_i = drift_velo_model(e_star_i_norm/gamma_0, 40180., 0.72, 493., 589)
 #    print v_100_i
     mu_star_i = v_100_i / gamma_0 / e_star_i_norm
-    
+
     n_i = inv_nu[i-1] / sum_nu
-    
+
 #    print E_star_i
 #    print e_star_i_norm
 
