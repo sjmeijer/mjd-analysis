@@ -22,7 +22,7 @@ import probability_model_waveform as pmw
 
 from dns_wf_model import *
 
-fitSamples = 300
+fitSamples = 400
 timeStepSize = 1
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -44,7 +44,7 @@ pcLenGuess = 1.6
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10)
-det.LoadFieldsGrad("fields_impgrad.npz", pcLen=pcLenGuess, pcRad=pcRadGuess)
+det.LoadFieldsGrad("fields_impgrad_0-0.06.npz", pcLen=pcLenGuess, pcRad=pcRadGuess)
 det.SetFieldsGradInterp(gradGuess)
 
 b_over_a = 0.107213
@@ -67,15 +67,15 @@ det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111
 nll_wf = lambda *args: -pmw.lnlike_waveform(*args)
 
 def main(argv):
-  wf = wfs[8]
-  wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2)
+  wf = wfs[5]
+  wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2, earlySamples=100)
   initializeDetector(det, )
   pmw.initializeDetector(det, )
   pmw.initializeWaveform(wf)
-  
+
   minresult = None
   minlike = np.inf
-  
+
   for r in np.linspace(4, np.floor(det.detector_radius)-3, 3):
     for z in np.linspace(4, np.floor(det.detector_length)-3, 5):
   #        for t0_guess in np.linspace(wf.t0Guess-10, wf.t0Guess+5, 3):
@@ -90,9 +90,9 @@ def main(argv):
       if result['fun'] < minlike:
         minlike = result['fun']
         minresult = result
-  
+
   initializeWaveform(wf, minresult['x'])
-  
+
   print "Best fit w:aveform",
   print "  " + str(minresult['x'])
 
@@ -103,7 +103,7 @@ def main(argv):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=200, num_steps=10000, new_level_interval=1000,
+  gen = sampler.sample(max_num_levels=5000, num_steps=100000, new_level_interval=1000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -117,4 +117,3 @@ def main(argv):
 
 if __name__=="__main__":
     main(sys.argv[1:])
-

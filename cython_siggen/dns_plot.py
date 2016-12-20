@@ -22,9 +22,10 @@ from detector_model import *
 from probability_model_hdxwf import *
 from probability_model_waveform import *
 
+
 #from dns_wf_model import *
 
-fitSamples = 300
+fitSamples = 400
 timeStepSize = 1
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -46,7 +47,7 @@ pcLenGuess = 1.6
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10)
-det.LoadFieldsGrad("fields_impgrad.npz", pcLen=pcLenGuess, pcRad=pcRadGuess)
+det.LoadFieldsGrad("fields_impgrad_0-0.06.npz", pcLen=pcLenGuess, pcRad=pcRadGuess)
 det.SetFieldsGradInterp(gradGuess)
 
 b_over_a = 0.107213
@@ -66,13 +67,14 @@ h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = 66333., 0.744
 
 tf_first_idx = 8
 velo_first_idx = 14
-trap_idx = 18
+trap_idx = 20
+grad_idx = 21
 
 
 def main(argv):
-  wf = wfs[8]
-  wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2)
-  
+  wf = wfs[5]
+  wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2, earlySamples=100)
+
   fig1 = plt.figure(1, figsize=(20,10))
   plt.clf()
   gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
@@ -85,30 +87,28 @@ def main(argv):
   dataLen = wf.wfLength
   t_data = np.arange(dataLen) * 10
   ax0.plot(t_data, wf.windowedWf, color="r")
-  
+
 #  data = np.loadtxt("posterior_sample.txt")
   data = np.loadtxt("sample.txt")
 
   print "found %d samples" % len(data)
-  
-  for params in data[-400:]:
+
+  for params in data[-100:]:
 #  for params in data:
 #      print params
       rad, phi, theta, scale, t0, smooth = params[:6]
       m, b = params[6:8]
       b_over_a, c, d, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
-      
+
       r = rad * np.cos(theta)
       z = rad * np.sin(theta)
-      
+
 #      print rc1, rc2, rcfrac
 
       det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
-      
+
       h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
       det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
-      
-
 
       print "new waveform:"
       print "  wf params: ",
@@ -117,16 +117,22 @@ def main(argv):
       print b_over_a, c, d, rc1, rc2, rcfrac
       print "  velo params: ",
       print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
-      
-      det.trapping_rc = params[18]     
+
+      det.trapping_rc = params[trap_idx]
       print "  charge trapping: ",
-      print params[18]
+      print params[trap_idx]
+
+      grad = np.int(params[grad_idx])
+      det.SetFieldsGradIdx(grad)
+      print "  grad idx (grad): ",
+      print params[grad_idx],
+      print " (%0.3f)" % det.gradList[grad]
 
       ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  fitSamples, h_smoothing = smooth)
-      
+
       baseline_trend = np.linspace(b, m*fitSamples+b, fitSamples)
       ml_wf += baseline_trend
-      
+
       if ml_wf is None:
         continue
 
@@ -140,4 +146,3 @@ def main(argv):
 
 if __name__=="__main__":
     main(sys.argv[1:])
-

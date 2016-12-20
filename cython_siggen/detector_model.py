@@ -26,6 +26,8 @@ class Detector:
 
     (self.detector_radius, self.detector_length) = self.siggenInst.GetDimensions()
 
+    print "Using model-based velocity numbers..."
+    self.siggenInst.set_velocity_type(1)
 
     if temperature > 0:
       self.SetTemperature(temperature)
@@ -63,7 +65,6 @@ class Detector:
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.processed_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
-    print "thru detector init"
 
 ###########################################################################################################################
   def LoadFields(self, fieldFileName):
@@ -142,8 +143,7 @@ class Detector:
   def SetFieldsGradInterp(self, impurityGrad):
 
     self.impurityGrad = impurityGrad
-
-    gradIdx = np.argwhere(self.gradList == impurityGrad)
+    gradIdx = (np.abs(self.gradList-impurityGrad)).argmin()
     self.SetFieldsGradIdx(gradIdx)
     #     rr = self.rr
     #     zz = self.zz
@@ -285,7 +285,7 @@ class Detector:
 
 ###########################################################################################################################
   def ReinitializeDetector(self):
-    self.SetTemperature(self.temperature)
+#    self.SetTemperature(self.temperature)
 #    self.SetFields(self.pcRad, self.pcLen, self.impurityGrad)
     self.SetFieldsGradInterp( self.impurityGrad)
 ###########################################################################################################################
@@ -494,7 +494,8 @@ class Detector:
     self.raw_siggen_data = np.zeros( self.num_steps, dtype=np.dtype('f4'), order="C" )
     self.raw_charge_data = np.zeros( self.calc_length, dtype=np.dtype('f4'), order="C" )
     self.LoadFields(self.fieldFileName)
-    det.siggenInst.set_velocity_type(1)
+    self.siggenInst.set_velocity_type(1)
+    self.siggenInst.ReadEFieldsFromArray(self.efld_rArray, self.efld_zArray, self.wpArray )
 
   def ReflectPoint(self, r,z):
     #algorithm shamelessly ripped from answer on http://stackoverflow.com/questions/3306838/algorithm-for-reflecting-a-point-across-a-line
