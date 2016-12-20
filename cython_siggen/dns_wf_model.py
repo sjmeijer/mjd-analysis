@@ -128,7 +128,7 @@ class Model(object):
 #        phi = rng.rand() * np.pi/4
 #        z = rng.rand() * np.pi/2
 
-        t0 = np.clip(0.5*rng.randn() + wf_guess[4], 0, max_t0)
+        t0 = np.clip(0.5*rng.randn() + 100, 0, max_t0)
         scale = 10*rng.randn() + wf_guess[3]
         smooth = np.clip(rng.randn() + wf_guess[5], 0, 20)
 
@@ -354,15 +354,30 @@ class Model(object):
         model = detector.MakeSimWaveform(r, phi, z, scale, t0, data_len, h_smoothing=smooth)
         if model is None:
           return -np.inf
+        if np.any(np.isnan(model)):
+          return -np.inf
+
         if np.amin(model) < 0:
           return -np.inf
 
         baseline_trend = np.linspace(b, m*data_len+b, data_len)
         model += baseline_trend
 
-        if model[-1] < 0.5*wf.wfMax:
+        #make sure the last point is near where it should be
+        if model[-1] < 0.9*wf.wfMax or model[-1] > wf.wfMax:
           return -np.inf
         if np.argmax(model) == len(model)-1:
+          return -np.inf
+
+        #kill way too fast wfs (from t0-t50)
+        t50_idx = findTimePointBeforeMax(model, 0.5)
+        t50 = t50_idx - t0
+        if t50 < 20 or t50 > 100:
+          return -np.inf
+
+        #kill way too slow wfs (from t50-t100)
+        t50_max = np.argmax(model) - t50_idx
+        if t50_max > 30:
           return -np.inf
 
 
@@ -378,5 +393,12 @@ def findTimePointBeforeMax(data, percent):
   int_data /= int_data[max_idx]
 
   int_data = int_data[0:max_idx]
-
-  return np.where(np.less(int_data, percent))[0][-1]
+  try:
+      return np.where(np.less(int_data, percent))[0][-1]
+  except IndexError:
+      print data
+      import matplotlib.pyplot as plt
+      plt.figure()
+      plt.plot(data)
+      plt.show()
+      exit(0)
