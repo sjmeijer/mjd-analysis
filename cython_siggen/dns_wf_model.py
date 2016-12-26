@@ -26,7 +26,11 @@ tf_first_idx = 8
 velo_first_idx = 14
 trap_idx = 20
 grad_idx = 21
-max_t0 = 105
+
+min_t0 = 475
+max_t0 = 510
+max_grad = 200
+
 
 ba_idx, c_idx, d_idx = np.arange(3)+ tf_first_idx
 rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
@@ -36,7 +40,7 @@ ba_prior = 0.107213
 c_prior = -0.815152
 d_prior = 0.822696
 
-rc1_prior = 80.
+rc1_prior = 74.
 rc2_prior = 2.08
 rc_frac_prior = 0.992
 
@@ -66,8 +70,8 @@ var = 0.01
 prior_vars[velo_first_idx:velo_first_idx+6] = var*priors[velo_first_idx:velo_first_idx+6]
 prior_vars[trap_idx] = 1.
 
-priors[grad_idx] = 6
-prior_vars[grad_idx] = 1
+priors[grad_idx] = 100
+prior_vars[grad_idx] = 3
 
 
 def draw_position():
@@ -128,7 +132,7 @@ class Model(object):
 #        phi = rng.rand() * np.pi/4
 #        z = rng.rand() * np.pi/2
 
-        t0 = np.clip(0.5*rng.randn() + 100, 0, max_t0)
+        t0 = np.clip(0.5*rng.randn() + 300, min_t0, max_t0)
         scale = 10*rng.randn() + wf_guess[3]
         smooth = np.clip(rng.randn() + wf_guess[5], 0, 20)
 
@@ -164,7 +168,7 @@ class Model(object):
 
         charge_trapping = prior_vars[trap_idx]*rng.randn() + priors[trap_idx]
 
-        grad = np.int(np.clip(prior_vars[trap_idx]*np.int(rng.randn()) + priors[trap_idx], 0, len(detector.gradList)-1))
+        grad = np.int(np.clip(prior_vars[grad_idx]*np.int(rng.randn()) + priors[grad_idx], 0, max_grad))
 
         #6 hole drift params
 
@@ -215,7 +219,7 @@ class Model(object):
 
 
         return np.array([
-              r, phi, theta, scale, t0, smooth, m, b,
+              rad, phi, theta, scale, t0, smooth, m, b,
               b_over_a, c, d,
               rc1, rc2, rcfrac,
               h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
@@ -239,10 +243,10 @@ class Model(object):
           (r_jump, t0_jump) = np.dot(cov, jumps)
 
           params[0] = dnest4.wrap(params[0] + r_jump , 0, max_rad)
-          params[4] = dnest4.wrap(params[4] + t0_jump , 0, max_t0)
+          params[4] = dnest4.wrap(params[4] + t0_jump , min_t0, max_t0)
 
           params[0] = np.clip(params[0] + r_jump , 0, max_rad)
-          params[4] = np.clip(params[4] + t0_jump , 0, max_t0)
+          params[4] = np.clip(params[4] + t0_jump , min_t0, max_t0)
 
         elif which == 1 or which ==2: #phi or theta
           if which == 1: max_val = np.pi/4
@@ -267,11 +271,11 @@ class Model(object):
           #normally distributed, no cutoffs
           params[which] += prior_vars[which]*dnest4.randh()
           if which == 6:
-            dnest4.wrap(params[which], -0.02, 0.02)
-            params[which] = np.clip(params[which], -0.05, 0.05)
+            dnest4.wrap(params[which], -0.01, 0.01)
+            params[which] = np.clip(params[which], -0.01, 0.01)
           if which == 7:
-            dnest4.wrap(params[which], -2, 2)
-            params[which] = np.clip(params[which], -5, 5)
+            dnest4.wrap(params[which], -01, 01)
+            params[which] = np.clip(params[which], -01, 01)
 
         elif which == ba_idx: #b over a
           params[which] += 0.1*dnest4.randh()
@@ -294,21 +298,21 @@ class Model(object):
 
         elif which == rc1_idx:
           params[which] += prior_vars[which]*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 70, 100)
+          params[which] = dnest4.wrap(params[which], 60, 90)
         elif which == rc2_idx:
           params[which] += prior_vars[which]*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 1, 5)
+          params[which] = dnest4.wrap(params[which], 0.1, 10)
         elif which == rcfrac_idx:
           params[which] += prior_vars[which]*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0.9, 1)
         elif which == grad_idx:
-          params[which] += prior_vars[trap_idx]*np.int(dnest4.randh())
-          params[which] = np.int(np.clip(params[which], 0, len(detector.gradList)-1))
+          params[which] += 3*np.int(dnest4.randh())
+          params[which] = np.int(np.clip(params[which], 0, max_grad))
 
         else: #velocity or rc params: cant be below 0, can be arb. large
           params[which] += prior_vars[which]*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0, 1E9)
-
+          params[which] = np.clip(params[which], 0, np.inf)
         return logH
 
     def log_likelihood(self, params):
@@ -357,28 +361,28 @@ class Model(object):
         if np.any(np.isnan(model)):
           return -np.inf
 
-        if np.amin(model) < 0:
-          return -np.inf
+        # if np.amin(model) < 0:
+        #   return -np.inf
 
         baseline_trend = np.linspace(b, m*data_len+b, data_len)
         model += baseline_trend
 
-        #make sure the last point is near where it should be
-        if model[-1] < 0.9*wf.wfMax or model[-1] > wf.wfMax:
-          return -np.inf
-        if np.argmax(model) == len(model)-1:
-          return -np.inf
-
-        #kill way too fast wfs (from t0-t50)
-        t50_idx = findTimePointBeforeMax(model, 0.5)
-        t50 = t50_idx - t0
-        if t50 < 20 or t50 > 100:
-          return -np.inf
-
-        #kill way too slow wfs (from t50-t100)
-        t50_max = np.argmax(model) - t50_idx
-        if t50_max > 30:
-          return -np.inf
+        # #make sure the last point is near where it should be
+        # if model[-1] < 0.9*wf.wfMax or model[-1] > wf.wfMax:
+        #   return -np.inf
+        # if np.argmax(model) == len(model)-1:
+        #   return -np.inf
+        #
+        # #kill way too fast wfs (from t0-t50)
+        # t50_idx = findTimePointBeforeMax(model, 0.5)
+        # t50 = t50_idx - t0
+        # if t50 < 20 or t50 > 100:
+        #   return -np.inf
+        #
+        # #kill way too slow wfs (from t50-t100)
+        # t50_max = np.argmax(model) - t50_idx
+        # if t50_max > 30:
+        #   return -np.inf
 
 
         inv_sigma2 = 1.0/(model_err**2)

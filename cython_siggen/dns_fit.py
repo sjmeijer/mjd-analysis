@@ -12,7 +12,7 @@ from pysiggen import Detector
 
 from dns_wf_model import *
 
-fitSamples = 400
+fitSamples = 1100
 timeStepSize = 1
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -27,13 +27,13 @@ else:
   exit(0)
 
 tempGuess = 79.071172
-gradGuess = 0.04
+gradGuess = 0.01
 pcRadGuess = 2.5
 pcLenGuess = 1.6
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, temperature=tempGuess, timeStep=timeStepSize, numSteps=fitSamples*10)
-det.LoadFieldsGrad("fields_impgrad_0-0.06.npz", pcLen=pcLenGuess, pcRad=pcRadGuess)
+det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=pcLenGuess, pcRad=pcRadGuess)
 det.SetFieldsGradInterp(gradGuess)
 
 tf_first_idx = 8
@@ -41,11 +41,14 @@ velo_first_idx = 14
 trap_idx = 20
 grad_idx = 21
 
-wf_idx = 5
+wf_idx = 7
+
+wf = wfs[wf_idx]
+wf.WindowWaveformTimepoint(fallPercentage=.93, rmsMult=2, earlySamples=500)
+print "wf is %d samples long" %wf.wfLength
 
 def fit(argv):
-  wf = wfs[wf_idx]
-  wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2, earlySamples=100)
+
   initializeDetector(det, )
   initializeWaveform(wf, results[wf_idx]['x'])
 
@@ -68,9 +71,6 @@ def fit(argv):
   dnest4.postprocess()
 
 def plot():
-    wf = wfs[wf_idx]
-    wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2, earlySamples=100)
-
     fig1 = plt.figure(1, figsize=(20,10))
     plt.clf()
     gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
@@ -120,15 +120,15 @@ def plot():
         det.SetFieldsGradIdx(grad)
         print "  grad idx (grad): ",
         print params[grad_idx],
-        print " (%0.3f)" % det.gradList[grad]
+        print " (%0.4f)" % det.gradList[grad]
 
         ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  fitSamples, h_smoothing = smooth)
 
-        baseline_trend = np.linspace(b, m*fitSamples+b, fitSamples)
-        ml_wf += baseline_trend
-
         if ml_wf is None:
           continue
+
+        baseline_trend = np.linspace(b, m*fitSamples+b, fitSamples)
+        ml_wf += baseline_trend
 
         ax0.plot(t_data, ml_wf[:dataLen], color="g", alpha=0.1)
         ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="g",alpha=0.1)
