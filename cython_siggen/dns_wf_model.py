@@ -27,8 +27,9 @@ velo_first_idx = 14
 trap_idx = 20
 grad_idx = 21
 
-min_t0 = 475
-max_t0 = 510
+min_t0 = 10
+max_t0 = 55
+t0_pad = 50
 max_grad = 200
 
 
@@ -132,7 +133,7 @@ class Model(object):
 #        phi = rng.rand() * np.pi/4
 #        z = rng.rand() * np.pi/2
 
-        t0 = np.clip(0.5*rng.randn() + 300, min_t0, max_t0)
+        t0 = np.clip(0.5*rng.randn() + t0_pad, min_t0, max_t0)
         scale = 10*rng.randn() + wf_guess[3]
         smooth = np.clip(rng.randn() + wf_guess[5], 0, 20)
 
@@ -367,22 +368,22 @@ class Model(object):
         baseline_trend = np.linspace(b, m*data_len+b, data_len)
         model += baseline_trend
 
-        # #make sure the last point is near where it should be
-        # if model[-1] < 0.9*wf.wfMax or model[-1] > wf.wfMax:
-        #   return -np.inf
-        # if np.argmax(model) == len(model)-1:
-        #   return -np.inf
-        #
-        # #kill way too fast wfs (from t0-t50)
-        # t50_idx = findTimePointBeforeMax(model, 0.5)
-        # t50 = t50_idx - t0
-        # if t50 < 20 or t50 > 100:
-        #   return -np.inf
-        #
-        # #kill way too slow wfs (from t50-t100)
-        # t50_max = np.argmax(model) - t50_idx
-        # if t50_max > 30:
-        #   return -np.inf
+        #make sure the last point is near where it should be
+        if model[-1] < 0.9*wf.wfMax or model[-1] > wf.wfMax:
+          return -np.inf
+        if np.argmax(model) == len(model)-1:
+          return -np.inf
+
+        #kill way too fast wfs (from t0-t50)
+        t50_idx = findTimePointBeforeMax(model, 0.5)
+        t50 = t50_idx - t0
+        if t50 < 20 or t50 > 100:
+          return -np.inf
+
+        #kill way too slow wfs (from t50-t100)
+        t50_max = np.argmax(model) - t50_idx
+        if t50_max > 30:
+          return -np.inf
 
 
         inv_sigma2 = 1.0/(model_err**2)
