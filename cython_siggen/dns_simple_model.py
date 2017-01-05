@@ -22,9 +22,9 @@ def initializeWaveform( wf_init, wf_guess_result):
 def initializeDetectorAndWaveform(det, wf_init):
   initializeWaveform(wf_init)
   initializeDetector(det)
-min_t0 = 10
-max_t0 = 55
-t0_pad = 50
+min_t0 = 0
+max_t0 = 15
+t0_pad = 10
 priors = np.empty(8)
 
 #linear baseline slope and intercept...
@@ -130,12 +130,29 @@ class Model(object):
           params[0] = np.clip(params[0] + r_jump , 0, max_rad)
           params[4] = np.clip(params[4] + t0_jump , min_t0, max_t0)
 
-        elif which == 1 or which ==2: #phi or theta
-          if which == 1: max_val = np.pi/4
-          if which ==2: max_val = np.pi/2
-          params[which] += dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 0, max_val)
-          params[which] = np.clip(params[which], 0, max_val)
+        elif which == 1:
+            max_val = np.pi/4
+            params[which] += np.pi/4*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], 0, max_val)
+            if params[which] < 0 or params[which] > np.pi/4:
+                print "wtf phi"
+            #params[which] = np.clip(params[which], 0, max_val)
+
+        elif which ==2: #theta
+          rad = params[0]
+
+          if rad < np.amin([detector.detector_radius, detector.detector_length]):
+              max_val = np.pi/2
+              min_val = 0
+          else:
+              min_val = np.cos(detector.detector_radius/rad)
+              max_val = np.pi/2 - np.cos(detector.detector_length/rad)
+
+          params[which] += (max_val-min_val)*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], min_val, max_val)
+        #   params[which] = np.clip(params[which], min_val, max_val)
+          if params[which] < min_val or params[which] > max_val:
+            print "wtf theta"
 
         elif which == 3: #scale
           params[which] += dnest4.randh()

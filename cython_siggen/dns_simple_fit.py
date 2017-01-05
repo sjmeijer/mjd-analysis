@@ -12,7 +12,7 @@ from pysiggen import Detector
 
 from dns_simple_model import *
 
-fitSamples = 150
+fitSamples = 85
 timeStepSize = 1
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -40,7 +40,7 @@ det.SetTransferFunction(5.31003292334, -0.808557803157, 0.815966976844, 81.86814
 wf_idx = 7
 
 wf = wfs[wf_idx]
-wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=50)
+wf.WindowWaveformTimepoint(fallPercentage=.997, rmsMult=2, earlySamples=10)
 print "wf is %d samples long" %wf.wfLength
 
 def fit(argv):
@@ -59,7 +59,7 @@ def fit(argv):
   # Set up the sampler. The first argument is max_num_levels
   gen = sampler.sample(max_num_levels=100, num_steps=10000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
-                        num_particles=2, lam=10, beta=100, seed=seed)
+                        num_particles=5, lam=10, beta=100, seed=seed)
 
   # Do the sampling (one iteration here = one particle save)
   for i, sample in enumerate(gen):
