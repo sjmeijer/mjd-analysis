@@ -83,7 +83,7 @@ class Model(object):
 
         (r,z) = draw_position()
         rad = np.sqrt(r**2+z**2)
-        theta = np.tan(z/r)
+        theta = np.arctan(z/r)
         phi = rng.rand() * np.pi/4
 
 
@@ -117,7 +117,17 @@ class Model(object):
         which = rng.randint(len(params))
 
         if which == 0 or which == 4: #radius and t0
-          max_rad = np.sqrt(detector.detector_radius**2 + detector.detector_length**2)
+          theta_eq = np.arctan(detector.detector_length/detector.detector_radius)
+          theta = params[2]
+        #   print "theta: %f pi" % (theta / np.pi)
+          if theta <= theta_eq:
+              max_rad = detector.detector_radius / np.cos(theta)
+            #   print "max rad radius: %f" %  max_rad
+          else:
+              theta_comp = np.pi/2 - theta
+              max_rad = detector.detector_length / np.cos(theta_comp)
+            #   print "max rad length: %f" %  max_rad
+
 
           mean = [0, 0]
           cov = [[1, -0.8], [-0.8, 1]]
@@ -127,8 +137,8 @@ class Model(object):
           params[0] = dnest4.wrap(params[0] + r_jump , 0, max_rad)
           params[4] = dnest4.wrap(params[4] + t0_jump , min_t0, max_t0)
 
-          params[0] = np.clip(params[0] + r_jump , 0, max_rad)
-          params[4] = np.clip(params[4] + t0_jump , min_t0, max_t0)
+        #   params[0] = np.clip(params[0] + r_jump , 0, max_rad)
+        #   params[4] = np.clip(params[4] + t0_jump , min_t0, max_t0)
 
         elif which == 1:
             max_val = np.pi/4
@@ -140,13 +150,21 @@ class Model(object):
 
         elif which ==2: #theta
           rad = params[0]
-
+        #   print "rad: %f" % rad
           if rad < np.amin([detector.detector_radius, detector.detector_length]):
               max_val = np.pi/2
               min_val = 0
+            #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
           else:
-              min_val = np.cos(detector.detector_radius/rad)
-              max_val = np.pi/2 - np.cos(detector.detector_length/rad)
+              if rad < detector.detector_radius:
+                  min_val = 0
+              else:
+                  min_val = np.arccos(detector.detector_radius/rad)
+              if rad < detector.detector_length:
+                  max_val = np.pi/2
+              else:
+                  max_val = np.pi/2 - np.arccos(detector.detector_length/rad)
+            #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
 
           params[which] += (max_val-min_val)*dnest4.randh()
           params[which] = dnest4.wrap(params[which], min_val, max_val)
@@ -192,10 +210,13 @@ class Model(object):
         z = rad * np.sin(theta)
 
         if scale < 0 or t0 < 0:
+          print "bad scale! or bad t0"
           return -np.inf
         if smooth < 0:
+           print "bad smooth!"
            return -np.inf
         if not detector.IsInDetector(r, phi, z):
+          print "bad position! %f, %f, %f" % (r,phi,z)
           return -np.inf
 
         data = wf.windowedWf
