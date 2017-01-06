@@ -37,7 +37,7 @@ det.LoadFieldsGrad("fields_impgrad_0-0.06.npz", pcLen=pcLenGuess, pcRad=pcRadGue
 det.SetFieldsGradInterp(gradGuess)
 det.SetTransferFunction(5.31003292334, -0.808557803157, 0.815966976844, 81.8681451166, 3.6629565274, 0.995895193187)
 
-wf_idx = 3
+wf_idx = 5
 
 wf = wfs[wf_idx]
 wf.WindowWaveformTimepoint(fallPercentage=.997, rmsMult=2, earlySamples=10)

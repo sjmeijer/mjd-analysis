@@ -117,10 +117,15 @@ class Model(object):
         which = rng.randint(len(params))
 
         if which == 0 or which == 4: #radius and t0
+          #FIND THE MAXIMUM RADIUS STILL INSIDE THE DETECTOR
           theta_eq = np.arctan(detector.detector_length/detector.detector_radius)
+          theta_taper = np.arctan(detector.taper_length/detector.detector_radius)
           theta = params[2]
         #   print "theta: %f pi" % (theta / np.pi)
-          if theta <= theta_eq:
+          if theta <= theta_taper:
+             z = np.tan(theta)*(detector.detector_radius - detector.taper_length) / (1-np.tan(theta))
+             max_rad = z / np.sin(theta)
+          elif theta <= theta_eq:
               max_rad = detector.detector_radius / np.cos(theta)
             #   print "max rad radius: %f" %  max_rad
           else:
@@ -128,17 +133,19 @@ class Model(object):
               max_rad = detector.detector_length / np.cos(theta_comp)
             #   print "max rad length: %f" %  max_rad
 
+          #AND THE MINIMUM (from PC dimple)
+          #min_rad  = 1./ ( np.cos(theta)**2/detector.pcRad**2  +  np.sin(theta)**2/detector.pcLen**2 )
+          min_rad = np.amax([detector.pcRad, detector.pcLen])
 
           mean = [0, 0]
           cov = [[1, -0.8], [-0.8, 1]]
           jumps = np.array((0.1*dnest4.randh(), 0.1*dnest4.randh()))
           (r_jump, t0_jump) = np.dot(cov, jumps)
-
-          params[0] = dnest4.wrap(params[0] + r_jump , 0, max_rad)
+          params[0] = dnest4.wrap(params[0] + r_jump , min_rad, max_rad)
           params[4] = dnest4.wrap(params[4] + t0_jump , min_t0, max_t0)
 
-        #   params[0] = np.clip(params[0] + r_jump , 0, max_rad)
-        #   params[4] = np.clip(params[4] + t0_jump , min_t0, max_t0)
+          if not checkPosition(params):
+              print "... in radius step"
 
         elif which == 1:
             max_val = np.pi/4
@@ -151,15 +158,26 @@ class Model(object):
         elif which ==2: #theta
           rad = params[0]
         #   print "rad: %f" % rad
-          if rad < np.amin([detector.detector_radius, detector.detector_length]):
+          if rad < np.amin([detector.detector_radius - detector.taper_length, detector.detector_length]):
               max_val = np.pi/2
               min_val = 0
             #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
           else:
-              if rad < detector.detector_radius:
+              if rad < detector.detector_radius - detector.taper_length:
+                  #can't possibly hit the taper
+                #   print "less than taper adjustment"
                   min_val = 0
+              elif rad < np.sqrt(detector.detector_radius**2 + detector.taper_length**2):
+                  #low enough that it could hit the taper region
+                #   print "taper adjustment"
+                  a = detector.detector_radius - detector.taper_length
+                  z = 0.5 * (np.sqrt(2*rad**2-a**2) - a)
+                  min_val = np.arcsin(z/rad)
               else:
+                  #longer than could hit the taper
+                #   print  " longer thantaper adjustment"
                   min_val = np.arccos(detector.detector_radius/rad)
+
               if rad < detector.detector_length:
                   max_val = np.pi/2
               else:
@@ -171,6 +189,9 @@ class Model(object):
         #   params[which] = np.clip(params[which], min_val, max_val)
           if params[which] < min_val or params[which] > max_val:
             print "wtf theta"
+          if not checkPosition(params):
+              print "... in theta step with rad %f" % rad
+              print "theta: min %f pi, max %f pi" % (min_val/np.pi, max_val/np.pi)
 
         elif which == 3: #scale
           params[which] += dnest4.randh()
@@ -225,8 +246,10 @@ class Model(object):
 
         model = detector.MakeSimWaveform(r, phi, z, scale, t0, data_len, h_smoothing=smooth)
         if model is None:
+          print "None waveform!  %f, %f, %f" % (r,phi,z)
           return -np.inf
         if np.any(np.isnan(model)):
+          print "NaN waveform!  %f, %f, %f" % (r,phi,z)
           return -np.inf
 
         baseline_trend = np.linspace(b, m*data_len+b, data_len)
@@ -235,3 +258,11 @@ class Model(object):
         inv_sigma2 = 1.0/(model_err**2)
 
         return -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
+
+def checkPosition(params):
+    rad, phi, theta = params[:3]
+    r = rad * np.cos(theta)
+    z = rad * np.sin(theta)
+    if not detector.IsInDetector(r, phi, z):
+      print "not in detector: (%f,%f,%f)" % (r, phi, z) ,
+    return detector.IsInDetector(r, phi, z)
