@@ -57,7 +57,7 @@ def fit(argv):
   seed = 1234
   np.random.seed(seed)
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=100, num_steps=10000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=50, num_steps=10000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=seed)
 

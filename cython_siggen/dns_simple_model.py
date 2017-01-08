@@ -202,8 +202,7 @@ class Model(object):
 #          params[which] = np.clip(params[which], 0, wf.wfLength)
         elif which == 5: #smooth
           params[which] += 0.1*dnest4.randh()
-          params[which] = np.clip(params[which], 0, 15)
-          max_val = np.inf
+          params[which] = dnest4.wrap(params[which], 0, 20)
 
         elif which == 6 or which == 7: #m and b, respectively
           #normally distributed, no cutoffs

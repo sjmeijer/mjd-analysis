@@ -41,7 +41,7 @@ velo_first_idx = 14
 trap_idx = 20
 grad_idx = 21
 
-wf_idx = 7
+wf_idx = 4
 
 wf = wfs[wf_idx]
 wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=50)
@@ -61,8 +61,8 @@ def fit(argv):
   seed = 1234
   np.random.seed(seed)
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=100, num_steps=100000, new_level_interval=100000,
-                        num_per_step=1000, thread_steps=100,
+  gen = sampler.sample(max_num_levels=100, num_steps=1000000, new_level_interval=100000,
+                        num_per_step=10000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=seed)
 
   # Do the sampling (one iteration here = one particle save)

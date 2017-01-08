@@ -27,7 +27,7 @@ velo_first_idx = 14
 trap_idx = 20
 grad_idx = 21
 
-min_t0 = 10
+min_t0 = 40
 max_t0 = 55
 t0_pad = 50
 max_grad = 200
@@ -124,7 +124,7 @@ class Model(object):
 
         (r,z) = draw_position()
         rad = np.sqrt(r**2+z**2)
-        theta = np.tan(z/r)
+        theta = np.arctan(z/r)
         phi = rng.rand() * np.pi/4
 
 
@@ -173,12 +173,12 @@ class Model(object):
 
         #6 hole drift params
 
-        h_100_mu0 = .1*var * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
-        h_100_beta = .1*var * h_100_beta_prior*rng.randn() + h_100_beta_prior
-        h_100_e0 = .1*var * h_100_e0_prior*rng.randn() + h_100_e0_prior
-        h_111_mu0 = .1*var * h_111_mu0_prior*rng.randn() + h_111_mu0_prior
-        h_111_beta = .1*var * h_111_beta_prior*rng.randn() + h_111_beta_prior
-        h_111_e0 = .1*var * h_111_e0_prior*rng.randn() + h_111_e0_prior
+        h_100_mu0 = .01*var * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
+        h_100_beta = .01*var * h_100_beta_prior*rng.randn() + h_100_beta_prior
+        h_100_e0 = .01*var * h_100_e0_prior*rng.randn() + h_100_e0_prior
+        h_111_mu0 = .01*var * h_111_mu0_prior*rng.randn() + h_111_mu0_prior
+        h_111_beta = .01*var * h_111_beta_prior*rng.randn() + h_111_beta_prior
+        h_111_e0 = .01*var * h_111_e0_prior*rng.randn() + h_111_e0_prior
 
         print "\n"
         print "new waveform:"
@@ -236,25 +236,85 @@ class Model(object):
         which = rng.randint(len(params))
 
         if which == 0 or which == 4: #radius and t0
-          max_rad = np.sqrt(detector.detector_radius**2 + detector.detector_length**2)
+          #FIND THE MAXIMUM RADIUS STILL INSIDE THE DETECTOR
+          theta_eq = np.arctan(detector.detector_length/detector.detector_radius)
+          theta_taper = np.arctan(detector.taper_length/detector.detector_radius)
+          theta = params[2]
+        #   print "theta: %f pi" % (theta / np.pi)
+          if theta <= theta_taper:
+             z = np.tan(theta)*(detector.detector_radius - detector.taper_length) / (1-np.tan(theta))
+             max_rad = z / np.sin(theta)
+          elif theta <= theta_eq:
+              max_rad = detector.detector_radius / np.cos(theta)
+            #   print "max rad radius: %f" %  max_rad
+          else:
+              theta_comp = np.pi/2 - theta
+              max_rad = detector.detector_length / np.cos(theta_comp)
+            #   print "max rad length: %f" %  max_rad
+
+          #AND THE MINIMUM (from PC dimple)
+          #min_rad  = 1./ ( np.cos(theta)**2/detector.pcRad**2  +  np.sin(theta)**2/detector.pcLen**2 )
+          min_rad = np.amax([detector.pcRad, detector.pcLen])
 
           mean = [0, 0]
           cov = [[1, -0.8], [-0.8, 1]]
           jumps = np.array((0.1*dnest4.randh(), 0.1*dnest4.randh()))
           (r_jump, t0_jump) = np.dot(cov, jumps)
 
-          params[0] = dnest4.wrap(params[0] + r_jump , 0, max_rad)
+        #   print "propoed jump: %f + %f" % (params[0], r_jump)
+        #   print  min_rad, max_rad
+
+          params[0] = dnest4.wrap(params[0] + r_jump , min_rad, max_rad)
           params[4] = dnest4.wrap(params[4] + t0_jump , min_t0, max_t0)
 
-          params[0] = np.clip(params[0] + r_jump , 0, max_rad)
-          params[4] = np.clip(params[4] + t0_jump , min_t0, max_t0)
+          if not checkPosition(params):
+              print "... in radius step"
 
-        elif which == 1 or which ==2: #phi or theta
-          if which == 1: max_val = np.pi/4
-          if which ==2: max_val = np.pi/2
-          params[which] += dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 0, max_val)
-          params[which] = np.clip(params[which], 0, max_val)
+        elif which == 1:
+            max_val = np.pi/4
+            params[which] += np.pi/4*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], 0, max_val)
+            if params[which] < 0 or params[which] > np.pi/4:
+                print "wtf phi"
+            #params[which] = np.clip(params[which], 0, max_val)
+
+        elif which ==2: #theta
+          rad = params[0]
+        #   print "rad: %f" % rad
+          if rad < np.amin([detector.detector_radius - detector.taper_length, detector.detector_length]):
+              max_val = np.pi/2
+              min_val = 0
+            #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
+          else:
+              if rad < detector.detector_radius - detector.taper_length:
+                  #can't possibly hit the taper
+                #   print "less than taper adjustment"
+                  min_val = 0
+              elif rad < np.sqrt(detector.detector_radius**2 + detector.taper_length**2):
+                  #low enough that it could hit the taper region
+                #   print "taper adjustment"
+                  a = detector.detector_radius - detector.taper_length
+                  z = 0.5 * (np.sqrt(2*rad**2-a**2) - a)
+                  min_val = np.arcsin(z/rad)
+              else:
+                  #longer than could hit the taper
+                #   print  " longer thantaper adjustment"
+                  min_val = np.arccos(detector.detector_radius/rad)
+
+              if rad < detector.detector_length:
+                  max_val = np.pi/2
+              else:
+                  max_val = np.pi/2 - np.arccos(detector.detector_length/rad)
+            #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
+
+          params[which] += (max_val-min_val)*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], min_val, max_val)
+        #   params[which] = np.clip(params[which], min_val, max_val)
+          if params[which] < min_val or params[which] > max_val:
+            print "wtf theta"
+          if not checkPosition(params):
+              print "... in theta step with rad %f" % rad
+              print "theta: min %f pi, max %f pi" % (min_val/np.pi, max_val/np.pi)
 
         elif which == 3: #scale
           params[which] += dnest4.randh()
@@ -307,13 +367,13 @@ class Model(object):
           params[which] += prior_vars[which]*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0.9, 1)
         elif which == grad_idx:
-          params[which] += 3*np.int(dnest4.randh())
-          params[which] = np.int(np.clip(params[which], 0, max_grad))
+          params[which] += 3*(dnest4.randh()
+          params[which] = np.int(dnest4.wrap(params[which], 0, max_grad))
 
         else: #velocity or rc params: cant be below 0, can be arb. large
           params[which] += prior_vars[which]*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 0, 1E9)
-          params[which] = np.clip(params[which], 0, np.inf)
+          params[which] = dnest4.wrap(params[which], 0.8*priors[which], 1.2*priors[which])
+        #   params[which] = np.clip(params[which], 0, np.inf)
         return logH
 
     def log_likelihood(self, params):
@@ -358,8 +418,10 @@ class Model(object):
 
         model = detector.MakeSimWaveform(r, phi, z, scale, t0, data_len, h_smoothing=smooth)
         if model is None:
+          print "None waveform!  %f, %f, %f" % (r,phi,z)
           return -np.inf
         if np.any(np.isnan(model)):
+          print "NaN waveform!  %f, %f, %f" % (r,phi,z)
           return -np.inf
 
         # if np.amin(model) < 0:
@@ -368,7 +430,9 @@ class Model(object):
         baseline_trend = np.linspace(b, m*data_len+b, data_len)
         model += baseline_trend
 
-        #make sure the last point is near where it should be
+
+
+        # #make sure the last point is near where it should be
         if model[-1] < 0.9*wf.wfMax or model[-1] > wf.wfMax:
           return -np.inf
         if np.argmax(model) == len(model)-1:
@@ -389,6 +453,13 @@ class Model(object):
         inv_sigma2 = 1.0/(model_err**2)
         return -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
 
+def checkPosition(params):
+    rad, phi, theta = params[:3]
+    r = rad * np.cos(theta)
+    z = rad * np.sin(theta)
+    if not detector.IsInDetector(r, phi, z):
+      print "not in detector: (%f,%f,%f)" % (r, phi, z) ,
+    return detector.IsInDetector(r, phi, z)
 
 def findTimePointBeforeMax(data, percent):
 
