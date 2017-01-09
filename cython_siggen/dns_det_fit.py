@@ -21,7 +21,7 @@ from detector_model import *
 
 from dns_det_model import *
 
-fitSamples = 425
+fitSamples = 900
 timeStepSize = 1
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -29,12 +29,12 @@ if os.path.isfile(wfFileName):
   data = np.load(wfFileName)
   wfs = data['wfs']
   results = data['results']
-  wfs = wfs[:10]
-  results = results[:10]
+  wfs = wfs[:5]
+  results = results[:5]
 
   #i think wfs 1 and 3 might be MSE
-  wfs = np.delete(wfs, [1,3])
-  results = np.delete(results, [1,3])
+  wfs = np.delete(wfs, [1,2,3])
+  results = np.delete(results, [1,2,3])
 
   numWaveforms = wfs.size
   print "Fitting %d waveforms" % numWaveforms
@@ -46,11 +46,12 @@ else:
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10)
-det.LoadFieldsGrad("fields_impgrad_0-0.06.npz", pcLen=1.6, pcRad=2.5)
+det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
 
 def main(argv):
   for wf in wfs:
-      wf.WindowWaveformTimepoint(fallPercentage=.97, rmsMult=2, earlySamples=100)
+      wf.WindowWaveformTimepoint(fallPercentage=.95, rmsMult=2, earlySamples=500)
+      print "wf length %d" % wf.wfLength
 
   initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
   initMultiThreading(8)
@@ -62,9 +63,9 @@ def main(argv):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=5000, num_steps=100000, new_level_interval=10000,
-                        num_per_step=10000, thread_steps=100,
-                        num_particles=5, lam=10, beta=100, seed=1234)
+  gen = sampler.sample(max_num_levels=5000, num_steps=100000, new_level_interval=1000,
+                        num_per_step=1000, thread_steps=100,
+                        num_particles=50, lam=10, beta=100, seed=1234)
 
   # Do the sampling (one iteration here = one particle save)
   for i, sample in enumerate(gen):
