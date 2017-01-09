@@ -29,7 +29,7 @@ t0_pad = 10
 tf_first_idx = 8
 
 #8 for wf, 6 for tf
-priors = np.empty(8 + 3)
+priors = np.empty(8 + 6)
 
 #prior stuff for wf params....
 #linear baseline slope and intercept...
@@ -48,11 +48,14 @@ rc1_prior = 74.
 rc2_prior = 2.08
 rc_frac_prior = 0.992
 
-# priors[tf_first_idx:tf_first_idx+3] = ba_prior, c_prior, d_prior
-# priors[rc1_idx:rc1_idx+3] = rc1_prior, rc2_prior, rc_frac_prior
-# prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
-
 ba_idx, c_idx, dc_idx = np.arange(3)+ tf_first_idx
+rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
+
+# priors[tf_first_idx:tf_first_idx+3] = ba_prior, c_prior, d_prior
+priors[rc1_idx:rc1_idx+3] = rc1_prior, rc2_prior, rc_frac_prior
+prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
+
+
 
 def draw_position():
 #  det_max = np.sqrt(detector.detector_radius**2 + detector.detector_length**2)
@@ -130,9 +133,9 @@ class Model(object):
         c = 0.05 *rng.randn() + c_prior
         dc =  0.01 *rng.randn() + dc_prior
 
-        # rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 50, 100)
-        # rc2 = dnest4.wrap(prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx], 0, 5)
-        # rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
+        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 50, 100)
+        rc2 = dnest4.wrap(prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx], 0, 5)
+        rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
 
         print "\n"
         print "new waveform:"
@@ -143,7 +146,7 @@ class Model(object):
 
         return np.array([
               rad, phi, theta, scale, t0, smooth, m, b,
-              b_over_a, c, dc,
+              b_over_a, c, dc, rc1, rc2, rcfrac
             ])
 
     def perturb(self, params):
@@ -261,6 +264,15 @@ class Model(object):
         elif which == dc_idx: #b over a
             params[which] += 0.01*dnest4.randh()
             params[which] = dnest4.wrap(params[which], -1.05, -0.975)
+        elif which == rc1_idx:
+          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], 60, 90)
+        elif which == rc2_idx:
+          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], 0.1, 10)
+        elif which == rcfrac_idx:
+          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], 0.9, 1)
 
         # elif which ==c_idx or which == d_idx: #this is c and d
         #   mean = [0, 0]
@@ -299,9 +311,9 @@ class Model(object):
           print "bad position! %f, %f, %f" % (r,phi,z)
           return -np.inf
 
-        b_over_a, c, dc,  = params[tf_first_idx:tf_first_idx+3]
+        b_over_a, c, dc, rc1, rc2, rcfrac  = params[tf_first_idx:tf_first_idx+6]
         d = dc * c
-        detector.SetTransferFunction(b_over_a, c, d, rc1_prior, rc2_prior, rc_frac_prior)
+        detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
 
         data = wf.windowedWf
         model_err = wf.baselineRMS

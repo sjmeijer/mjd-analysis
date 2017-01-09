@@ -42,7 +42,7 @@ wf_idx = 5
 tf_first_idx = 8
 
 wf = wfs[wf_idx]
-wf.WindowWaveformTimepoint(fallPercentage=.997, rmsMult=2, earlySamples=10)
+wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=10)
 print "wf is %d samples long" %wf.wfLength
 
 def fit(argv):
@@ -59,7 +59,7 @@ def fit(argv):
   seed = 1234
   np.random.seed(seed)
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=50, num_steps=10000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=100, num_steps=10000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=seed)
 
@@ -107,9 +107,9 @@ def plot():
         z = rad * np.sin(theta)
         r_arr[idx], z_arr[idx] = r,z
 
-        b_over_a, c, dc,  = params[tf_first_idx:tf_first_idx+3]
+        b_over_a, c, dc,rc1, rc2, rcfrac  = params[tf_first_idx:tf_first_idx+6]
         d = dc*c
-        det.SetTransferFunction(b_over_a, c, d, rc1_prior, rc2_prior, rc_frac_prior)
+        det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
         tf[:,idx] = params[tf_first_idx:tf_first_idx+3]
 
         print "new waveform:"
