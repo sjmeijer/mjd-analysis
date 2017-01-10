@@ -36,34 +36,36 @@ if os.path.isfile(wfFileName):
   data = np.load(wfFileName)
   wfs = data['wfs']
   results = data['results']
-  wfs = wfs[:8]
-  results = results[:8]
+  wfs = wfs[:3]
+  results = results[:3]
 
   #i think wfs 1 and 3 might be MSE
-  wfs = np.delete(wfs, [0,1,2,3])
-  results = np.delete(results, [0,1,2,3])
+  wfs = np.delete(wfs, [0,1])
+  results = np.delete(results, [0,1])
 
   numWaveforms = wfs.size
   print "Fitting %d waveforms" % numWaveforms,
   if numWaveforms < numThreads:
       numThreads = numWaveforms
-      print " using %d threads" % numThreads
+  print "using %d threads" % numThreads
 
 else:
-  print "No saved waveforms available.  Loading from Data"
+  print "Saved waveform file %s not available" % wfFileName
   exit(0)
 
-colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown" ]
-
+colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey" ]
 fitSamples = 0
-# plt.figure(0)
+
+doInitPlot = False#True
+if doInitPlot: plt.figure(500)
 for (wf_idx,wf) in enumerate(wfs):
   wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=10)
-  print "wf length %d" % wf.wfLength
+  print "wf %d length %d" % (wf_idx, wf.wfLength)
   if wf.wfLength >= fitSamples:
       fitSamples = wf.wfLength + 1
-  # plt.plot(wf.windowedWf, color=colors[wf_idx])
-# plt.show()
+  if doInitPlot:  plt.plot(wf.windowedWf, color=colors[wf_idx])
+
+if doInitPlot: plt.show()
 
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
@@ -93,6 +95,8 @@ def fit(argv):
   # Run the postprocessing
   # dnest4.postprocess()
 
+
+
 def plot(sample_file_name):
     fig1 = plt.figure(0, figsize=(20,10))
     plt.clf()
@@ -119,6 +123,7 @@ def plot(sample_file_name):
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
     tf = np.empty((6, num_samples))
+    velo = np.empty((6, num_samples))
 
     for (idx,params) in enumerate(data[-num_samples:]):
 
@@ -128,6 +133,7 @@ def plot(sample_file_name):
         grad = np.int(params[grad_idx])
 
         tf[:,idx] = params[tf_first_idx:tf_first_idx+6]
+        velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
 
         d = c*dc
         det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
@@ -202,7 +208,34 @@ def plot(sample_file_name):
     [n, b, p] = tf5.hist(tf[5,:], bins=num_bins)
     # [n, b, p] = tf6.hist(tf[6,:], bins=num_bins)
 
-    positionFig = plt.figure(2)
+    plotnum = 600
+    vFig = plt.figure(2)
+    v0 = vFig.add_subplot(plotnum+11)
+    v1 = vFig.add_subplot(plotnum+12, )
+    v2 = vFig.add_subplot(plotnum+13, )
+    v3 = vFig.add_subplot(plotnum+14, )
+    v4 = vFig.add_subplot(plotnum+15, )
+    v5 = vFig.add_subplot(plotnum+16, )
+    # v6 = vFig.add_subplot(plotnum+17, )
+
+    v0.set_ylabel('h_100_mu0')
+    v1.set_ylabel('h_100_beta')
+    v2.set_ylabel('h_100_e0')
+    v3.set_ylabel('h_111_mu0')
+    v4.set_ylabel('h_111_beta')
+    v5.set_ylabel('h_111_e0')
+    # v6.set_ylabel('grad_idx')
+
+    num_bins = 100
+    [n, b, p] = v0.hist(velo[0,:], bins=num_bins)
+    [n, b, p] = v1.hist(velo[1,:], bins=num_bins)
+    [n, b, p] = v2.hist(velo[2,:], bins=num_bins)
+    [n, b, p] = v3.hist(velo[3,:], bins=num_bins)
+    [n, b, p] = v4.hist(velo[4,:], bins=num_bins)
+    [n, b, p] = v5.hist(velo[5,:], bins=num_bins)
+    # [n, b, p] = v6.hist(velo[6,:], bins=num_bins)
+
+    positionFig = plt.figure(3)
     plt.clf()
     colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges"]
 
