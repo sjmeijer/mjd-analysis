@@ -33,21 +33,28 @@ grad_idx = 12
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
-  data = np.load(wfFileName)
-  wfs = data['wfs']
-  results = data['results']
-  wfs = wfs[:3]
-  results = results[:3]
+    data = np.load(wfFileName)
+    wfs = data['wfs']
+    results = data['results']
+    # wfs = wfs[:3]
+    # results = results[:3]
+    #
+    # #i think wfs 1 and 3 might be MSE
+    # wfs = np.delete(wfs, [0,1])
+    # results = np.delete(results, [0,1])
 
-  #i think wfs 1 and 3 might be MSE
-  wfs = np.delete(wfs, [0,1])
-  results = np.delete(results, [0,1])
+    wfs = wfs[:8]
+    results = results[:8]
 
-  numWaveforms = wfs.size
-  print "Fitting %d waveforms" % numWaveforms,
-  if numWaveforms < numThreads:
+    #i think wfs 1 and 3 might be MSE
+    wfs = np.delete(wfs, [0,1,2,3])
+    results = np.delete(results, [0,1,2,3])
+
+    numWaveforms = wfs.size
+    print "Fitting %d waveforms" % numWaveforms,
+    if numWaveforms < numThreads:
       numThreads = numWaveforms
-  print "using %d threads" % numThreads
+    print "using %d threads" % numThreads
 
 else:
   print "Saved waveform file %s not available" % wfFileName
@@ -124,6 +131,8 @@ def plot(sample_file_name):
     z_arr = np.empty((numWaveforms, num_samples))
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
+    velo_priors = [ 66333., 0.744, 181., 107270., 0.580, 100.]
+    velo_lims = 0.2
 
     for (idx,params) in enumerate(data[-num_samples:]):
 
@@ -210,30 +219,17 @@ def plot(sample_file_name):
 
     plotnum = 600
     vFig = plt.figure(2)
-    v0 = vFig.add_subplot(plotnum+11)
-    v1 = vFig.add_subplot(plotnum+12, )
-    v2 = vFig.add_subplot(plotnum+13, )
-    v3 = vFig.add_subplot(plotnum+14, )
-    v4 = vFig.add_subplot(plotnum+15, )
-    v5 = vFig.add_subplot(plotnum+16, )
-    # v6 = vFig.add_subplot(plotnum+17, )
-
-    v0.set_ylabel('h_100_mu0')
-    v1.set_ylabel('h_100_beta')
-    v2.set_ylabel('h_100_e0')
-    v3.set_ylabel('h_111_mu0')
-    v4.set_ylabel('h_111_beta')
-    v5.set_ylabel('h_111_e0')
-    # v6.set_ylabel('grad_idx')
-
+    vLabels = ['h_100_mu0', 'h_100_beta', 'h_100_e0','h_111_mu0','h_111_beta', 'h_111_e0']
+    vAxes = []
     num_bins = 100
-    [n, b, p] = v0.hist(velo[0,:], bins=num_bins)
-    [n, b, p] = v1.hist(velo[1,:], bins=num_bins)
-    [n, b, p] = v2.hist(velo[2,:], bins=num_bins)
-    [n, b, p] = v3.hist(velo[3,:], bins=num_bins)
-    [n, b, p] = v4.hist(velo[4,:], bins=num_bins)
-    [n, b, p] = v5.hist(velo[5,:], bins=num_bins)
-    # [n, b, p] = v6.hist(velo[6,:], bins=num_bins)
+    for i in range(plotnum/100):
+        axis = vFig.add_subplot(plotnum+10 + i+1)
+        axis.set_ylabel('h_100_mu0')
+        [n, b, p] = axis.hist(velo[i,:], bins=num_bins)
+        axis.axvline(x=(1-velo_lims)*velo_priors[i], color="r")
+        axis.axvline(x=(1+velo_lims)*velo_priors[i], color="r")
+        axis.axvline(x=velo_priors[i], color="g")
+
 
     positionFig = plt.figure(3)
     plt.clf()
