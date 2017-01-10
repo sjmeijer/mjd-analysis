@@ -34,8 +34,8 @@ if os.path.isfile(wfFileName):
   data = np.load(wfFileName)
   wfs = data['wfs']
   results = data['results']
-  wfs = wfs[:6]
-  results = results[:6]
+  wfs = wfs[:8]
+  results = results[:8]
 
   #i think wfs 1 and 3 might be MSE
   wfs = np.delete(wfs, [0,1,2,3])
@@ -48,19 +48,27 @@ else:
   print "No saved waveforms available.  Loading from Data"
   exit(0)
 
+colors = ["red" ,"blue", "green", "purple", "cyan", "magenta", "goldenrod", "brown" ]
+
+fitSamples = 0
+# plt.figure(0)
+for (wf_idx,wf) in enumerate(wfs):
+  wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=10)
+  print "wf length %d" % wf.wfLength
+  if wf.wfLength >= fitSamples:
+      fitSamples = wf.wfLength + 1
+  # plt.plot(wf.windowedWf, color=colors[wf_idx])
+# plt.show()
+
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10)
 det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
 
-for wf in wfs:
-  wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=10)
-  print "wf length %d" % wf.wfLength
-
 def fit(argv):
 
   initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
-  initMultiThreading(2)
+  initMultiThreading(4)
 
   # Create a model object and a sampler
   model = Model()
@@ -80,10 +88,8 @@ def fit(argv):
   # Run the postprocessing
   # dnest4.postprocess()
 
-def plot():
-    colors = ["red" ,"blue", "green", "purple", "cyan", "magenta", "goldenrod", "brown" ]
-
-    fig1 = plt.figure(1, figsize=(20,10))
+def plot(sample_file_name):
+    fig1 = plt.figure(0, figsize=(20,10))
     plt.clf()
     gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
     ax0 = plt.subplot(gs[0])
@@ -98,12 +104,16 @@ def plot():
       ax0.plot(t_data, wf.windowedWf, color="black")
 
 #  data = np.loadtxt("posterior_sample.txt")
-    data = np.loadtxt("sample.txt")
+    data = np.loadtxt(sample_file_name)
     num_samples = len(data)
     print "found %d samples" % num_samples
-    num_samples = 200
 
-    print "found %d samples" % len(data)
+    if sample_file_name=="sample.txt":
+        num_samples = 500
+
+    r_arr = np.empty((numWaveforms, num_samples))
+    z_arr = np.empty((numWaveforms, num_samples))
+    tf = np.empty((7, num_samples))
 
     for (idx,params) in enumerate(data[-num_samples:]):
 
@@ -111,6 +121,8 @@ def plot():
         # h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
         # charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
+
+        tf[:,idx] = params[tf_first_idx:grad_idx+1]
 
         d = c*dc
         det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
@@ -141,6 +153,7 @@ def plot():
           print "    rad: %0.2f, theta: %0.4f" % (rad, theta/np.pi)
           print "    t0: %0.2f" % t0
           print "    m: %0.3f, b: %0.3f" % (m,b)
+          r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
 
           ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  fitSamples, h_smoothing = smooth)
           if ml_wf is None:
@@ -155,7 +168,49 @@ def plot():
           ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color=colors[wf_idx],alpha=0.1)
 
     #  ax0.set_ylim(0, wf.wfMax*1.1)
-    ax1.set_ylim(-50, 50)
+    ax1.set_ylim(-20, 20)
+
+
+
+    plotnum = 700
+    tfFig = plt.figure(1)
+    tf0 = tfFig.add_subplot(plotnum+11)
+    tf1 = tfFig.add_subplot(plotnum+12, )
+    tf2 = tfFig.add_subplot(plotnum+13, )
+    tf3 = tfFig.add_subplot(plotnum+14, )
+    tf4 = tfFig.add_subplot(plotnum+15, )
+    tf5 = tfFig.add_subplot(plotnum+16, )
+    tf6 = tfFig.add_subplot(plotnum+17, )
+
+    tf0.set_ylabel('b_ov_a')
+    tf1.set_ylabel('c')
+    tf2.set_ylabel('dc')
+    tf3.set_ylabel('rc1')
+    tf4.set_ylabel('rc2')
+    tf5.set_ylabel('rcfrac')
+    tf6.set_ylabel('grad_idx')
+
+    num_bins = 100
+    [n, b, p] = tf0.hist(tf[0,:], bins=num_bins)
+    [n, b, p] = tf1.hist(tf[1,:], bins=num_bins)
+    [n, b, p] = tf2.hist(tf[2,:], bins=num_bins)
+    [n, b, p] = tf3.hist(tf[3,:], bins=num_bins)
+    [n, b, p] = tf4.hist(tf[4,:], bins=num_bins)
+    [n, b, p] = tf5.hist(tf[5,:], bins=num_bins)
+    [n, b, p] = tf6.hist(tf[6,:], bins=num_bins)
+
+    positionFig = plt.figure(2)
+    plt.clf()
+    colorbars = ["Blues", "Greens", "Purples", "Reds", "Oranges"]
+
+    for wf_idx in range(numWaveforms):
+        xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
+        yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
+        plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ], norm=LogNorm(), cmap=plt.get_cmap(colorbars[wf_idx]))
+        # plt.colorbar()
+    plt.xlabel("r from Point Contact (mm)")
+    plt.ylabel("z from Point Contact (mm)")
+
     plt.show()
 
 if __name__=="__main__":
@@ -163,3 +218,5 @@ if __name__=="__main__":
         fit(sys.argv[1:])
     elif sys.argv[1] == "plot":
         plot()
+    elif sys.argv[1] == "plot_post":
+        plot("posterior_sample.txt")

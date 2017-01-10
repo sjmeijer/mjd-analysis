@@ -335,7 +335,7 @@ class Model(object):
           params[which] = dnest4.wrap(params[which], 0.9, 1)
         elif which == grad_idx:
           params[which] += prior_vars[grad_idx]*np.int(dnest4.randh())
-          params[which] = np.int(np.clip(params[which], 0, len(detector.gradList)-1))
+          params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
 
         else: #velocity or rc params: cant be below 0, can be arb. large
             print "which value %d not supported" % which
