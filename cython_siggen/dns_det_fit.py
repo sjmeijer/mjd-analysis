@@ -22,12 +22,11 @@ from pysiggen import Detector
 
 from dns_det_model import *
 
-fitSamples = 105
 timeStepSize = 1
 tf_first_idx = 0
-# velo_first_idx = 6
+velo_first_idx = 6
 # trap_idx = 12
-grad_idx = 6
+grad_idx = 12
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
@@ -38,8 +37,8 @@ if os.path.isfile(wfFileName):
   results = results[:8]
 
   #i think wfs 1 and 3 might be MSE
-  wfs = np.delete(wfs, [0,1,2,3])
-  results = np.delete(results, [0,1,2,3])
+  wfs = np.delete(wfs, [0,1,2,3,4,6])
+  results = np.delete(results, [0,1,2,3,4,6])
 
   numWaveforms = wfs.size
   print "Fitting %d waveforms" % numWaveforms
@@ -113,20 +112,20 @@ def plot(sample_file_name):
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
-    tf = np.empty((7, num_samples))
+    tf = np.empty((6, num_samples))
 
     for (idx,params) in enumerate(data[-num_samples:]):
 
         b_over_a, c, dc, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
-        # h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
+        h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
         # charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
 
-        tf[:,idx] = params[tf_first_idx:grad_idx+1]
+        tf[:,idx] = params[tf_first_idx:tf_first_idx+6]
 
         d = c*dc
         det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
-        # det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
+        det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
         # det.trapping_rc = charge_trapping
         det.SetFieldsGradIdx(grad)
 
@@ -134,8 +133,8 @@ def plot(sample_file_name):
         print "sample %d:" % idx
         print "  tf params: ",
         print b_over_a, c, d, rc1, rc2, rcfrac
-        # print "  velo params: ",
-        # print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
+        print "  velo params: ",
+        print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
         # print "  charge trapping: ",
         # print params[trap_idx]
         print "  grad idx (grad): ",
@@ -167,12 +166,10 @@ def plot(sample_file_name):
           ax0.plot(t_data, ml_wf[:dataLen], color=colors[wf_idx], alpha=0.1)
           ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color=colors[wf_idx],alpha=0.1)
 
-    #  ax0.set_ylim(0, wf.wfMax*1.1)
+    ax0.set_ylim(-20, wf.wfMax*1.1)
     ax1.set_ylim(-20, 20)
 
-
-
-    plotnum = 700
+    plotnum = 600
     tfFig = plt.figure(1)
     tf0 = tfFig.add_subplot(plotnum+11)
     tf1 = tfFig.add_subplot(plotnum+12, )
@@ -180,7 +177,7 @@ def plot(sample_file_name):
     tf3 = tfFig.add_subplot(plotnum+14, )
     tf4 = tfFig.add_subplot(plotnum+15, )
     tf5 = tfFig.add_subplot(plotnum+16, )
-    tf6 = tfFig.add_subplot(plotnum+17, )
+    # tf6 = tfFig.add_subplot(plotnum+17, )
 
     tf0.set_ylabel('b_ov_a')
     tf1.set_ylabel('c')
@@ -188,7 +185,7 @@ def plot(sample_file_name):
     tf3.set_ylabel('rc1')
     tf4.set_ylabel('rc2')
     tf5.set_ylabel('rcfrac')
-    tf6.set_ylabel('grad_idx')
+    # tf6.set_ylabel('grad_idx')
 
     num_bins = 100
     [n, b, p] = tf0.hist(tf[0,:], bins=num_bins)
@@ -197,7 +194,7 @@ def plot(sample_file_name):
     [n, b, p] = tf3.hist(tf[3,:], bins=num_bins)
     [n, b, p] = tf4.hist(tf[4,:], bins=num_bins)
     [n, b, p] = tf5.hist(tf[5,:], bins=num_bins)
-    [n, b, p] = tf6.hist(tf[6,:], bins=num_bins)
+    # [n, b, p] = tf6.hist(tf[6,:], bins=num_bins)
 
     positionFig = plt.figure(2)
     plt.clf()
@@ -217,6 +214,6 @@ if __name__=="__main__":
     if len(sys.argv) < 2:
         fit(sys.argv[1:])
     elif sys.argv[1] == "plot":
-        plot()
+        plot("sample.txt")
     elif sys.argv[1] == "plot_post":
         plot("posterior_sample.txt")
