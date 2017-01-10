@@ -13,15 +13,18 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
 
+
 import scipy.optimize as op
 import numpy as np
 from scipy import signal
+import multiprocessing
 
 import helpers
 from pysiggen import Detector
 
 from dns_det_model import *
 
+numThreads = multiprocessing.cpu_count()
 timeStepSize = 1
 tf_first_idx = 0
 velo_first_idx = 6
@@ -37,17 +40,20 @@ if os.path.isfile(wfFileName):
   results = results[:8]
 
   #i think wfs 1 and 3 might be MSE
-  wfs = np.delete(wfs, [0,1,2,3,4,6])
-  results = np.delete(results, [0,1,2,3,4,6])
+  wfs = np.delete(wfs, [0,1,2,3])
+  results = np.delete(results, [0,1,2,3])
 
   numWaveforms = wfs.size
-  print "Fitting %d waveforms" % numWaveforms
+  print "Fitting %d waveforms" % numWaveforms,
+  if numWaveforms < numThreads:
+      numThreads = numWaveforms
+      print " using %d threads" % numThreads
 
 else:
   print "No saved waveforms available.  Loading from Data"
   exit(0)
 
-colors = ["red" ,"blue", "green", "purple", "cyan", "magenta", "goldenrod", "brown" ]
+colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown" ]
 
 fitSamples = 0
 # plt.figure(0)
@@ -67,7 +73,7 @@ det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
 def fit(argv):
 
   initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
-  initMultiThreading(4)
+  initMultiThreading(numThreads)
 
   # Create a model object and a sampler
   model = Model()
@@ -198,7 +204,7 @@ def plot(sample_file_name):
 
     positionFig = plt.figure(2)
     plt.clf()
-    colorbars = ["Blues", "Greens", "Purples", "Reds", "Oranges"]
+    colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges"]
 
     for wf_idx in range(numWaveforms):
         xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
