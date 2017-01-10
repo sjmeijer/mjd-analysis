@@ -26,29 +26,28 @@ from dns_det_model import *
 
 numThreads = multiprocessing.cpu_count()
 timeStepSize = 1
-tf_first_idx = 0
-velo_first_idx = 6
-# trap_idx = 12
-grad_idx = 12
 
 wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     wfs = data['wfs']
     results = data['results']
-    # wfs = wfs[:3]
-    # results = results[:3]
-    #
-    # #i think wfs 1 and 3 might be MSE
-    # wfs = np.delete(wfs, [0,1])
-    # results = np.delete(results, [0,1])
 
-    wfs = wfs[:8]
-    results = results[:8]
+    #one slow waveform
+    wfs = wfs[:3]
+    results = results[:3]
 
     #i think wfs 1 and 3 might be MSE
-    wfs = np.delete(wfs, [0,1,2,3])
-    results = np.delete(results, [0,1,2,3])
+    wfs = np.delete(wfs, [0,1])
+    results = np.delete(results, [0,1])
+
+    # 4 medium waveforms
+    # wfs = wfs[:8]
+    # results = results[:8]
+    #
+    # #i think wfs 1 and 3 might be MSE
+    # wfs = np.delete(wfs, [0,1,2,3])
+    # results = np.delete(results, [0,1,2,3])
 
     numWaveforms = wfs.size
     print "Fitting %d waveforms" % numWaveforms,
@@ -125,20 +124,21 @@ def plot(sample_file_name):
     print "found %d samples" % num_samples
 
     if sample_file_name=="sample.txt":
-        num_samples = 500
+        if num_samples > 500: num_samples = 500
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
-    velo_priors = [ 66333., 0.744, 181., 107270., 0.580, 100.]
-    velo_lims = 0.2
+
+    velo_priors, velo_lims = get_velo_params()
+    tf_first_idx, velo_first_idx, grad_idx, trap_idx = get_param_idxs()
 
     for (idx,params) in enumerate(data[-num_samples:]):
 
         b_over_a, c, dc, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
         h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
-        # charge_trapping = params[trap_idx]
+        charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
 
         tf[:,idx] = params[tf_first_idx:tf_first_idx+6]
@@ -147,17 +147,17 @@ def plot(sample_file_name):
         d = c*dc
         det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
         det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
-        # det.trapping_rc = charge_trapping
+        det.trapping_rc = charge_trapping
         det.SetFieldsGradIdx(grad)
 
-        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[grad_idx+1:].reshape((8, numWaveforms))
+        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[trap_idx+1:].reshape((8, numWaveforms))
         print "sample %d:" % idx
         print "  tf params: ",
         print b_over_a, c, d, rc1, rc2, rcfrac
         print "  velo params: ",
         print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
-        # print "  charge trapping: ",
-        # print params[trap_idx]
+        print "  charge trapping: ",
+        print params[trap_idx]
         print "  grad idx (grad): ",
         print params[grad_idx],
         print " (%0.3f)" % det.gradList[grad]
@@ -224,7 +224,7 @@ def plot(sample_file_name):
     num_bins = 100
     for i in range(plotnum/100):
         axis = vFig.add_subplot(plotnum+10 + i+1)
-        axis.set_ylabel('h_100_mu0')
+        axis.set_ylabel(vLabels[i])
         [n, b, p] = axis.hist(velo[i,:], bins=num_bins)
         axis.axvline(x=(1-velo_lims)*velo_priors[i], color="r")
         axis.axvline(x=(1+velo_lims)*velo_priors[i], color="r")
