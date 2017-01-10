@@ -68,7 +68,7 @@ prior_vars =  np.empty(len(priors))
 
 prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
 
-var = 0.05
+var = 0.2
 prior_vars[velo_first_idx:velo_first_idx+6] = var*priors[velo_first_idx:velo_first_idx+6]
 # prior_vars[trap_idx] = 1.
 
@@ -147,6 +147,7 @@ class Model(object):
         m_arr      = np.empty(num_waveforms)
         b_arr      = np.empty(num_waveforms)
 
+        print "\n"
         #draw 8 waveform params for each waveform
         for (wf_idx, wf) in enumerate(wfs):
             (r,z, scale, t0, smooth) = draw_position(wf_idx)
@@ -164,9 +165,9 @@ class Model(object):
             m_arr[wf_idx] =  0.001*rng.randn() + 0.
             b_arr[wf_idx] =  0.01*rng.randn() + 0.
 
-            print "creating wf %d" % wf_idx
-            print "  ",
-            print r, phi_arr[wf_idx]/np.pi, z, t0_arr[wf_idx],
+            print "  creating wf %d" % wf_idx
+            print "  >>",
+            print r, phi_arr[wf_idx]/np.pi, z, t0_arr[wf_idx]
             # print "  ", rad_arr[wf_idx], theta_arr[wf_idx]/np.pi
 
         b_over_a = 0.1*rng.randn() + ba_prior
@@ -336,6 +337,7 @@ class Model(object):
         elif which == grad_idx:
           params[which] += prior_vars[grad_idx]*np.int(dnest4.randh())
           params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
+
         elif which >= velo_first_idx and which < velo_first_idx+6:
             params[which] += prior_vars[which]*dnest4.randh()
             params[which] = dnest4.wrap(params[which], 0.8*priors[which], 1.2*priors[which])
@@ -427,7 +429,7 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
     #   return -np.inf
     # if np.argmax(model) <= len(model)-10:
     #   return -np.inf
-    # 
+    #
     # #kill way too fast wfs
     # t50_idx = findTimePointBeforeMax(model, 0.5)
     # t50 = t50_idx - t0
