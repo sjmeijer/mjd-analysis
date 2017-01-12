@@ -76,7 +76,7 @@ if doInitPlot: plt.show()
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10)
-det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
+det.LoadFieldsGrad("fields_impgrad_0-0.02_radmult1-3.npz", pcLen=1.6, pcRad=2.5)
 
 def fit(argv):
 
