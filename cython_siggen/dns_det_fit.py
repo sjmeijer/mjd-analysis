@@ -34,12 +34,12 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-    wfs = wfs[:3]
-    results = results[:3]
+    wfs = wfs[:4]
+    results = results[:4]
 
     #i think wfs 1 and 3 might be MSE
-    wfs = np.delete(wfs, [0,1])
-    results = np.delete(results, [0,1])
+    wfs = np.delete(wfs, [0,1,2])
+    results = np.delete(results, [0,1,2])
 
     # 4 medium waveforms
     # wfs = wfs[:8]
@@ -140,6 +140,7 @@ def plot(sample_file_name):
         h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
         charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
+        gradMult = np.int(params[grad_idx+1])
 
         tf[:,idx] = params[tf_first_idx:tf_first_idx+6]
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
@@ -158,9 +159,11 @@ def plot(sample_file_name):
         print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
         print "  charge trapping: ",
         print params[trap_idx]
-        print "  grad idx (grad): ",
-        print params[grad_idx],
-        print " (%0.3f)" % det.gradList[grad]
+        print "  grad idx (grad), gradMult idx (gradMult): ",
+        print grad,
+        print " (%0.3f)" % det.gradList[grad],
+        print gradMult,
+        print " (%0.3f)" % det.gradMultList[gradMult]
 
         for (wf_idx,wf) in enumerate(wfs):
           rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
