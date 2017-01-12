@@ -37,10 +37,10 @@ t0_guess = 10
 
 tf_first_idx = 0
 velo_first_idx = 6
-trap_idx = 13
-grad_idx = 12
+trap_idx = 14
+grad_idx, gradmult_idx = 12, 13
 
-priors = np.empty(6 + 6 + 1 + 1) #6 + 2)
+priors = np.empty(6 + 6 + 2 + 1) #6 + 2)
 
 ba_idx, c_idx, dc_idx = np.arange(3)+ tf_first_idx
 rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
@@ -68,8 +68,11 @@ prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
 var = 0.2
 prior_vars[velo_first_idx:velo_first_idx+6] = var*priors[velo_first_idx:velo_first_idx+6]
 
-priors[grad_idx] = 100
+priors[grad_idx] = 10/2.
 prior_vars[grad_idx] = 3
+priors[gradmult_idx] = 10/2.
+prior_vars[gradmult_idx] = 3
+
 priors[trap_idx] = 120.
 
 def get_velo_params():
@@ -180,6 +183,8 @@ class Model(object):
         rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
 
         grad = np.int(np.clip(prior_vars[grad_idx]*np.int(rng.randn()) + priors[grad_idx], 0, len(detector.gradList)-1))
+        gradMult = np.int(np.clip(prior_vars[gradmult_idx]*np.int(rng.randn()) + priors[gradmult_idx], 0, len(detector.gradMultList)-1))
+
         charge_trapping = np.exp(20.0*rng.rand())
 
         #6 hole drift params
@@ -194,7 +199,7 @@ class Model(object):
               b_over_a, c, dc,
               rc1, rc2, rcfrac,
               h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-              grad, charge_trapping,
+              grad, gradMult, charge_trapping,
             #   r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
               rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
             ])
@@ -333,8 +338,11 @@ class Model(object):
           params[which] += prior_vars[which]*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0.9, 1)
         elif which == grad_idx:
-          params[which] += prior_vars[grad_idx]*np.int(dnest4.randh())
+          params[which] += (len(detector.gradList)-1)*dnest4.randh()
           params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
+        elif which == gradmult_idx:
+          params[which] += (len(detector.gradMultList)-1)*dnest4.randh()
+          params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradMultList)-1))
 
         elif which >= velo_first_idx and which < velo_first_idx+6:
             params[which] += prior_vars[which]*dnest4.randh()
@@ -360,6 +368,7 @@ class Model(object):
         h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
         charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
+        gradMult = np.int(params[gradmult_idx])
 
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[len(priors):].reshape((8, num_waveforms))
 
@@ -372,7 +381,7 @@ class Model(object):
                           m_arr[wf_idx], b_arr[wf_idx],
                           b_over_a, c, dc, rc1, rc2, rcfrac,
                           h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                          grad, charge_trapping
+                          grad, gradMult, charge_trapping
                         ])
             # sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
             #                scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
@@ -393,7 +402,7 @@ class Model(object):
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, dc, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, grad, charge_trapping):
+def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, dc, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, grad, gradMult, charge_trapping):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
     # exit(0)
@@ -413,7 +422,7 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
     detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
     detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
     detector.trapping_rc = charge_trapping
-    detector.SetFieldsGradIdx(grad)
+    detector.SetFieldsGradMultIdx(grad, gradMult)
 
     data = wf.windowedWf
     model_err = wf.baselineRMS

@@ -76,7 +76,7 @@ if doInitPlot: plt.show()
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10)
-det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
+det.LoadFieldsGrad("fields_impgrad_0-0.02_radmult1-3.npz", pcLen=1.6, pcRad=2.5)
 
 def fit(argv):
 
@@ -140,6 +140,7 @@ def plot(sample_file_name):
         h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
         charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
+        gradMult = np.int(params[grad_idx+1])
 
         tf[:,idx] = params[tf_first_idx:tf_first_idx+6]
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
@@ -158,9 +159,11 @@ def plot(sample_file_name):
         print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
         print "  charge trapping: ",
         print params[trap_idx]
-        print "  grad idx (grad): ",
-        print params[grad_idx],
-        print " (%0.3f)" % det.gradList[grad]
+        print "  grad idx (grad), gradMult idx (gradMult): ",
+        print grad,
+        print " (%0.3f)" % det.gradList[grad],
+        print gradMult,
+        print " (%0.3f)" % det.gradMultList[gradMult]
 
         for (wf_idx,wf) in enumerate(wfs):
           rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
