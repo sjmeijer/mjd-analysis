@@ -8,7 +8,7 @@ import dnest4
 
 import matplotlib
 #matplotlib.use('CocoaAgg')
-import sys, os
+import sys, os, shutil
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
@@ -118,13 +118,17 @@ def plot(sample_file_name):
       t_data = np.arange(dataLen) * 10
       ax0.plot(t_data, wf.windowedWf, color="black")
 
+    if sample_file_name == "sample.txt":
+        shutil.copy("sample.txt", "sample_plot.txt")
+        sample_file_name = "sample_plot.txt"
+
 #  data = np.loadtxt("posterior_sample.txt")
     data = np.loadtxt(sample_file_name)
     num_samples = len(data)
     print "found %d samples" % num_samples
 
-    if sample_file_name=="sample.txt":
-        if num_samples > 500: num_samples = 500
+    if sample_file_name=="sample_plot.txt":
+        if num_samples > 50: num_samples = 50
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
