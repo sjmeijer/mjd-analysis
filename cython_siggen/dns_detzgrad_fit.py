@@ -8,7 +8,7 @@ import dnest4
 
 import matplotlib
 #matplotlib.use('CocoaAgg')
-import sys, os, shutil
+import sys, os
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
@@ -37,17 +37,23 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-    fitwfnum = 10
-    wfs = wfs[:fitwfnum+1]
-    results = results[:fitwfnum+1]
-    wfs = np.delete(wfs, range(0,fitwfnum))
-    results = np.delete(results, range(0,fitwfnum))
+#    fitwfnum = 3
+#    wfs = wfs[:fitwfnum+1]
+#    results = results[:fitwfnum+1]
+#    wfs = np.delete(wfs, range(0,fitwfnum))
+#    results = np.delete(results, range(0,fitwfnum))
 
     # 4 medium waveforms
     # wfs = wfs[:8]
     # results = results[:8]
     # wfs = np.delete(wfs, [0,1,2,3])
     # results = np.delete(results, [0,1,2,3])
+
+    # #8 wfs questionable provenance
+    wfs = wfs[:11]
+    results = results[:11]
+    wfs = np.delete(wfs, [1,2,3])
+    results = np.delete(results, [1,2,3])
 
     numWaveforms = wfs.size
     print "Fitting %d waveforms" % numWaveforms,
@@ -76,7 +82,7 @@ if doInitPlot: plt.show()
 #Create a detector model
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10)
-det.LoadFieldsGrad("fields_impgrad_0-0.02_radmult1-3.npz", pcLen=1.6, pcRad=2.5)
+det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
 
 def fit(argv):
 
@@ -103,7 +109,8 @@ def fit(argv):
 
 
 
-def plot(sample_file_name):
+def plot(sample_file_name, directory):
+    doWaveformPlot = True
     fig1 = plt.figure(0, figsize=(20,10))
     plt.clf()
     gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
@@ -118,17 +125,14 @@ def plot(sample_file_name):
       t_data = np.arange(dataLen) * 10
       ax0.plot(t_data, wf.windowedWf, color="black")
 
-    if sample_file_name == "sample.txt":
-        shutil.copy("sample.txt", "sample_plot.txt")
-        sample_file_name = "sample_plot.txt"
 
 #  data = np.loadtxt("posterior_sample.txt")
-    data = np.loadtxt(sample_file_name)
+    data = np.loadtxt(directory + sample_file_name)
     num_samples = len(data)
     print "found %d samples" % num_samples
 
-    if sample_file_name=="sample_plot.txt":
-        if num_samples > 50: num_samples = 50
+    if sample_file_name=="sample.txt":
+        if num_samples > 500: num_samples = 500
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
@@ -144,7 +148,6 @@ def plot(sample_file_name):
         h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
         charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
-        gradMult = np.int(params[grad_idx+1])
 
         tf[:,idx] = params[tf_first_idx:tf_first_idx+6]
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
@@ -163,11 +166,9 @@ def plot(sample_file_name):
         print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
         print "  charge trapping: ",
         print params[trap_idx]
-        print "  grad idx (grad), gradMult idx (gradMult): ",
-        print grad,
-        print " (%0.3f)" % det.gradList[grad],
-        print gradMult,
-        print " (%0.3f)" % det.gradMultList[gradMult]
+        print "  grad idx (grad): ",
+        print params[grad_idx],
+        print " (%0.3f)" % det.gradList[grad]
 
         for (wf_idx,wf) in enumerate(wfs):
           rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
@@ -182,17 +183,18 @@ def plot(sample_file_name):
           print "    m: %0.3f, b: %0.3f" % (m,b)
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
 
-          ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  fitSamples, h_smoothing = smooth)
-          if ml_wf is None:
-            continue
+          if doWaveformPlot:
+              ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  fitSamples, h_smoothing = smooth)
+              if ml_wf is None:
+                continue
 
-          baseline_trend = np.linspace(b, m*fitSamples+b, fitSamples)
-          ml_wf += baseline_trend
+              baseline_trend = np.linspace(b, m*fitSamples+b, fitSamples)
+              ml_wf += baseline_trend
 
-          dataLen = wf.wfLength
-          t_data = np.arange(dataLen) * 10
-          ax0.plot(t_data, ml_wf[:dataLen], color=colors[wf_idx], alpha=0.1)
-          ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color=colors[wf_idx],alpha=0.1)
+              dataLen = wf.wfLength
+              t_data = np.arange(dataLen) * 10
+              ax0.plot(t_data, ml_wf[:dataLen], color=colors[wf_idx], alpha=0.1)
+              ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color=colors[wf_idx],alpha=0.1)
 
     ax0.set_ylim(-20, wf.wfMax*1.1)
     ax1.set_ylim(-20, 20)
@@ -237,10 +239,13 @@ def plot(sample_file_name):
         axis.axvline(x=(1+velo_lims)*velo_priors[i], color="r")
         axis.axvline(x=velo_priors[i], color="g")
 
+        max_idx = np.argmax(n)
+        print "%s mode: %f" % (vLabels[i], b[max_idx])
+
 
     positionFig = plt.figure(3)
     plt.clf()
-    colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges"]
+    colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges", "Greys", "YlOrBr", "PuRd"]
 
     for wf_idx in range(numWaveforms):
         xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
@@ -255,7 +260,13 @@ def plot(sample_file_name):
 if __name__=="__main__":
     if len(sys.argv) < 2:
         fit(sys.argv[1:])
-    elif sys.argv[1] == "plot":
-        plot("sample.txt")
+
+    if len(sys.argv) >= 3:
+        directory = sys.argv[2]
+    else:
+        directory = ""
+
+    if sys.argv[1] == "plot":
+        plot("sample.txt", directory)
     elif sys.argv[1] == "plot_post":
-        plot("posterior_sample.txt")
+        plot("posterior_sample.txt", directory)
