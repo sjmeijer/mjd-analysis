@@ -28,8 +28,11 @@ def initializeDetectorAndWaveforms(det, wfs_init, wf_guess_init, reinit=True):
   initializeDetector(det, reinit)
 
 def initMultiThreading(numThreads):
+  global num_threads
   global pool
-  pool = Pool(numThreads, initializer=initializeDetector, initargs=[detector])
+  num_threads = numThreads
+  if num_threads > 1:
+      pool = Pool(num_threads, initializer=initializeDetector, initargs=[detector])
 
 def initT0Padding(t0_pad):
     global t0_guess, min_t0, max_t0
@@ -368,29 +371,39 @@ class Model(object):
 
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[len(priors):].reshape((8, num_waveforms))
 
-        args = []
-        # sum_like = 0
-        for (wf_idx, wf) in enumerate(wfs):
-            # print rad_arr[wf_idx]
-            args.append([wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
-                          scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
-                          m_arr[wf_idx], b_arr[wf_idx],
-                          b_over_a, c, dc, rc1, rc2, rcfrac,
-                          h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                          grad, charge_trapping
-                        ])
-            # sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
-            #                scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
-            #                m_arr[wf_idx], b_arr[wf_idx],
-            #                b_over_a, c, d, rc1, rc2, rcfrac,
-            #                h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-            #                charge_trapping, grad
-            #                )
+        if num_threads > 1:
+            args = []
+            # sum_like = 0
+            for (wf_idx, wf) in enumerate(wfs):
+                # print rad_arr[wf_idx]
+                args.append([wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
+                              scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
+                              m_arr[wf_idx], b_arr[wf_idx],
+                              b_over_a, c, dc, rc1, rc2, rcfrac,
+                              h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
+                              grad, charge_trapping
+                            ])
+                # sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
+                #                scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
+                #                m_arr[wf_idx], b_arr[wf_idx],
+                #                b_over_a, c, d, rc1, rc2, rcfrac,
+                #                h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
+                #                charge_trapping, grad
+                #                )
 
 
-        results = pool.map(WaveformLogLikeStar, args)
-
-        sum_like = np.sum(results)
+                results = pool.map(WaveformLogLikeStar, args)
+                sum_like = np.sum(results)
+        else:
+            sum_like = 0
+            for (wf_idx, wf) in enumerate(wfs):
+                sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
+                              scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
+                              m_arr[wf_idx], b_arr[wf_idx],
+                              b_over_a, c, dc, rc1, rc2, rcfrac,
+                              h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
+                              grad, charge_trapping
+                            )
 
         return sum_like
 
