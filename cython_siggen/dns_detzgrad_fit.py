@@ -70,24 +70,32 @@ else:
   exit(0)
 
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey" ]
-fitSamples = 0
+
+
+t0_padding = 10
+wfLengths = np.empty(numWaveforms)
+wfMaxes = np.empty(numWaveforms)
 
 if doInitPlot: plt.figure(500)
 for (wf_idx,wf) in enumerate(wfs):
-  wf.WindowWaveformTimepoint(fallPercentage=.92, rmsMult=2, earlySamples=10)
+  wf.WindowWaveformTimepoint(fallPercentage=.92, rmsMult=2, earlySamples=t0_padding)
   # wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=10)
 
   print "wf %d length %d" % (wf_idx, wf.wfLength)
-  if wf.wfLength >= fitSamples:
-      fitSamples = wf.wfLength + 1
-  if doInitPlot:  plt.plot(wf.windowedWf, color=colors[wf_idx])
+  wfLengths[wf_idx] = wf.wfLength
+  wfMaxes[wf_idx] = np.argmax(wf.windowedWf)
 
+  if doInitPlot:  plt.plot(wf.windowedWf, color=colors[wf_idx])
 if doInitPlot: plt.show()
 
+siggen_wf_length = (np.amax(wfMaxes) - t0_padding + 10)*10
+output_wf_length = np.amax(wfLengths)
+
+
 #Create a detector model
-timeStepSize = 1
+timeStepSize = 1 #ns
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-det =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10)
+det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length )
 det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
 
 def fit(argv):
