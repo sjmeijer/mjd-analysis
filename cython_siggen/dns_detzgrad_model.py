@@ -34,9 +34,14 @@ def initMultiThreading(numThreads):
   if num_threads > 1:
       pool = Pool(num_threads, initializer=initializeDetector, initargs=[detector])
 
-min_t0 = 0
-max_t0 = 15
-t0_guess = 10
+def initT0Padding(t0_pad):
+    global t0_guess, min_t0, max_t0
+    t0_guess = t0_pad
+    max_t0 = t0_guess + 5
+    min_t0 = t0_guess - 10
+
+
+
 
 tf_first_idx = 0
 velo_first_idx = 6
@@ -178,7 +183,7 @@ class Model(object):
         c = 0.05 *rng.randn() + c_prior
         dc =  0.01 *rng.randn() + dc_prior
 
-        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 50, 100)
+        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 60, 90)
         rc2 = dnest4.wrap(prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx], 0, 5)
         rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
 
@@ -308,11 +313,11 @@ class Model(object):
               params[which] = dnest4.wrap(params[which], 0, 15)
             #   print "  adjusted smooth to %f" %  ( params[which])
 
-            elif wf_which == 6:
+            elif wf_which == 6: #wf baseline slope (m)
               params[which] += 0.001*dnest4.randh()
-              params[which]=dnest4.wrap(params[which], -0.1, 0.1)
+              params[which]=dnest4.wrap(params[which], -0.01, 0.01)
             #   print "  adjusted m to %f" %  ( params[which])
-            elif wf_which == 7:
+            elif wf_which == 7: #wf baseline incercept (b)
               params[which] += 0.01*dnest4.randh()
               params[which]=dnest4.wrap(params[which], -1, 1)
             #   print "  adjusted b to %f" %  ( params[which])
@@ -327,16 +332,16 @@ class Model(object):
             params[which] += 0.01*dnest4.randh()
             params[which] = dnest4.wrap(params[which], -1.05, -0.975)
         elif which == rc1_idx:
-          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] += 30*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 60, 90)
         elif which == rc2_idx:
-          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] += 5*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0, 5)
         elif which == rcfrac_idx:
-          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] += 0.1*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0.9, 1)
         elif which == grad_idx:
-          params[which] += prior_vars[grad_idx]*np.int(dnest4.randh())
+          params[which] += (len(detector.gradList)-1)*dnest4.randh()
           params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
 
         elif which >= velo_first_idx and which < velo_first_idx+6:

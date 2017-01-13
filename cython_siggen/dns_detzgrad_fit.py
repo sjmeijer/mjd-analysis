@@ -40,8 +40,8 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-    fitwfnum = 11
-    # fitwfnum = 7
+    #fitwfnum = 11
+    fitwfnum = 7
     wfs = wfs[:fitwfnum+1]
     results = results[:fitwfnum+1]
     wfs = np.delete(wfs, range(0,fitwfnum))
@@ -72,7 +72,7 @@ else:
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey" ]
 
 
-t0_padding = 10
+t0_padding = 500
 wfLengths = np.empty(numWaveforms)
 wfMaxes = np.empty(numWaveforms)
 
@@ -91,7 +91,6 @@ if doInitPlot: plt.show()
 siggen_wf_length = (np.amax(wfMaxes) - t0_padding + 10)*10
 output_wf_length = np.amax(wfLengths)
 
-
 #Create a detector model
 timeStepSize = 1 #ns
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
@@ -102,6 +101,7 @@ def fit(argv):
 
   initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
   initMultiThreading(numThreads)
+  initT0Padding(t0_padding)
 
   # Create a model object and a sampler
   model = Model()
@@ -204,11 +204,11 @@ def plot(sample_file_name, directory):
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
 
           if doWaveformPlot:
-              ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  fitSamples, h_smoothing = smooth)
+              ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth)
               if ml_wf is None:
                 continue
 
-              baseline_trend = np.linspace(b, m*fitSamples+b, fitSamples)
+              baseline_trend = np.linspace(b, m*output_wf_length+b, output_wf_length)
               ml_wf += baseline_trend
 
               dataLen = wf.wfLength
