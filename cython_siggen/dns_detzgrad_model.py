@@ -65,15 +65,15 @@ priors[velo_first_idx+3:velo_first_idx+6] = h_111_mu0_prior, h_111_beta_prior, h
 prior_vars =  np.empty(len(priors))
 prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
 
-var = 0.2
-prior_vars[velo_first_idx:velo_first_idx+6] = var*priors[velo_first_idx:velo_first_idx+6]
+velo_var = 0.5
+prior_vars[velo_first_idx:velo_first_idx+6] = velo_var*priors[velo_first_idx:velo_first_idx+6]
 
 priors[grad_idx] = 100
 prior_vars[grad_idx] = 3
 priors[trap_idx] = 120.
 
 def get_velo_params():
-    return (priors[velo_first_idx:velo_first_idx+6], var)
+    return (priors[velo_first_idx:velo_first_idx+6], velo_var)
 def get_param_idxs():
     return (tf_first_idx, velo_first_idx, grad_idx, trap_idx)
 
@@ -183,12 +183,12 @@ class Model(object):
         charge_trapping = np.exp(20.0*rng.rand())
 
         #6 hole drift params
-        h_100_mu0 = .01*var * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
-        h_100_beta = .01*var * h_100_beta_prior*rng.randn() + h_100_beta_prior
-        h_100_e0 = .01*var * h_100_e0_prior*rng.randn() + h_100_e0_prior
-        h_111_mu0 = .01*var * h_111_mu0_prior*rng.randn() + h_111_mu0_prior
-        h_111_beta = .01*var * h_111_beta_prior*rng.randn() + h_111_beta_prior
-        h_111_e0 = .01*var * h_111_e0_prior*rng.randn() + h_111_e0_prior
+        h_100_mu0 = .01*velo_var * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
+        h_100_beta = .01*velo_var * h_100_beta_prior*rng.randn() + h_100_beta_prior
+        h_100_e0 = .01*velo_var * h_100_e0_prior*rng.randn() + h_100_e0_prior
+        h_111_mu0 = .01*velo_var * h_111_mu0_prior*rng.randn() + h_111_mu0_prior
+        h_111_beta = .01*velo_var * h_111_beta_prior*rng.randn() + h_111_beta_prior
+        h_111_e0 = .01*velo_var * h_111_e0_prior*rng.randn() + h_111_e0_prior
 
         return np.hstack([
               b_over_a, c, dc,
@@ -338,7 +338,7 @@ class Model(object):
 
         elif which >= velo_first_idx and which < velo_first_idx+6:
             params[which] += prior_vars[which]*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0.8*priors[which], 1.2*priors[which])
+            params[which] = dnest4.wrap(params[which], (1-velo_var)*priors[which], (1+velo_var)*priors[which])
         elif which == trap_idx:
             log_traprc = np.log(params[which])
             log_traprc += 20*dnest4.randh()

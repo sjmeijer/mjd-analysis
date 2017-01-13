@@ -8,7 +8,7 @@ import dnest4
 
 import matplotlib
 #matplotlib.use('CocoaAgg')
-import sys, os
+import sys, os, shutil
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
@@ -22,12 +22,15 @@ import multiprocessing
 import helpers
 from pysiggen import Detector
 
-from dns_det_model import *
+from dns_detzgrad_model import *
+
+doInitPlot = False
+doWaveformPlot = True
+plotNum = 500 #for plotting during the Run
 
 numThreads = multiprocessing.cpu_count()
-timeStepSize = 1
 
-wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
+wfFileName = "P42574A_24_spread.npz"
 if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     #i think wfs 1 and 3 might be MSE
@@ -37,11 +40,12 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-#    fitwfnum = 3
-#    wfs = wfs[:fitwfnum+1]
-#    results = results[:fitwfnum+1]
-#    wfs = np.delete(wfs, range(0,fitwfnum))
-#    results = np.delete(results, range(0,fitwfnum))
+    fitwfnum = 11
+    # fitwfnum = 7
+    wfs = wfs[:fitwfnum+1]
+    results = results[:fitwfnum+1]
+    wfs = np.delete(wfs, range(0,fitwfnum))
+    results = np.delete(results, range(0,fitwfnum))
 
     # 4 medium waveforms
     # wfs = wfs[:8]
@@ -50,10 +54,10 @@ if os.path.isfile(wfFileName):
     # results = np.delete(results, [0,1,2,3])
 
     # #8 wfs questionable provenance
-    wfs = wfs[:11]
-    results = results[:11]
-    wfs = np.delete(wfs, [1,2,3])
-    results = np.delete(results, [1,2,3])
+    # wfs = wfs[:11]
+    # results = results[:11]
+    # wfs = np.delete(wfs, [1,2,3])
+    # results = np.delete(results, [1,2,3])
 
     numWaveforms = wfs.size
     print "Fitting %d waveforms" % numWaveforms,
@@ -68,10 +72,11 @@ else:
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey" ]
 fitSamples = 0
 
-doInitPlot = False
 if doInitPlot: plt.figure(500)
 for (wf_idx,wf) in enumerate(wfs):
-  wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=10)
+  wf.WindowWaveformTimepoint(fallPercentage=.92, rmsMult=2, earlySamples=10)
+  # wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=10)
+
   print "wf %d length %d" % (wf_idx, wf.wfLength)
   if wf.wfLength >= fitSamples:
       fitSamples = wf.wfLength + 1
@@ -80,6 +85,7 @@ for (wf_idx,wf) in enumerate(wfs):
 if doInitPlot: plt.show()
 
 #Create a detector model
+timeStepSize = 1
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10)
 det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
@@ -110,7 +116,6 @@ def fit(argv):
 
 
 def plot(sample_file_name, directory):
-    doWaveformPlot = True
     fig1 = plt.figure(0, figsize=(20,10))
     plt.clf()
     gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
@@ -125,14 +130,21 @@ def plot(sample_file_name, directory):
       t_data = np.arange(dataLen) * 10
       ax0.plot(t_data, wf.windowedWf, color="black")
 
+      sample_file_name = directory + sample_file_name
+      if sample_file_name == directory + "sample.txt":
+          shutil.copy(directory+ "sample.txt", directory+"sample_plot.txt")
+          sample_file_name = directory + "sample_plot.txt"
 
 #  data = np.loadtxt("posterior_sample.txt")
-    data = np.loadtxt(directory + sample_file_name)
+    data = np.loadtxt( sample_file_name)
     num_samples = len(data)
     print "found %d samples" % num_samples
 
-    if sample_file_name=="sample.txt":
-        if num_samples > 500: num_samples = 500
+    print sample_file_name
+    if sample_file_name== (directory+"sample_plot.txt"):
+        if num_samples > plotNum: num_samples = plotNum
+    print "plotting %d samples" % num_samples
+    # exit(0)
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
