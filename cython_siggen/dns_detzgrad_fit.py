@@ -158,6 +158,7 @@ def plot(sample_file_name, directory):
     z_arr = np.empty((numWaveforms, num_samples))
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
+    wf_params = np.empty((8, num_samples))
 
     velo_priors, velo_lims = get_velo_params()
     tf_first_idx, velo_first_idx, grad_idx, trap_idx = get_param_idxs()
@@ -194,6 +195,8 @@ def plot(sample_file_name, directory):
           rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
           scale, t0, smooth =  scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]
           m, b = m_arr[wf_idx], b_arr[wf_idx]
+          wf_params[:, idx] = rad, phi, theta, scale, t0, smooth, m, b
+
           r = rad * np.cos(theta)
           z = rad * np.sin(theta)
           print "  wf number %d:" % wf_idx
@@ -219,51 +222,31 @@ def plot(sample_file_name, directory):
     ax0.set_ylim(-20, wf.wfMax*1.1)
     ax1.set_ylim(-20, 20)
 
-    plotnum = 600
-    tfFig = plt.figure(1)
-    tf0 = tfFig.add_subplot(plotnum+11)
-    tf1 = tfFig.add_subplot(plotnum+12, )
-    tf2 = tfFig.add_subplot(plotnum+13, )
-    tf3 = tfFig.add_subplot(plotnum+14, )
-    tf4 = tfFig.add_subplot(plotnum+15, )
-    tf5 = tfFig.add_subplot(plotnum+16, )
-    # tf6 = tfFig.add_subplot(plotnum+17, )
 
-    tf0.set_ylabel('b_ov_a')
-    tf1.set_ylabel('c')
-    tf2.set_ylabel('dc')
-    tf3.set_ylabel('rc1')
-    tf4.set_ylabel('rc2')
-    tf5.set_ylabel('rcfrac')
-    # tf6.set_ylabel('grad_idx')
 
-    num_bins = 100
-    [n, b, p] = tf0.hist(tf[0,:], bins=num_bins)
-    [n, b, p] = tf1.hist(tf[1,:], bins=num_bins)
-    [n, b, p] = tf2.hist(tf[2,:], bins=num_bins)
-    [n, b, p] = tf3.hist(tf[3,:], bins=num_bins)
-    [n, b, p] = tf4.hist(tf[4,:], bins=num_bins)
-    [n, b, p] = tf5.hist(tf[5,:], bins=num_bins)
-    # [n, b, p] = tf6.hist(tf[6,:], bins=num_bins)
-
-    plotnum = 600
-    vFig = plt.figure(2)
+    vFig = plt.figure(2, figsize=(20,10))
+    tfLabels = ['b_ov_a', 'c', 'd', 'rc1', 'rc2', 'rcfrac']
     vLabels = ['h_100_mu0', 'h_100_beta', 'h_100_e0','h_111_mu0','h_111_beta', 'h_111_e0']
-    vAxes = []
+    vmodes, tfmodes = np.empty(6), np.empty(6)
     num_bins = 100
-    for i in range(plotnum/100):
-        axis = vFig.add_subplot(plotnum+10 + i+1)
+    for i in range(6):
+        idx = (i+1)*2
+        axis = vFig.add_subplot(6,2,idx)
         axis.set_ylabel(vLabels[i])
         [n, b, p] = axis.hist(velo[i,:], bins=num_bins)
         axis.axvline(x=(1-velo_lims)*velo_priors[i], color="r")
         axis.axvline(x=(1+velo_lims)*velo_priors[i], color="r")
         axis.axvline(x=velo_priors[i], color="g")
-
         max_idx = np.argmax(n)
         print "%s mode: %f" % (vLabels[i], b[max_idx])
 
+        axis = vFig.add_subplot(6,2,idx-1)
+        axis.set_ylabel(tfLabels[i])
+        [n, b, p] = axis.hist(tf[i,:], bins=num_bins)
+        max_idx = np.argmax(n)
+        print "%s mode: %f" % (tfLabels[i], b[max_idx])
 
-    positionFig = plt.figure(3)
+    positionFig = plt.figure(3, figsize=(15,15))
     plt.clf()
     colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges", "Greys", "YlOrBr", "PuRd"]
 
@@ -274,6 +257,17 @@ def plot(sample_file_name, directory):
         # plt.colorbar()
     plt.xlabel("r from Point Contact (mm)")
     plt.ylabel("z from Point Contact (mm)")
+    plt.axis('equal')
+
+    if numWaveforms == 1:
+        #TODO: make this plot work for a bunch of wfs
+        vFig = plt.figure(4, figsize=(20,10))
+        wfLabels = ['rad', 'phi', 'theta', 'scale', 't0', 'smooth', 'm', 'b']
+        num_bins = 100
+        for i in range(8):
+            axis = vFig.add_subplot(4,2,i+1)
+            axis.set_ylabel(wfLabels[i])
+            [n, b, p] = axis.hist(wf_params[i,:], bins=num_bins)
 
     plt.show()
 
