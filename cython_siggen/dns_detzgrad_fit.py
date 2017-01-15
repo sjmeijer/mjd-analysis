@@ -228,9 +228,9 @@ def plot(sample_file_name, directory):
                 continue
 
             start_idx = -baseline_origin_idx
-            end_idx = data_len - baseline_origin_idx - 1
-            baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, data_len)
-            model += baseline_trend
+            end_idx = dataLen - baseline_origin_idx - 1
+            baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, dataLen)
+            ml_wf += baseline_trend
 
             dataLen = wf.wfLength
             t_data = np.arange(dataLen) * 10
