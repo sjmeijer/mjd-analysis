@@ -380,7 +380,7 @@ class Model(object):
                               m_arr[wf_idx], b_arr[wf_idx],
                               b_over_a, c, dc, rc1, rc2, rcfrac,
                               h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                              grad, charge_trapping
+                              grad, charge_trapping, baseline_origin_idx
                             ])
                 # sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
                 #                scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
@@ -401,7 +401,7 @@ class Model(object):
                               m_arr[wf_idx], b_arr[wf_idx],
                               b_over_a, c, dc, rc1, rc2, rcfrac,
                               h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                              grad, charge_trapping
+                              grad, charge_trapping, baseline_origin_idx
                             )
 
         return sum_like
@@ -410,7 +410,7 @@ class Model(object):
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, dc, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, grad, charge_trapping):
+def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, dc, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, grad, charge_trapping, bl_origin_idx):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
     # exit(0)
@@ -462,8 +462,8 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
     #     # print np.argmax(model), t50
     #     return -np.inf
 
-    start_idx = -baseline_origin_idx
-    end_idx = data_len - baseline_origin_idx - 1
+    start_idx = -bl_origin_idx
+    end_idx = data_len - bl_origin_idx - 1
     baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, data_len)
     model += baseline_trend
 
