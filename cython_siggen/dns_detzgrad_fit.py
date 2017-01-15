@@ -13,8 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
 
-
-import scipy.optimize as op
+# import pandas as pd
 import numpy as np
 from scipy import signal
 import multiprocessing
@@ -26,7 +25,8 @@ from dns_detzgrad_model import *
 
 doInitPlot = False
 doWaveformPlot = True
-plotNum = 500 #for plotting during the Run
+doHists = False
+plotNum = 50 #for plotting during the Run
 
 numThreads = multiprocessing.cpu_count()
 
@@ -69,10 +69,21 @@ else:
   print "Saved waveform file %s not available" % wfFileName
   exit(0)
 
+baselineLengths = np.empty(numWaveforms)
+for (wf_idx, wf) in enumerate(wfs):
+    baselineLengths[wf_idx] = wf.EstimateT0(rmsMult=2)
+min_length = np.amin(baselineLengths)
+t0_padding = min_length - 10
+baseline_origin_idx = t0_padding - 30
+
+if baseline_origin_idx < 0:
+    print "You need to make the pre-wf baseline longer"
+    exit(0)
+
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey" ]
 
 
-t0_padding = 500
+# t0_padding = 500
 wfLengths = np.empty(numWaveforms)
 wfMaxes = np.empty(numWaveforms)
 
@@ -101,7 +112,7 @@ def fit(argv):
 
   initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
   initMultiThreading(numThreads)
-  initT0Padding(t0_padding)
+  initT0Padding(t0_padding, baseline_origin_idx)
 
   # Create a model object and a sampler
   model = Model()
@@ -143,12 +154,15 @@ def plot(sample_file_name, directory):
           shutil.copy(directory+ "sample.txt", directory+"sample_plot.txt")
           sample_file_name = directory + "sample_plot.txt"
 
-#  data = np.loadtxt("posterior_sample.txt")
     data = np.loadtxt( sample_file_name)
     num_samples = len(data)
+
+    # data = pd.read_csv("sample_plot.txt", delim_whitespace=True, header=None)
+    # num_samples = len(data.index)
     print "found %d samples" % num_samples
 
     print sample_file_name
+
     if sample_file_name== (directory+"sample_plot.txt"):
         if num_samples > plotNum: num_samples = plotNum
     print "plotting %d samples" % num_samples
@@ -164,6 +178,8 @@ def plot(sample_file_name, directory):
     tf_first_idx, velo_first_idx, grad_idx, trap_idx = get_param_idxs()
 
     for (idx,params) in enumerate(data[-num_samples:]):
+        # params = data.iloc[-(idx+1)]
+        # print params
 
         b_over_a, c, dc, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
         h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
@@ -207,22 +223,26 @@ def plot(sample_file_name, directory):
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
 
           if doWaveformPlot:
-              ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth)
-              if ml_wf is None:
+            ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth)
+            if ml_wf is None:
                 continue
 
-              baseline_trend = np.linspace(b, m*output_wf_length+b, output_wf_length)
-              ml_wf += baseline_trend
+            start_idx = -baseline_origin_idx
+            end_idx = data_len - baseline_origin_idx - 1
+            baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, data_len)
+            model += baseline_trend
 
-              dataLen = wf.wfLength
-              t_data = np.arange(dataLen) * 10
-              ax0.plot(t_data, ml_wf[:dataLen], color=colors[wf_idx], alpha=0.1)
-              ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color=colors[wf_idx],alpha=0.1)
+            dataLen = wf.wfLength
+            t_data = np.arange(dataLen) * 10
+            ax0.plot(t_data, ml_wf[:dataLen], color=colors[wf_idx], alpha=0.1)
+            ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color=colors[wf_idx],alpha=0.1)
 
     ax0.set_ylim(-20, wf.wfMax*1.1)
     ax1.set_ylim(-20, 20)
 
-
+    if not doHists:
+        plt.show()
+        exit()
 
     vFig = plt.figure(2, figsize=(20,10))
     tfLabels = ['b_ov_a', 'c', 'd', 'rc1', 'rc2', 'rcfrac']

@@ -34,13 +34,12 @@ def initMultiThreading(numThreads):
   if num_threads > 1:
       pool = Pool(num_threads, initializer=initializeDetector, initargs=[detector])
 
-def initT0Padding(t0_pad):
-    global t0_guess, min_t0, max_t0
+def initT0Padding(t0_pad, linear_baseline_origin):
+    global t0_guess, min_t0, max_t0, baseline_origin_idx
     t0_guess = t0_pad
     max_t0 = t0_guess + 5
-    min_t0 = t0_guess - 10
-
-
+    min_t0 = t0_guess - 20
+    baseline_origin_idx = linear_baseline_origin
 
 
 tf_first_idx = 0
@@ -463,8 +462,9 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
     #     # print np.argmax(model), t50
     #     return -np.inf
 
-
-    baseline_trend = np.linspace(b, m*data_len+b, data_len)
+    start_idx = -baseline_origin_idx
+    end_idx = data_len - baseline_origin_idx - 1
+    baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, data_len)
     model += baseline_trend
 
     inv_sigma2 = 1.0/(model_err**2)
