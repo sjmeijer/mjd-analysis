@@ -92,7 +92,7 @@ for (wf_idx,wf) in enumerate(wfs):
   wf.WindowWaveformTimepoint(fallPercentage=.92, rmsMult=2, earlySamples=t0_padding)
   # wf.WindowWaveformTimepoint(fallPercentage=.99, rmsMult=2, earlySamples=10)
 
-  print "wf %d length %d" % (wf_idx, wf.wfLength)
+  print "wf %d length %d (entry %d from run %d)" % (wf_idx, wf.wfLength, wf.entry_number, wf.runNumber)
   wfLengths[wf_idx] = wf.wfLength
   wfMaxes[wf_idx] = np.argmax(wf.windowedWf)
 
