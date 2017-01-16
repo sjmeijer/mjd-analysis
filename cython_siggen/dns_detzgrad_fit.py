@@ -23,10 +23,10 @@ from pysiggen import Detector
 
 from dns_detzgrad_model import *
 
-doInitPlot = False
-doWaveformPlot = True
-doHists = False
-plotNum = 50 #for plotting during the Run
+doInitPlot = 0
+doWaveformPlot = 0
+doHists = 1
+plotNum = 1000 #for plotting during the Run
 
 numThreads = multiprocessing.cpu_count()
 
@@ -41,7 +41,7 @@ if os.path.isfile(wfFileName):
 
     #one slow waveform
     #fitwfnum = 11
-    fitwfnum = 7
+    fitwfnum = 0
     wfs = wfs[:fitwfnum+1]
     results = results[:fitwfnum+1]
     wfs = np.delete(wfs, range(0,fitwfnum))
@@ -79,9 +79,11 @@ baseline_origin_idx = t0_padding - 30
 if baseline_origin_idx < 0:
     print "You need to make the pre-wf baseline longer"
     exit(0)
+initT0Padding(t0_padding, baseline_origin_idx)
+
+
 
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey" ]
-
 
 # t0_padding = 500
 wfLengths = np.empty(numWaveforms)
@@ -97,7 +99,9 @@ for (wf_idx,wf) in enumerate(wfs):
   wfMaxes[wf_idx] = np.argmax(wf.windowedWf)
 
   if doInitPlot:  plt.plot(wf.windowedWf, color=colors[wf_idx])
-if doInitPlot: plt.show()
+if doInitPlot:
+    plt.show()
+    exit()
 
 siggen_wf_length = (np.amax(wfMaxes) - t0_padding + 10)*10
 output_wf_length = np.amax(wfLengths)
@@ -112,7 +116,6 @@ def fit(argv):
 
   initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
   initMultiThreading(numThreads)
-  initT0Padding(t0_padding, baseline_origin_idx)
 
   # Create a model object and a sampler
   model = Model()
@@ -173,8 +176,10 @@ def plot(sample_file_name, directory):
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
     wf_params = np.empty((8, num_samples))
+    det_params = np.empty((2, num_samples))
 
     velo_priors, velo_lims = get_velo_params()
+    t0_guess, t0_min, t0_max = get_t0_params()
     tf_first_idx, velo_first_idx, grad_idx, trap_idx = get_param_idxs()
 
     for (idx,params) in enumerate(data[-num_samples:]):
@@ -188,6 +193,7 @@ def plot(sample_file_name, directory):
 
         tf[:,idx] = params[tf_first_idx:tf_first_idx+6]
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
+        det_params[:,idx] = np.int(params[grad_idx]), params[trap_idx]
 
         d = c*dc
         det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
@@ -250,8 +256,8 @@ def plot(sample_file_name, directory):
     vmodes, tfmodes = np.empty(6), np.empty(6)
     num_bins = 100
     for i in range(6):
-        idx = (i+1)*2
-        axis = vFig.add_subplot(6,2,idx)
+        idx = (i+1)*3
+        axis = vFig.add_subplot(6,3,idx-1)
         axis.set_ylabel(vLabels[i])
         [n, b, p] = axis.hist(velo[i,:], bins=num_bins)
         axis.axvline(x=(1-velo_lims)*velo_priors[i], color="r")
@@ -260,11 +266,26 @@ def plot(sample_file_name, directory):
         max_idx = np.argmax(n)
         print "%s mode: %f" % (vLabels[i], b[max_idx])
 
-        axis = vFig.add_subplot(6,2,idx-1)
+        axis = vFig.add_subplot(6,3,idx-2)
         axis.set_ylabel(tfLabels[i])
         [n, b, p] = axis.hist(tf[i,:], bins=num_bins)
         max_idx = np.argmax(n)
         print "%s mode: %f" % (tfLabels[i], b[max_idx])
+
+        if i==0:
+            axis = vFig.add_subplot(6,3,idx)
+            axis.set_ylabel("imp grad")
+            [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
+            max_idx = np.argmax(n)
+            print "%s mode: %f" % ("imp grad", b[max_idx])
+        if i==1:
+            axis = vFig.add_subplot(6,3,idx)
+            axis.set_ylabel("trapping_rc")
+            [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
+            max_idx = np.argmax(n)
+            print "%s mode: %f" % ("trapping_rc grad", b[max_idx])
+
+
 
     positionFig = plt.figure(3, figsize=(15,15))
     plt.clf()
@@ -288,6 +309,11 @@ def plot(sample_file_name, directory):
             axis = vFig.add_subplot(4,2,i+1)
             axis.set_ylabel(wfLabels[i])
             [n, b, p] = axis.hist(wf_params[i,:], bins=num_bins)
+            if i == 4:
+                axis.axvline(x=t0_min, color="r")
+                axis.axvline(x=t0_max, color="r")
+                axis.axvline(x=t0_guess, color="g")
+
 
     plt.show()
 
