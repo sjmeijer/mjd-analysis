@@ -72,7 +72,7 @@ priors[velo_first_idx+3:velo_first_idx+6] = h_111_mu0_prior, h_111_beta_prior, h
 prior_vars =  np.empty(len(priors))
 prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
 
-velo_var = 0.5
+velo_var = 1.
 prior_vars[velo_first_idx:velo_first_idx+6] = velo_var*priors[velo_first_idx:velo_first_idx+6]
 
 priors[grad_idx] = 100
@@ -81,6 +81,8 @@ priors[trap_idx] = 120.
 
 def get_velo_params():
     return (priors[velo_first_idx:velo_first_idx+6], velo_var)
+def get_t0_params():
+    return (t0_guess, min_t0, max_t0, )
 def get_param_idxs():
     return (tf_first_idx, velo_first_idx, grad_idx, trap_idx)
 
