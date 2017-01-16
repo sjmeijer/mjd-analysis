@@ -21,7 +21,7 @@ import multiprocessing
 import helpers
 from pysiggen import Detector
 
-from dns_detzgrad_model import *
+from dns_det_model import *
 
 doInitPlot = 0
 doWaveformPlot = 0
@@ -42,7 +42,7 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-    fitwfnum = 0
+    fitwfnum = 1
     wfs = wfs[:fitwfnum+1]
     results = results[:fitwfnum+1]
     wfs = np.delete(wfs, range(0,fitwfnum))
@@ -113,7 +113,7 @@ detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length )
 det.LoadFieldsGrad("fields_impgrad_0-0.02_radmult1-3.npz", pcLen=1.6, pcRad=2.5)
 
-def fit(argv):
+def fit(directory):
 
   initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
   initMultiThreading(numThreads)
@@ -121,7 +121,7 @@ def fit(argv):
   # Create a model object and a sampler
   model = Model()
   sampler = dnest4.DNest4Sampler(model,
-                                 backend=dnest4.backends.CSVBackend(".",
+                                 backend=dnest4.backends.CSVBackend(basedir ="./" + directory,
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
@@ -192,18 +192,13 @@ def plot(sample_file_name, directory):
         charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
         gradMult = np.int(params[grad_idx+1])
+        d = c*dc
 
         tf[:,idx] = params[tf_first_idx:tf_first_idx+6]
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
         det_params[:,idx] = grad, gradMult, charge_trapping
-
-        d = c*dc
-        det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
-        det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
-        det.trapping_rc = charge_trapping
-        det.SetFieldsGradMultIdx(grad, gradMult)
-
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[trap_idx+1:].reshape((8, numWaveforms))
+
         print "sample %d:" % idx
         print "  tf params: ",
         print b_over_a, c, d, rc1, rc2, rcfrac
@@ -216,6 +211,12 @@ def plot(sample_file_name, directory):
         print " (%0.3f)" % det.gradList[grad],
         print gradMult,
         print " (%0.3f)" % det.gradMultList[gradMult]
+
+
+        det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
+        det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
+        det.trapping_rc = charge_trapping
+        det.SetFieldsGradMultIdx(grad, gradMult)
 
         for (wf_idx,wf) in enumerate(wfs):
           rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
@@ -329,8 +330,7 @@ def plot(sample_file_name, directory):
 
 if __name__=="__main__":
     if len(sys.argv) < 2:
-        fit(sys.argv[1:])
-
+        fit("")
     if len(sys.argv) >= 3:
         directory = sys.argv[2]
     else:
@@ -340,3 +340,5 @@ if __name__=="__main__":
         plot("sample.txt", directory)
     elif sys.argv[1] == "plot_post":
         plot("posterior_sample.txt", directory)
+    else:
+        fit(sys.argv[1])

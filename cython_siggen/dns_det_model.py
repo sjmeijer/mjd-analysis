@@ -44,7 +44,7 @@ def initT0Padding(t0_pad, linear_baseline_origin):
 
 tf_first_idx = 0
 velo_first_idx = 6
-trap_idx = 13
+trap_idx = 14
 grad_idx, gradmult_idx = 12, 13
 
 priors = np.empty(6 + 6 + 2 + 1) #6 + 2)
@@ -412,7 +412,7 @@ class Model(object):
                               m_arr[wf_idx], b_arr[wf_idx],
                               b_over_a, c, dc, rc1, rc2, rcfrac,
                               h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                              grad, charge_trapping, baseline_origin_idx
+                              grad,gradMult, charge_trapping, baseline_origin_idx
                             )
 
         return sum_like
