@@ -25,12 +25,13 @@ from dns_detzgrad_model import *
 
 doInitPlot = False
 doWaveformPlot = True
-doHists = False
-plotNum = 50 #for plotting during the Run
+doHists = True
+plotNum = 500 #for plotting during the Run
 
 numThreads = multiprocessing.cpu_count()
 
-wfFileName = "P42574A_24_spread.npz"
+# wfFileName = "P42574A_24_spread.npz"
+wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     #i think wfs 1 and 3 might be MSE
@@ -41,17 +42,17 @@ if os.path.isfile(wfFileName):
 
     #one slow waveform
     #fitwfnum = 11
-    fitwfnum = 7
-    wfs = wfs[:fitwfnum+1]
-    results = results[:fitwfnum+1]
-    wfs = np.delete(wfs, range(0,fitwfnum))
-    results = np.delete(results, range(0,fitwfnum))
+    # fitwfnum = 7
+    # wfs = wfs[:fitwfnum+1]
+    # results = results[:fitwfnum+1]
+    # wfs = np.delete(wfs, range(0,fitwfnum))
+    # results = np.delete(results, range(0,fitwfnum))
 
     # 4 medium waveforms
-    # wfs = wfs[:8]
-    # results = results[:8]
-    # wfs = np.delete(wfs, [0,1,2,3])
-    # results = np.delete(results, [0,1,2,3])
+    wfs = wfs[:8]
+    results = results[:8]
+    wfs = np.delete(wfs, [0,1,2,3])
+    results = np.delete(results, [0,1,2,3])
 
     # #8 wfs questionable provenance
     # wfs = wfs[:11]
@@ -228,8 +229,8 @@ def plot(sample_file_name, directory):
                 continue
 
             start_idx = -baseline_origin_idx
-            end_idx = dataLen - baseline_origin_idx - 1
-            baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, dataLen)
+            end_idx = output_wf_length - baseline_origin_idx - 1
+            baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, output_wf_length)
             ml_wf += baseline_trend
 
             dataLen = wf.wfLength
