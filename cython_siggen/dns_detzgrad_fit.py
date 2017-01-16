@@ -28,9 +28,11 @@ doWaveformPlot = 0
 doHists = 1
 plotNum = 1000 #for plotting during the Run
 
+
 numThreads = multiprocessing.cpu_count()
 
 wfFileName = "P42574A_24_spread.npz"
+# wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
     #i think wfs 1 and 3 might be MSE
@@ -40,7 +42,6 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-    #fitwfnum = 11
     fitwfnum = 0
     wfs = wfs[:fitwfnum+1]
     results = results[:fitwfnum+1]
@@ -234,8 +235,8 @@ def plot(sample_file_name, directory):
                 continue
 
             start_idx = -baseline_origin_idx
-            end_idx = dataLen - baseline_origin_idx - 1
-            baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, dataLen)
+            end_idx = output_wf_length - baseline_origin_idx - 1
+            baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, output_wf_length)
             ml_wf += baseline_trend
 
             dataLen = wf.wfLength
