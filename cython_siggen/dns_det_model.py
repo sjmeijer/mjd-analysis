@@ -28,16 +28,23 @@ def initializeDetectorAndWaveforms(det, wfs_init, wf_guess_init, reinit=True):
   initializeDetector(det, reinit)
 
 def initMultiThreading(numThreads):
+  global num_threads
   global pool
-  pool = Pool(numThreads, initializer=initializeDetector, initargs=[detector])
+  num_threads = numThreads
+  if num_threads > 1:
+      pool = Pool(num_threads, initializer=initializeDetector, initargs=[detector])
 
-min_t0 = 0
-max_t0 = 15
-t0_guess = 10
+def initT0Padding(t0_pad, linear_baseline_origin):
+    global t0_guess, min_t0, max_t0, baseline_origin_idx
+    t0_guess = t0_pad
+    max_t0 = t0_guess + 5
+    min_t0 = t0_guess - 20
+    baseline_origin_idx = linear_baseline_origin
+
 
 tf_first_idx = 0
 velo_first_idx = 6
-trap_idx = 14
+trap_idx = 13
 grad_idx, gradmult_idx = 12, 13
 
 priors = np.empty(6 + 6 + 2 + 1) #6 + 2)
@@ -65,8 +72,8 @@ priors[velo_first_idx+3:velo_first_idx+6] = h_111_mu0_prior, h_111_beta_prior, h
 prior_vars =  np.empty(len(priors))
 prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
 
-var = 0.2
-prior_vars[velo_first_idx:velo_first_idx+6] = var*priors[velo_first_idx:velo_first_idx+6]
+velo_var = 1.
+prior_vars[velo_first_idx:velo_first_idx+6] = velo_var*priors[velo_first_idx:velo_first_idx+6]
 
 priors[grad_idx] = 10/2.
 prior_vars[grad_idx] = 3
@@ -76,7 +83,9 @@ prior_vars[gradmult_idx] = 3
 priors[trap_idx] = 120.
 
 def get_velo_params():
-    return (priors[velo_first_idx:velo_first_idx+6], var)
+    return (priors[velo_first_idx:velo_first_idx+6], velo_var)
+def get_t0_params():
+    return (t0_guess, min_t0, max_t0, )
 def get_param_idxs():
     return (tf_first_idx, velo_first_idx, grad_idx, trap_idx)
 
@@ -178,7 +187,7 @@ class Model(object):
         c = 0.05 *rng.randn() + c_prior
         dc =  0.01 *rng.randn() + dc_prior
 
-        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 50, 100)
+        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 60, 90)
         rc2 = dnest4.wrap(prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx], 0, 5)
         rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
 
@@ -188,12 +197,12 @@ class Model(object):
         charge_trapping = np.exp(20.0*rng.rand())
 
         #6 hole drift params
-        h_100_mu0 = .01*var * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
-        h_100_beta = .01*var * h_100_beta_prior*rng.randn() + h_100_beta_prior
-        h_100_e0 = .01*var * h_100_e0_prior*rng.randn() + h_100_e0_prior
-        h_111_mu0 = .01*var * h_111_mu0_prior*rng.randn() + h_111_mu0_prior
-        h_111_beta = .01*var * h_111_beta_prior*rng.randn() + h_111_beta_prior
-        h_111_e0 = .01*var * h_111_e0_prior*rng.randn() + h_111_e0_prior
+        h_100_mu0 = .01*velo_var * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
+        h_100_beta = .01*velo_var * h_100_beta_prior*rng.randn() + h_100_beta_prior
+        h_100_e0 = .01*velo_var * h_100_e0_prior*rng.randn() + h_100_e0_prior
+        h_111_mu0 = .01*velo_var * h_111_mu0_prior*rng.randn() + h_111_mu0_prior
+        h_111_beta = .01*velo_var * h_111_beta_prior*rng.randn() + h_111_beta_prior
+        h_111_e0 = .01*velo_var * h_111_e0_prior*rng.randn() + h_111_e0_prior
 
         return np.hstack([
               b_over_a, c, dc,
@@ -310,11 +319,11 @@ class Model(object):
               params[which] = dnest4.wrap(params[which], 0, 15)
             #   print "  adjusted smooth to %f" %  ( params[which])
 
-            elif wf_which == 6:
+            elif wf_which == 6: #wf baseline slope (m)
               params[which] += 0.001*dnest4.randh()
-              params[which]=dnest4.wrap(params[which], -0.1, 0.1)
+              params[which]=dnest4.wrap(params[which], -0.01, 0.01)
             #   print "  adjusted m to %f" %  ( params[which])
-            elif wf_which == 7:
+            elif wf_which == 7: #wf baseline incercept (b)
               params[which] += 0.01*dnest4.randh()
               params[which]=dnest4.wrap(params[which], -1, 1)
             #   print "  adjusted b to %f" %  ( params[which])
@@ -329,24 +338,24 @@ class Model(object):
             params[which] += 0.01*dnest4.randh()
             params[which] = dnest4.wrap(params[which], -1.05, -0.975)
         elif which == rc1_idx:
-          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] += 30*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 60, 90)
         elif which == rc2_idx:
-          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] += 5*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0, 5)
         elif which == rcfrac_idx:
-          params[which] += prior_vars[which]*dnest4.randh()
+          params[which] += 0.1*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0.9, 1)
         elif which == grad_idx:
           params[which] += (len(detector.gradList)-1)*dnest4.randh()
           params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
         elif which == gradmult_idx:
-          params[which] += (len(detector.gradMultList)-1)*dnest4.randh()
-          params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradMultList)-1))
+            params[which] += (len(detector.gradMultList)-1)*dnest4.randh()
+            params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradMultList)-1))
 
         elif which >= velo_first_idx and which < velo_first_idx+6:
             params[which] += prior_vars[which]*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0.8*priors[which], 1.2*priors[which])
+            params[which] = dnest4.wrap(params[which], (1-velo_var)*priors[which], (1+velo_var)*priors[which])
         elif which == trap_idx:
             log_traprc = np.log(params[which])
             log_traprc += 20*dnest4.randh()
@@ -372,29 +381,39 @@ class Model(object):
 
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[len(priors):].reshape((8, num_waveforms))
 
-        args = []
-        # sum_like = 0
-        for (wf_idx, wf) in enumerate(wfs):
-            # print rad_arr[wf_idx]
-            args.append([wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
-                          scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
-                          m_arr[wf_idx], b_arr[wf_idx],
-                          b_over_a, c, dc, rc1, rc2, rcfrac,
-                          h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                          grad, gradMult, charge_trapping
-                        ])
-            # sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
-            #                scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
-            #                m_arr[wf_idx], b_arr[wf_idx],
-            #                b_over_a, c, d, rc1, rc2, rcfrac,
-            #                h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-            #                charge_trapping, grad
-            #                )
+        if num_threads > 1:
+            args = []
+            # sum_like = 0
+            for (wf_idx, wf) in enumerate(wfs):
+                # print rad_arr[wf_idx]
+                args.append([wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
+                              scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
+                              m_arr[wf_idx], b_arr[wf_idx],
+                              b_over_a, c, dc, rc1, rc2, rcfrac,
+                              h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
+                              grad, gradMult, charge_trapping, baseline_origin_idx
+                            ])
+                # sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
+                #                scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
+                #                m_arr[wf_idx], b_arr[wf_idx],
+                #                b_over_a, c, d, rc1, rc2, rcfrac,
+                #                h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
+                #                charge_trapping, grad
+                #                )
 
 
-        results = pool.map(WaveformLogLikeStar, args)
-
-        sum_like = np.sum(results)
+                results = pool.map(WaveformLogLikeStar, args)
+                sum_like = np.sum(results)
+        else:
+            sum_like = 0
+            for (wf_idx, wf) in enumerate(wfs):
+                sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
+                              scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
+                              m_arr[wf_idx], b_arr[wf_idx],
+                              b_over_a, c, dc, rc1, rc2, rcfrac,
+                              h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
+                              grad, charge_trapping, baseline_origin_idx
+                            )
 
         return sum_like
 
@@ -402,7 +421,7 @@ class Model(object):
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, dc, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, grad, gradMult, charge_trapping):
+def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, dc, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, grad, gradMult, charge_trapping, bl_origin_idx):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
     # exit(0)
@@ -454,8 +473,9 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
     #     # print np.argmax(model), t50
     #     return -np.inf
 
-
-    baseline_trend = np.linspace(b, m*data_len+b, data_len)
+    start_idx = -bl_origin_idx
+    end_idx = data_len - bl_origin_idx - 1
+    baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, data_len)
     model += baseline_trend
 
     inv_sigma2 = 1.0/(model_err**2)
