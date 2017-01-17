@@ -395,8 +395,8 @@ class Model(object):
                 #                )
 
 
-                results = pool.map(WaveformLogLikeStar, args)
-                sum_like = np.sum(results)
+            results = pool.map(WaveformLogLikeStar, args)
+            sum_like = np.sum(results)
         else:
             sum_like = 0
             for (wf_idx, wf) in enumerate(wfs):
