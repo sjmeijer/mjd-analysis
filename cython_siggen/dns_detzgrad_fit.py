@@ -23,10 +23,10 @@ from pysiggen import Detector
 
 from dns_detzgrad_model import *
 
-doInitPlot = 0
-doWaveformPlot = 0
+doInitPlot =0
+doWaveformPlot = 1
 doHists = 1
-plotNum = 1000 #for plotting during the Run
+plotNum = 100 #for plotting during the Run
 
 
 numThreads = multiprocessing.cpu_count()
@@ -42,11 +42,15 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-    fitwfnum = 0
+    fitwfnum = 21
     wfs = wfs[:fitwfnum+1]
     results = results[:fitwfnum+1]
     wfs = np.delete(wfs, range(0,fitwfnum))
     results = np.delete(results, range(0,fitwfnum))
+
+    # wfidxs = [0,7,13,21]
+    # wfs = wfs[wfidxs]
+    # results = results[wfidxs]
 
     # 4 medium waveforms
     # wfs = wfs[:8]
@@ -99,7 +103,11 @@ for (wf_idx,wf) in enumerate(wfs):
   wfLengths[wf_idx] = wf.wfLength
   wfMaxes[wf_idx] = np.argmax(wf.windowedWf)
 
-  if doInitPlot:  plt.plot(wf.windowedWf, color=colors[wf_idx])
+  if doInitPlot:
+      if len(colors) < numWaveforms:
+          color = "red"
+      else: color = colors[wf_idx]
+      plt.plot(wf.windowedWf, color=color)
 if doInitPlot:
     plt.show()
     exit()
@@ -113,7 +121,7 @@ detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length )
 det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
 
-def fit(argv):
+def fit(directory):
 
   initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
   initMultiThreading(numThreads)
@@ -121,11 +129,11 @@ def fit(argv):
   # Create a model object and a sampler
   model = Model()
   sampler = dnest4.DNest4Sampler(model,
-                                 backend=dnest4.backends.CSVBackend(".",
+                                 backend=dnest4.backends.CSVBackend(basedir ="./" + directory,
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=500, num_steps=100000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=500, num_steps=100000, new_level_interval=100000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -153,10 +161,10 @@ def plot(sample_file_name, directory):
       t_data = np.arange(dataLen) * 10
       ax0.plot(t_data, wf.windowedWf, color="black")
 
-      sample_file_name = directory + sample_file_name
-      if sample_file_name == directory + "sample.txt":
-          shutil.copy(directory+ "sample.txt", directory+"sample_plot.txt")
-          sample_file_name = directory + "sample_plot.txt"
+    sample_file_name = directory + sample_file_name
+    if sample_file_name == directory + "sample.txt":
+      shutil.copy(directory+ "sample.txt", directory+"sample_plot.txt")
+      sample_file_name = directory + "sample_plot.txt"
 
     data = np.loadtxt( sample_file_name)
     num_samples = len(data)
@@ -320,8 +328,7 @@ def plot(sample_file_name, directory):
 
 if __name__=="__main__":
     if len(sys.argv) < 2:
-        fit(sys.argv[1:])
-
+        fit("")
     if len(sys.argv) >= 3:
         directory = sys.argv[2]
     else:
@@ -331,3 +338,5 @@ if __name__=="__main__":
         plot("sample.txt", directory)
     elif sys.argv[1] == "plot_post":
         plot("posterior_sample.txt", directory)
+    else:
+        fit(sys.argv[1])

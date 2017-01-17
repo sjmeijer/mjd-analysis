@@ -72,6 +72,7 @@ priors[velo_first_idx+3:velo_first_idx+6] = h_111_mu0_prior, h_111_beta_prior, h
 prior_vars =  np.empty(len(priors))
 prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
 
+velo_width = 10.
 velo_var = 1.
 prior_vars[velo_first_idx:velo_first_idx+6] = velo_var*priors[velo_first_idx:velo_first_idx+6]
 
@@ -140,6 +141,7 @@ class Model(object):
         """
         Parameter values *are not* stored inside the class
         """
+        changed_wfs = np.zeros(num_waveforms)
 
     def from_prior(self):
         """
@@ -346,8 +348,8 @@ class Model(object):
           params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
 
         elif which >= velo_first_idx and which < velo_first_idx+6:
-            params[which] += prior_vars[which]*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0*priors[which], (100.)*priors[which])
+            params[which] += (velo_width*priors[which] - 1/velo_width*priors[which])  *dnest4.randh()
+            params[which] = dnest4.wrap(params[which], 0.1*priors[which], (10.)*priors[which])
         elif which == trap_idx:
             log_traprc = np.log(params[which])
             log_traprc += 20*dnest4.randh()
