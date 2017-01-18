@@ -95,7 +95,7 @@ def plotResidual(simWFArray, dataWF, figure=None, residAlpha=0.1):
     ax1.plot(t_data, diff  ,color="#7BAFD4",  alpha = residAlpha )
 
   legend_line_1 = ax0.plot( np.NaN, np.NaN, color='r', label='Data (unfiltered)' )
-  legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveform' )
+  legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveforms' )
 
   first_legend = ax0.legend(loc=4)
   ax1.set_ylim(-20,20)
@@ -135,7 +135,7 @@ def plotManyResidual(simWFArray, dataWFArray, figure=None, residAlpha=0.1):
       ax1.plot(t_data, diff  ,color="#7BAFD4",  alpha = residAlpha )
 
   legend_line_1 = ax0.plot( np.NaN, np.NaN, color='r', label='Data (unfiltered)' )
-  legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveform' )
+  legend_line_2 = ax0.plot( np.NaN, np.NaN, color='black', label='Fit waveforms' )
 
   first_legend = ax0.legend(loc=4)
 
