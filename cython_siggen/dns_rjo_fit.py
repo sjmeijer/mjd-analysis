@@ -25,7 +25,7 @@ from dns_rjo_model import *
 
 doInitPlot = 0
 doWaveformPlot = 1
-doHists = 1
+doHists = 0
 plotNum = 100 #for plotting during the Run
 
 numThreads = multiprocessing.cpu_count()
@@ -44,7 +44,7 @@ if os.path.isfile(wfFileName):
     results = results[wfidxs]
 
     #one slow waveform
-    # fitwfnum = 11
+    # fitwfnum = 21
     # wfs = wfs[:fitwfnum+1]
     # results = results[:fitwfnum+1]
     # wfs = np.delete(wfs, range(0,fitwfnum))
@@ -64,7 +64,7 @@ baselineLengths = np.empty(numWaveforms)
 for (wf_idx, wf) in enumerate(wfs):
     baselineLengths[wf_idx] = wf.EstimateT0(rmsMult=2)
 min_length = np.amin(baselineLengths)
-t0_padding = min_length - 10
+t0_padding = np.int(min_length - 10)
 baseline_origin_idx = t0_padding - 30
 
 if baseline_origin_idx < 0:
@@ -141,10 +141,10 @@ def plot(sample_file_name, directory):
       t_data = np.arange(dataLen) * 10
       ax0.plot(t_data, wf.windowedWf, color="black")
 
-      sample_file_name = directory + sample_file_name
-      if sample_file_name == directory + "sample.txt":
-          shutil.copy(directory+ "sample.txt", directory+"sample_plot.txt")
-          sample_file_name = directory + "sample_plot.txt"
+    sample_file_name = directory + sample_file_name
+    if sample_file_name == directory + "sample.txt":
+      shutil.copy(directory+ "sample.txt", directory+"sample_plot.txt")
+      sample_file_name = directory + "sample_plot.txt"
 
     data = np.loadtxt( sample_file_name)
     num_samples = len(data)

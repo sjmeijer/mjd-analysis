@@ -72,7 +72,7 @@ priors[velo_first_idx+3:velo_first_idx+6] = h_111_mu0_prior, h_111_beta_prior, h
 prior_vars =  np.empty(len(priors))
 prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
 
-velo_width = (velo_width*priors[which] - 1/velo_width*priors[which])
+velo_width = 10
 velo_var = 1.
 prior_vars[velo_first_idx:velo_first_idx+6] = velo_var*priors[velo_first_idx:velo_first_idx+6]
 
@@ -406,38 +406,40 @@ class Model(object):
 
         if num_threads > 1:
             args = []
-            wf_calc_idxs = []
             for (wf_idx, wf) in enumerate(wfs):
                 if self.changed_wfs[wf_idx]:
-                    wf_calc_idxs.append(wf_idx)
                     args.append([wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
                                   scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
                                   m_arr[wf_idx], b_arr[wf_idx],
                                   b_over_a, c, dc, rc1, rc2, rcfrac,
                                   h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                                  grad, charge_trapping, baseline_origin_idx
+                                  grad, charge_trapping, baseline_origin_idx, wf_idx
                                 ])
             results = pool.map(WaveformLogLikeStar, args)
-            for (idx, wf_like) in enumerate(results):
-                wf_idx = wf_calc_idxs[idx]
-                self.ln_likes[wf_idx] = wf_like
+            for result in (results):
+                self.ln_likes[result['wf_idx']] = result['ln_like']
         else:
             for (wf_idx, wf) in enumerate(wfs):
                 if self.changed_wfs[wf_idx]:
-                    self.ln_likes[wf_idx] = WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
+                    result = WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
                                   scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
                                   m_arr[wf_idx], b_arr[wf_idx],
                                   b_over_a, c, dc, rc1, rc2, rcfrac,
                                   h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                                  grad, charge_trapping, baseline_origin_idx
+                                  grad, charge_trapping, baseline_origin_idx, wf_idx
                                 )
+                    self.ln_likes[wf_idx] = result['ln_like']
 
-        return np.sum(self.ln_likes[wf_idx])
+        return np.sum(self.ln_likes)
 
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, dc, rc1, rc2, rcfrac, h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0, grad, charge_trapping, bl_origin_idx):
+def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b,
+                    b_over_a, c, dc, rc1, rc2, rcfrac,
+                    h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
+                    grad, charge_trapping,
+                    bl_origin_idx, wf_idx):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
     # exit(0)
@@ -465,8 +467,8 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
 
     model = detector.MakeSimWaveform(r, phi, z, scale, t0, data_len, h_smoothing=smooth)
     if model is None:
-      return -np.inf
-    if np.any(np.isnan(model)): return -np.inf
+      return {'wf_idx':wf_idx, 'ln_like':-np.inf}
+    if np.any(np.isnan(model)): return {'wf_idx':wf_idx, 'ln_like':-np.inf}
 
     # if np.amin(model) < 0:
     #   return -np.inf
@@ -496,7 +498,10 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
 
     inv_sigma2 = 1.0/(model_err**2)
     ln_like = -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
-    return ln_like
+
+    result = {'wf_idx':wf_idx, 'ln_like':ln_like}
+
+    return result
 
 def findTimePointBeforeMax(data, percent):
 
