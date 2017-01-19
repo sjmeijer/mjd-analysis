@@ -390,7 +390,7 @@ class Model(object):
 
         elif which >= velo_first_idx and which < velo_first_idx+6:
             params[which] += (velo_width*priors[which] - 1/velo_width*priors[which])  *dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0.1*priors[which], (10.)*priors[which])
+            params[which] = dnest4.wrap(params[which], 1./velo_width*priors[which], (velo_width)*priors[which])
         elif which == trap_idx:
             log_traprc = np.log(params[which])
             log_traprc += 20*dnest4.randh()
