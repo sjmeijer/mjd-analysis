@@ -9,8 +9,8 @@ from multiprocessing import Pool
 def initializeDetector(det, reinit=True):
   global detector
   detector = det
-  if reinit:
-      detector.ReinitializeDetector
+  # if reinit:
+  #     detector.ReinitializeDetector
 
 def initializeWaveforms( wfs_init, wfs_guess_result):
   global wfs
@@ -107,17 +107,24 @@ def draw_position(wf_idx):
   wf_guess = wf_guesses[wf_idx]
 
   r, phi, z, scale, t0, smooth = wf_guess['x'][0:6]
+
+  rad = 5*rng.randn() + np.sqrt(r**2+z**2)
+  theta = rng.rand() * np.pi/2
+
+  r = np.cos(theta)*rad
+  z = np.sin(theta)*rad
+
   # r += rng.randn()*0.1
   # z += rng.randn()*0.1
 
-  r = rng.rand() * detector.detector_radius
-  z = rng.rand() * detector.detector_radius
+  # r = rng.rand() * detector.detector_radius
+  # z = rng.rand() * detector.detector_radius
 
   if not detector.IsInDetector(r, 0.1, z):
 #    print "not in detector..."
     return draw_position(wf_idx)
   else:
-    return (r,z, scale, t0, smooth)
+    return (rad,theta, scale, t0)
 
 def random_position(r, z):
   r_init,z_init = r,z
@@ -162,24 +169,24 @@ class Model(object):
         print "\n"
         #draw 8 waveform params for each waveform
         for (wf_idx, wf) in enumerate(wfs):
-            (r,z, scale, t0, smooth) = draw_position(wf_idx)
+            (rad,theta, scale, t0) = draw_position(wf_idx)
             smooth_guess = 10
             t0 -= 20 #hack to go from 20 to 100 as t0guess
             t0 += t0_guess
             # r_arr[wf_idx] = r
             # z_arr[wf_idx] = z
-            rad_arr[wf_idx] = np.sqrt(r**2+z**2)
+            rad_arr[wf_idx] = rad
             phi_arr[wf_idx] = rng.rand() * np.pi/4
-            theta_arr[wf_idx] = np.arctan(z/r)
+            theta_arr[wf_idx] = theta
             scale_arr[wf_idx] = 5*rng.randn() + scale
             t0_arr[wf_idx] = 3*rng.randn() + t0
             smooth_arr[wf_idx] = np.clip(rng.randn() + smooth_guess, 0, 20)
             m_arr[wf_idx] =  0.001*rng.randn() + 0.
             b_arr[wf_idx] =  0.01*rng.randn() + 0.
 
-            print "  creating wf %d" % wf_idx
-            print "  >>",
-            print r, phi_arr[wf_idx]/np.pi, z, t0_arr[wf_idx]
+            # print "  creating wf %d" % wf_idx
+            # print "  >>",
+            # print r, phi_arr[wf_idx]/np.pi, z, t0_arr[wf_idx]
             # print "  ", rad_arr[wf_idx], theta_arr[wf_idx]/np.pi
 
         b_over_a = 0.1*rng.randn() + ba_prior
@@ -200,6 +207,40 @@ class Model(object):
         h_111_mu0 = .01*velo_var * h_111_mu0_prior*rng.randn() + h_111_mu0_prior
         h_111_beta = .01*velo_var * h_111_beta_prior*rng.randn() + h_111_beta_prior
         h_111_e0 = .01*velo_var * h_111_e0_prior*rng.randn() + h_111_e0_prior
+
+        # import matplotlib.pyplot as plt
+        # plt.figure(0)
+        #
+        # d = dc*c
+        # detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
+        # detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
+        # detector.trapping_rc = charge_trapping
+        # detector.SetFieldsGradIdx(grad)
+        # for (wf_idx,wf) in enumerate(wfs):
+        #     rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
+        #     scale, t0, smooth =  scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]
+        #     m, b = m_arr[wf_idx], b_arr[wf_idx]
+        #
+        #     r = rad * np.cos(theta)
+        #     z = rad * np.sin(theta)
+        #
+        #     dataLen = wfs[wf_idx].wfLength
+        #     ml_wf = detector.MakeSimWaveform(r, phi, z, scale, t0,  dataLen, h_smoothing = smooth)
+        #
+        #     start_idx = -baseline_origin_idx
+        #     end_idx = dataLen - baseline_origin_idx - 1
+        #     baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, dataLen)
+        #     ml_wf += baseline_trend
+        #
+        #     t_data = np.arange(dataLen) * 10
+        #     plt.plot(t_data, ml_wf[:dataLen], color="b", alpha=0.1)
+        #     plt.plot(t_data, wf.windowedWf, color="r", alpha=0.1)
+        # plt.xlim(9000,11000)
+        # plt.show()
+
+
+
+
 
         return np.hstack([
               b_over_a, c, dc,
@@ -349,7 +390,7 @@ class Model(object):
 
         elif which >= velo_first_idx and which < velo_first_idx+6:
             params[which] += (velo_width*priors[which] - 1/velo_width*priors[which])  *dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0.1*priors[which], (10.)*priors[which])
+            params[which] = dnest4.wrap(params[which], 1./velo_width*priors[which], (velo_width)*priors[which])
         elif which == trap_idx:
             log_traprc = np.log(params[which])
             log_traprc += 20*dnest4.randh()
@@ -373,7 +414,7 @@ class Model(object):
         grad = np.int(params[grad_idx])
 
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[len(priors):].reshape((8, num_waveforms))
-
+        sum_like = 0
         if num_threads > 1:
             args = []
             # sum_like = 0
@@ -398,7 +439,6 @@ class Model(object):
             results = pool.map(WaveformLogLikeStar, args)
             sum_like = np.sum(results)
         else:
-            sum_like = 0
             for (wf_idx, wf) in enumerate(wfs):
                 sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
                               scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
