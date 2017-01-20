@@ -181,8 +181,8 @@ class Model(object):
             scale_arr[wf_idx] = 5*rng.randn() + scale
             t0_arr[wf_idx] = 3*rng.randn() + t0
             smooth_arr[wf_idx] = np.clip(rng.randn() + smooth_guess, 0, 20)
-            m_arr[wf_idx] =  0.001*rng.randn() + 0.
-            b_arr[wf_idx] =  0.01*rng.randn() + 0.
+            m_arr[wf_idx] =  0.0001*rng.randn() + 0.
+            b_arr[wf_idx] =  0.001*rng.randn() + 0.
 
             # print "  creating wf %d" % wf_idx
             # print "  >>",
@@ -364,8 +364,8 @@ class Model(object):
             #   print "  adjusted smooth to %f" %  ( params[which])
 
             elif wf_which == 6: #wf baseline slope (m)
-              params[which] += 0.001*dnest4.randh()
-              params[which]=dnest4.wrap(params[which], -0.01, 0.01)
+              params[which] += 0.0001*dnest4.randh()
+              params[which]=dnest4.wrap(params[which], -0.001, 0.001)
             #   print "  adjusted m to %f" %  ( params[which])
             elif wf_which == 7: #wf baseline incercept (b)
               params[which] += 0.01*dnest4.randh()
