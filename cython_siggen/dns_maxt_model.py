@@ -41,6 +41,7 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
     min_maxt = maxt_guess - 10
     baseline_origin_idx = linear_baseline_origin
 
+traprc_min = 100
 
 tf_first_idx = 0
 velo_first_idx = 6
@@ -204,7 +205,7 @@ class Model(object):
         grad = np.int(np.clip(prior_vars[grad_idx]*np.int(rng.randn()) + priors[grad_idx], 0, len(detector.gradList)-1))
 
         charge_trapping = np.exp(-1./200) + np.exp(-1./50)* rng.randn()
-        charge_trapping = dnest4.wrap(rc1, np.exp(-1./50), np.exp(-1./5000))
+        charge_trapping = dnest4.wrap(rc1, np.exp(-1./traprc_min), np.exp(-1./5000))
 
         #6 hole drift params
         h_100_mu0 = .01 * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
@@ -417,9 +418,9 @@ class Model(object):
                 params[which] = dnest4.wrap(params[which], 10E3 * 100, 100E3 * 300)
 
         elif which == trap_idx:
-          space = np.exp(-1./5000) - np.exp(-1./1)
+          space = np.exp(-1./5000) - np.exp(-1./traprc_min)
           params[which] += space*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], np.exp(-1./1), np.exp(-1./5000))
+          params[which] = dnest4.wrap(params[which], np.exp(-1./traprc_min), np.exp(-1./5000))
 
         else: #velocity or rc params: cant be below 0, can be arb. large
             print "which value %d not supported" % which
