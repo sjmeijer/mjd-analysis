@@ -34,11 +34,11 @@ def initMultiThreading(numThreads):
   if num_threads > 1:
       pool = Pool(num_threads, initializer=initializeDetector, initargs=[detector])
 
-def initT0Padding(t0_pad, linear_baseline_origin):
-    global t0_guess, min_t0, max_t0, baseline_origin_idx
-    t0_guess = t0_pad
-    max_t0 = t0_guess + 5
-    min_t0 = t0_guess - 20
+def initT0Padding(maxt_pad, linear_baseline_origin):
+    global maxt_guess, min_maxt, max_maxt, baseline_origin_idx
+    maxt_guess = maxt_pad
+    max_maxt = maxt_guess + 10
+    min_maxt = maxt_guess - 10
     baseline_origin_idx = linear_baseline_origin
 
 
@@ -171,22 +171,21 @@ class Model(object):
         for (wf_idx, wf) in enumerate(wfs):
             (rad,theta, scale, t0) = draw_position(wf_idx)
             smooth_guess = 10
-            t0 -= 20 #hack to go from 20 to 100 as t0guess
-            t0 += t0_guess
+
             # r_arr[wf_idx] = r
             # z_arr[wf_idx] = z
             rad_arr[wf_idx] = rad
             phi_arr[wf_idx] = rng.rand() * np.pi/4
             theta_arr[wf_idx] = theta
             scale_arr[wf_idx] = 5*rng.randn() + scale
-            t0_arr[wf_idx] = 3*rng.randn() + t0
+            t0_arr[wf_idx] = 3*rng.randn() + maxt_guess
             smooth_arr[wf_idx] = np.clip(rng.randn() + smooth_guess, 0, 20)
             m_arr[wf_idx] =  0.0001*rng.randn() + 0.
             b_arr[wf_idx] =  0.001*rng.randn() + 0.
 
-            # print "  creating wf %d" % wf_idx
-            # print "  >>",
-            # print r, phi_arr[wf_idx]/np.pi, z, t0_arr[wf_idx]
+            print "  creating wf %d" % wf_idx
+            print "  >>",
+            print rad_arr[wf_idx], phi_arr[wf_idx]/np.pi, theta_arr[wf_idx]/np.pi, t0_arr[wf_idx]
             # print "  ", rad_arr[wf_idx], theta_arr[wf_idx]/np.pi
 
         b_over_a = 0.1*rng.randn() + ba_prior
@@ -271,7 +270,7 @@ class Model(object):
             # print "which idx is %d, value is %f" % (which, params[which])
             # print "  wf which is %d" % wf_which
 
-            if wf_which == 0 or wf_which == 4: #radius and t0
+            if wf_which == 0:# or wf_which == 4: #radius and t0
               wf_idx = (which - len(priors)) % num_waveforms
               rad_idx = len(priors) + wf_idx
               theta_idx =  len(priors) + 2*num_waveforms+ wf_idx
@@ -298,13 +297,13 @@ class Model(object):
               #min_rad  = 1./ ( np.cos(theta)**2/detector.pcRad**2  +  np.sin(theta)**2/detector.pcLen**2 )
               min_rad = np.amax([detector.pcRad, detector.pcLen])
 
-              mean = [0, 0]
-              cov = [[1, -0.8], [-0.8, 1]]
-              jumps = np.array((0.1*dnest4.randh(), 0.1*dnest4.randh()))
-              (r_jump, t0_jump) = np.dot(cov, jumps)
-
-              params[rad_idx] = dnest4.wrap(params[rad_idx] + r_jump , min_rad, max_rad)
-              params[t0_idx] = dnest4.wrap(params[t0_idx] + t0_jump , min_t0, max_t0)
+            #   mean = [0, 0]
+            #   cov = [[1, -0.8], [-0.8, 1]]
+            #   jumps = np.array((0.1*dnest4.randh(), 0.1*dnest4.randh()))
+            #   (r_jump, t0_jump) = np.dot(cov, jumps)
+              params[rad_idx] = (max_rad - min_rad)*params[rad_idx]
+              params[rad_idx] = dnest4.wrap(params[rad_idx] , min_rad, max_rad)
+            #   params[t0_idx] = dnest4.wrap(params[t0_idx] + t0_jump , min_t0, max_t0)
 
             elif wf_which == 1:
                 max_val = np.pi/4
@@ -358,6 +357,10 @@ class Model(object):
               params[which] = dnest4.wrap(params[which], wf.wfMax - 10*wf.baselineRMS, wf.wfMax + 10*wf.baselineRMS)
               params[which] = np.clip(params[which], wf.wfMax - 50*wf.baselineRMS, wf.wfMax + 50*wf.baselineRMS)
             #   print "  adjusted scale to %f" %  ( params[which])
+
+            elif wf_which == 4: #t0
+              params[which] += 1*dnest4.randh()
+              params[which] = dnest4.wrap(params[which], min_maxt, max_maxt)
             elif wf_which == 5: #smooth
               params[which] += 0.1*dnest4.randh()
               params[which] = dnest4.wrap(params[which], 0, 25)
@@ -414,9 +417,9 @@ class Model(object):
                 params[which] = dnest4.wrap(params[which], 10E3 * 100, 100E3 * 300)
 
         elif which == trap_idx:
-          space = np.exp(-1./5000) - np.exp(-1./50)
+          space = np.exp(-1./5000) - np.exp(-1./1)
           params[which] += space*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], np.exp(-1./50), np.exp(-1./5000))
+          params[which] = dnest4.wrap(params[which], np.exp(-1./1), np.exp(-1./5000))
 
         else: #velocity or rc params: cant be below 0, can be arb. large
             print "which value %d not supported" % which
@@ -475,7 +478,7 @@ class Model(object):
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, dc, e_rc1, e_rc2, rcfrac, h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu, grad, e_charge_trapping, bl_origin_idx):
+def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, b_over_a, c, dc, e_rc1, e_rc2, rcfrac, h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu, grad, e_charge_trapping, bl_origin_idx):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
     # exit(0)
@@ -494,7 +497,7 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
     h_100_e0 = h_100_emu / h_100_mu0
     h_111_e0 = h_111_emu / h_111_mu0
 
-    if scale < 0 or t0 < 0:
+    if scale < 0:
       return -np.inf
     if smooth < 0:
        return -np.inf
@@ -510,7 +513,7 @@ def WaveformLogLike(wf, rad, phi, theta, scale, t0, smooth, m, b, b_over_a, c, d
     model_err = wf.baselineRMS
     data_len = len(data)
 
-    model = detector.MakeSimWaveform(r, phi, z, scale, t0, data_len, h_smoothing=smooth)
+    model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max")
     if model is None:
       return -np.inf
     if np.any(np.isnan(model)): return -np.inf
