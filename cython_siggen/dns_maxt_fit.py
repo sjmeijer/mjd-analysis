@@ -24,9 +24,12 @@ from pysiggen import Detector
 from dns_maxt_model import *
 
 doInitPlot =0
-doWaveformPlot =0
-doHists = 1
-plotNum = 1000 #for plotting during the Run
+# doWaveformPlot =0
+# doHists = 1
+# plotNum = 1000 #for plotting during the Run
+doWaveformPlot =1
+doHists = 0
+plotNum = 100 #for plotting during the Run
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
@@ -43,15 +46,15 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-    fitwfnum = 21
-    wfs = wfs[:fitwfnum+1]
-    results = results[:fitwfnum+1]
-    wfs = np.delete(wfs, range(0,fitwfnum))
-    results = np.delete(results, range(0,fitwfnum))
-
-    # wfidxs = [0,18,13,21]
-    # wfs = wfs[wfidxs]
-    # results = results[wfidxs]
+    # fitwfnum = 21
+    # wfs = wfs[:fitwfnum+1]
+    # results = results[:fitwfnum+1]
+    # wfs = np.delete(wfs, range(0,fitwfnum))
+    # results = np.delete(results, range(0,fitwfnum))
+    #
+    wfidxs = [0,18,13,21]
+    wfs = wfs[wfidxs]
+    results = results[wfidxs]
 
     # 4 medium waveforms
     # wfs = wfs[:8]
@@ -129,7 +132,7 @@ def fit(directory):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=50, num_steps=100000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=100, num_steps=100000, new_level_interval=25000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -180,7 +183,7 @@ def plot(sample_file_name, directory):
     z_arr = np.empty((numWaveforms, num_samples))
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
-    wf_params = np.empty((8, num_samples))
+    wf_params = np.empty((numWaveforms, 8, num_samples))
     det_params = np.empty((2, num_samples))
 
     velo_priors, velo_lims = get_velo_params()
@@ -229,16 +232,16 @@ def plot(sample_file_name, directory):
         print " (%0.3f)" % det.gradList[grad]
 
         for (wf_idx,wf) in enumerate(wfs):
-          rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
+          r, phi, z = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
           scale, t0, smooth =  scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]
           m, b = m_arr[wf_idx], b_arr[wf_idx]
-          wf_params[:, idx] = rad, phi, theta, scale, t0, smooth, m, b
+          wf_params[wf_idx, :, idx] = r, phi, z, scale, t0, smooth, m, b
 
-          r = rad * np.cos(theta)
-          z = rad * np.sin(theta)
+        #   r = rad * np.cos(theta)
+        #   z = rad * np.sin(theta)
           print "  wf number %d:" % wf_idx
           print "    r: %0.2f , phi: %0.4f, z:%0.2f" % (r, phi/np.pi, z)
-          print "    rad: %0.2f, theta: %0.4f" % (rad, theta/np.pi)
+        #   print "    rad: %0.2f, theta: %0.4f" % (rad, theta/np.pi)
           print "    t0: %0.2f" % t0
           print "    m: %0.3e, b: %0.3e" % (m,b)
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
@@ -310,6 +313,9 @@ def plot(sample_file_name, directory):
         xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
         yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
         plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ], norm=LogNorm(), cmap=plt.get_cmap(colorbars[wf_idx]))
+        rad_mean = np.mean(wf_params[wf_idx, 0,:])
+        print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
+        print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
         # plt.colorbar()
     plt.xlabel("r from Point Contact (mm)")
     plt.ylabel("z from Point Contact (mm)")
@@ -323,7 +329,7 @@ def plot(sample_file_name, directory):
         for i in range(8):
             axis = vFig.add_subplot(4,2,i+1)
             axis.set_ylabel(wfLabels[i])
-            [n, b, p] = axis.hist(wf_params[i,:], bins=num_bins)
+            [n, b, p] = axis.hist(wf_params[0, i,:], bins=num_bins)
             # if i == 4:
             #     axis.axvline(x=t0_min, color="r")
             #     axis.axvline(x=t0_max, color="r")
