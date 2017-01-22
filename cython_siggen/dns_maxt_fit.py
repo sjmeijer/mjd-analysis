@@ -24,9 +24,9 @@ from pysiggen import Detector
 from dns_maxt_model import *
 
 doInitPlot =0
-doWaveformPlot = 1
-doHists = 0
-plotNum = 100 #for plotting during the Run
+doWaveformPlot =0
+doHists = 1
+plotNum = 1000 #for plotting during the Run
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
@@ -43,15 +43,15 @@ if os.path.isfile(wfFileName):
     results = data['results']
 
     #one slow waveform
-    # fitwfnum = 21
-    # wfs = wfs[:fitwfnum+1]
-    # results = results[:fitwfnum+1]
-    # wfs = np.delete(wfs, range(0,fitwfnum))
-    # results = np.delete(results, range(0,fitwfnum))
+    fitwfnum = 21
+    wfs = wfs[:fitwfnum+1]
+    results = results[:fitwfnum+1]
+    wfs = np.delete(wfs, range(0,fitwfnum))
+    results = np.delete(results, range(0,fitwfnum))
 
-    wfidxs = [0,7,13,21]
-    wfs = wfs[wfidxs]
-    results = results[wfidxs]
+    # wfidxs = [0,18,13,21]
+    # wfs = wfs[wfidxs]
+    # results = results[wfidxs]
 
     # 4 medium waveforms
     # wfs = wfs[:8]
@@ -129,7 +129,7 @@ def fit(directory):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=500, num_steps=100000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=50, num_steps=100000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -191,14 +191,14 @@ def plot(sample_file_name, directory):
         # params = data.iloc[-(idx+1)]
         # print params
 
-        b_over_a, c, dc, e_rc1, e_rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
+        b_over_a, c, dc, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
         h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu = params[velo_first_idx:velo_first_idx+6]
-        e_charge_trapping = params[trap_idx]
+        charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
 
-        rc1 = -1./np.log(e_rc1)
-        rc2 = -1./np.log(e_rc2)
-        charge_trapping = -1./np.log(e_charge_trapping)
+        # rc1 = -1./np.log(e_rc1)
+        # rc2 = -1./np.log(e_rc2)
+        # charge_trapping = -1./np.log(e_charge_trapping)
 
         h_100_beta = 1./np.exp(h_100_lnbeta)
         h_111_beta = 1./np.exp(h_111_lnbeta)
