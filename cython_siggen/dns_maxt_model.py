@@ -41,6 +41,7 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
     min_maxt = maxt_guess - 10
     baseline_origin_idx = linear_baseline_origin
 
+traprc_min = 100
 
 tf_first_idx = 0
 velo_first_idx = 6
@@ -70,7 +71,7 @@ priors[velo_first_idx:velo_first_idx+3] = h_100_mu0_prior, h_100_beta_prior, h_1
 priors[velo_first_idx+3:velo_first_idx+6] = h_111_mu0_prior, h_111_beta_prior, h_111_e0_prior
 
 prior_vars =  np.empty(len(priors))
-prior_vars[rc1_idx:rc1_idx+3] = 0.05*rc1_prior, 0.05*rc2_prior, 0.001
+prior_vars[rc1_idx:rc1_idx+3] = 5, 2, 0.05
 
 velo_width = 10.
 velo_var = 1.
@@ -78,7 +79,8 @@ prior_vars[velo_first_idx:velo_first_idx+6] = velo_var*priors[velo_first_idx:vel
 
 priors[grad_idx] = 100
 prior_vars[grad_idx] = 3
-priors[trap_idx] = 120.
+priors[trap_idx] = 200.
+prior_vars[trap_idx] = 25.
 
 def get_velo_params():
     return (priors[velo_first_idx:velo_first_idx+6], velo_var)
@@ -193,18 +195,12 @@ class Model(object):
         dc =  0.01 *rng.randn() + dc_prior
 
         #limit from 60 to 90
-        rc1 = np.exp(-1./prior_vars[rc1_idx]) + np.exp(-1./5)* rng.randn()
-        rc1 = dnest4.wrap(rc1, np.exp(-1./60), np.exp(-1./90))
-        #limit from 0.01 to 10
-        rc2 = np.exp(-1./prior_vars[rc2_idx]) + np.exp(-1./0.5)* rng.randn()
-        rc2 = dnest4.wrap(rc1, np.exp(-1./0.01), np.exp(-1./10))
-
+        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 60, 90)
+        rc2 = dnest4.wrap(prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx], 0.1, 10)
         rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
+        charge_trapping = dnest4.wrap(prior_vars[trap_idx]*rng.randn() + priors[trap_idx], 50, 1000)
 
         grad = np.int(np.clip(prior_vars[grad_idx]*np.int(rng.randn()) + priors[grad_idx], 0, len(detector.gradList)-1))
-
-        charge_trapping = np.exp(-1./200) + np.exp(-1./50)* rng.randn()
-        charge_trapping = dnest4.wrap(rc1, np.exp(-1./50), np.exp(-1./5000))
 
         #6 hole drift params
         h_100_mu0 = .01 * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
@@ -301,7 +297,7 @@ class Model(object):
             #   cov = [[1, -0.8], [-0.8, 1]]
             #   jumps = np.array((0.1*dnest4.randh(), 0.1*dnest4.randh()))
             #   (r_jump, t0_jump) = np.dot(cov, jumps)
-              params[rad_idx] = (max_rad - min_rad)*params[rad_idx]
+              params[rad_idx] += (max_rad - min_rad)*dnest4.randh()
               params[rad_idx] = dnest4.wrap(params[rad_idx] , min_rad, max_rad)
             #   params[t0_idx] = dnest4.wrap(params[t0_idx] + t0_jump , min_t0, max_t0)
 
@@ -367,12 +363,16 @@ class Model(object):
             #   print "  adjusted smooth to %f" %  ( params[which])
 
             elif wf_which == 6: #wf baseline slope (m)
-              params[which] += 0.0001*dnest4.randh()
-              params[which]=dnest4.wrap(params[which], -0.001, 0.001)
-            #   print "  adjusted m to %f" %  ( params[which])
+                logH -= -0.5*(params[which]/1E-4)**2
+                params[which] += 1E-4*dnest4.randh()
+                logH += -0.5*(params[which]/1E-4)**2
             elif wf_which == 7: #wf baseline incercept (b)
-              params[which] += 0.01*dnest4.randh()
-              params[which]=dnest4.wrap(params[which], -1, 1)
+                logH -= -0.5*(params[which]/1E-2)**2
+                params[which] += 1E-2*dnest4.randh()
+                logH += -0.5*(params[which]/1E-2)**2
+
+            #   params[which] += 0.01*dnest4.randh()
+            #   params[which]=dnest4.wrap(params[which], -1, 1)
             #   print "  adjusted b to %f" %  ( params[which])
 
         elif which == ba_idx: #b over a
@@ -385,18 +385,14 @@ class Model(object):
             params[which] += 0.01*dnest4.randh()
             params[which] = dnest4.wrap(params[which], -1.05, -0.975)
 
-
-
         elif which == rc1_idx:
-          space = np.exp(-1./90) - np.exp(-1./60)
-          params[which] += space*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], np.exp(-1./60), np.exp(-1./90))
+          params[which] += prior_vars[rc1_idx]*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], 60, 90)
         elif which == rc2_idx:
-          space = np.exp(-1./10) - np.exp(-1./.01)
-          params[which] += space*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], np.exp(-1./0.01), np.exp(-1./10))
+          params[which] += prior_vars[rc2_idx]*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], 0.1, 10)
         elif which == rcfrac_idx:
-          params[which] += 0.1*dnest4.randh()
+          params[which] += prior_vars[rcfrac_idx]*dnest4.randh()
           params[which] = dnest4.wrap(params[which], 0.9, 1)
         elif which == grad_idx:
           params[which] += (len(detector.gradList)-1)*dnest4.randh()
@@ -417,9 +413,8 @@ class Model(object):
                 params[which] = dnest4.wrap(params[which], 10E3 * 100, 100E3 * 300)
 
         elif which == trap_idx:
-          space = np.exp(-1./5000) - np.exp(-1./1)
-          params[which] += space*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], np.exp(-1./1), np.exp(-1./5000))
+          params[which] += prior_vars[trap_idx]*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], 50, 1000)
 
         else: #velocity or rc params: cant be below 0, can be arb. large
             print "which value %d not supported" % which
@@ -478,7 +473,9 @@ class Model(object):
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, b_over_a, c, dc, e_rc1, e_rc2, rcfrac, h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu, grad, e_charge_trapping, bl_origin_idx):
+def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, b_over_a, c, dc, rc1, rc2, rcfrac,
+        h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu,
+        grad, charge_trapping, bl_origin_idx):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
     # exit(0)
@@ -488,9 +485,9 @@ def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, b_over_a, c,
     z = rad * np.sin(theta)
     d = c * dc
 
-    rc1 = -1./np.log(e_rc1)
-    rc2 = -1./np.log(e_rc2)
-    charge_trapping = -1./np.log(e_charge_trapping)
+    # rc1 = -1./np.log(e_rc1)
+    # rc2 = -1./np.log(e_rc2)
+    # charge_trapping = -1./np.log(e_charge_trapping)
 
     h_100_beta = 1./np.exp(h_100_lnbeta)
     h_111_beta = 1./np.exp(h_111_lnbeta)
