@@ -12,19 +12,16 @@ def initializeDetector(det, reinit=True):
   # if reinit:
   #     detector.ReinitializeDetector
 
-def initializeWaveforms( wfs_init, wfs_guess_result):
+def initializeWaveforms( wfs_init, ):
   global wfs
   wfs = wfs_init
 
   global num_waveforms
   num_waveforms = len(wfs)
 
-  global wf_guesses
-  wf_guesses = wfs_guess_result
 
-
-def initializeDetectorAndWaveforms(det, wfs_init, wf_guess_init, reinit=True):
-  initializeWaveforms(wfs_init, wf_guess_init)
+def initializeDetectorAndWaveforms(det, wfs_init, reinit=True):
+  initializeWaveforms(wfs_init)
   initializeDetector(det, reinit)
 
 def initMultiThreading(numThreads):
