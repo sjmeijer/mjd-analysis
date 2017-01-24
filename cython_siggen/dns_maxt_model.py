@@ -357,8 +357,6 @@ def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, b_over_a, c, dc, r
     model_err = wf.baselineRMS
     data_len = len(data)
 
-    print maxt
-
     model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max")
     if model is None:
       return -np.inf
