@@ -87,59 +87,16 @@ def get_param_idxs():
     return (tf_first_idx, velo_first_idx, grad_idx, trap_idx)
 
 def draw_position(wf_idx):
-#  det_max = np.sqrt(detector.detector_radius**2 + detector.detector_length**2)
-
-#  r = rng.rand() * detector.detector_radius
-#  z = rng.rand() * detector.detector_radius
-
-#  number = 100
-#  dt_array = np.load("P42574A_drifttimes.npy")
-#  r_arr = np.linspace(0, detector.detector_radius, number)
-#  z_arr = np.linspace(0, detector.detector_length, number)
-#  t_50 = findTimePointBeforeMax(wf.windowedWf, 0.5) - 20
-#
-#  location_idxs = np.where(np.logical_and(np.greater(dt_array, t_50-10), np.less(dt_array, t_50+10)) )
-#
-#  guess_idx = rng.randint(len(location_idxs[0]))
-#  r = r_arr[location_idxs[0][guess_idx]]
-#  z = z_arr[location_idxs[1][guess_idx]]
-  # wf_guess = wf_guesses[wf_idx]
-  #
-  # r, phi, z, scale, t0, smooth = wf_guess['x'][0:6]
-
-  # rad = 5*rng.randn() + np.sqrt(r**2+z**2)
-  # theta = rng.rand() * np.pi/2
-
-  # r = np.cos(theta)*rad
-  # z = np.sin(theta)*rad
-
-  # r += rng.randn()*0.1
-  # z += rng.randn()*0.1
-
   r = rng.rand() * detector.detector_radius
   z = rng.rand() * detector.detector_radius
   scale = np.amax(wfs[wf_idx].windowedWf)
   t0 = None
 
   if not detector.IsInDetector(r, 0.1, z):
-#    print "not in detector..."
     return draw_position(wf_idx)
   else:
     return (r,z, scale, t0)
 
-def random_position(r, z):
-  r_init,z_init = r,z
-  r += dnest4.randh()*0.1
-  z += dnest4.randh()*0.1
-
-  r = dnest4.wrap(r, 0, detector.detector_radius)
-  z = dnest4.wrap(z, 0, detector.detector_length)
-
-  if not detector.IsInDetector(r, 0.1, z):
-#    print "not in detector..."
-    return random_position(r_init,z_init)
-  else:
-    return (r,z)
 
 class Model(object):
     """
@@ -178,7 +135,7 @@ class Model(object):
             # rad_arr[wf_idx] = rad
             phi_arr[wf_idx] = rng.rand() * np.pi/4
             # theta_arr[wf_idx] = theta
-            scale_arr[wf_idx] = 5*rng.randn() + scale
+            scale_arr[wf_idx] = 5*rng.randn() + scale - .005*scale
             t0_arr[wf_idx] = 3*rng.randn() + maxt_guess
             smooth_arr[wf_idx] = np.clip(rng.randn() + smooth_guess, 0, 20)
             m_arr[wf_idx] =  0.0001*rng.randn() + 0.
@@ -189,7 +146,7 @@ class Model(object):
             # print rad_arr[wf_idx], phi_arr[wf_idx]/np.pi, theta_arr[wf_idx]/np.pi, t0_arr[wf_idx]
             # print "  ", rad_arr[wf_idx], theta_arr[wf_idx]/np.pi
 
-        b_over_a = 0.1*rng.randn() + ba_prior
+        b_over_a = rng.rand() * 400 - 100
         c = 0.05 *rng.randn() + c_prior
         dc =  0.01 *rng.randn() + dc_prior
 
@@ -212,43 +169,12 @@ class Model(object):
         h_111_lnbeta = dnest4.wrap(lnbeta, 0, np.log(1/.1))
         h_111_emu = .01 * (h_111_e0_prior*h_111_mu0_prior)*rng.randn() + h_111_e0_prior*h_111_mu0_prior
 
-        # import matplotlib.pyplot as plt
-        # plt.figure(0)
-        #
-        # d = dc*c
-        # detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
-        # detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
-        # detector.trapping_rc = charge_trapping
-        # detector.SetFieldsGradIdx(grad)
-        # for (wf_idx,wf) in enumerate(wfs):
-        #     rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
-        #     scale, t0, smooth =  scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]
-        #     m, b = m_arr[wf_idx], b_arr[wf_idx]
-        #
-        #     r = rad * np.cos(theta)
-        #     z = rad * np.sin(theta)
-        #
-        #     dataLen = wfs[wf_idx].wfLength
-        #     ml_wf = detector.MakeSimWaveform(r, phi, z, scale, t0,  dataLen, h_smoothing = smooth)
-        #
-        #     start_idx = -baseline_origin_idx
-        #     end_idx = dataLen - baseline_origin_idx - 1
-        #     baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, dataLen)
-        #     ml_wf += baseline_trend
-        #
-        #     t_data = np.arange(dataLen) * 10
-        #     plt.plot(t_data, ml_wf[:dataLen], color="b", alpha=0.1)
-        #     plt.plot(t_data, wf.windowedWf, color="r", alpha=0.1)
-        # plt.xlim(9000,11000)
-        # plt.show()
-
         return np.hstack([
               b_over_a, c, dc,
               rc1, rc2, rcfrac,
               h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu,
               grad, charge_trapping,
               r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
-            #   rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
             ])
 
     def perturb(self, params):
@@ -262,43 +188,7 @@ class Model(object):
         if which >= len(priors):
             #this is a waveform variable!
             wf_which = np.floor((which - len(priors)) / num_waveforms)
-            # print "which idx is %d, value is %f" % (which, params[which])
-            # print "  wf which is %d" % wf_which
 
-            # if wf_which == 0:# or wf_which == 4: #radius and t0
-            #   wf_idx = (which - len(priors)) % num_waveforms
-            #   rad_idx = len(priors) + wf_idx
-            #   theta_idx =  len(priors) + 2*num_waveforms+ wf_idx
-            #   t0_idx =  len(priors) + 4*num_waveforms+ wf_idx
-            #
-            #   theta = params[theta_idx]
-            #
-            #   #FIND THE MAXIMUM RADIUS STILL INSIDE THE DETECTOR
-            #   theta_eq = np.arctan(detector.detector_length/detector.detector_radius)
-            #   theta_taper = np.arctan(detector.taper_length/detector.detector_radius)
-            # #   print "theta: %f pi" % (theta / np.pi)
-            #   if theta <= theta_taper:
-            #      z = np.tan(theta)*(detector.detector_radius - detector.taper_length) / (1-np.tan(theta))
-            #      max_rad = z / np.sin(theta)
-            #   elif theta <= theta_eq:
-            #       max_rad = detector.detector_radius / np.cos(theta)
-            #     #   print "max rad radius: %f" %  max_rad
-            #   else:
-            #       theta_comp = np.pi/2 - theta
-            #       max_rad = detector.detector_length / np.cos(theta_comp)
-            #     #   print "max rad length: %f" %  max_rad
-            #
-            #   #AND THE MINIMUM (from PC dimple)
-            #   #min_rad  = 1./ ( np.cos(theta)**2/detector.pcRad**2  +  np.sin(theta)**2/detector.pcLen**2 )
-            #   min_rad = np.amax([detector.pcRad, detector.pcLen])
-            #
-            # #   mean = [0, 0]
-            # #   cov = [[1, -0.8], [-0.8, 1]]
-            # #   jumps = np.array((0.1*dnest4.randh(), 0.1*dnest4.randh()))
-            # #   (r_jump, t0_jump) = np.dot(cov, jumps)
-            #   params[rad_idx] += (max_rad - min_rad)*dnest4.randh()
-            #   params[rad_idx] = dnest4.wrap(params[rad_idx] , min_rad, max_rad)
-            # #   params[t0_idx] = dnest4.wrap(params[t0_idx] + t0_jump , min_t0, max_t0)
             if wf_which == 0:
                 params[which] += (detector.detector_radius)*dnest4.randh()
                 params[which] = dnest4.wrap(params[which] , 0, detector.detector_radius)
@@ -312,49 +202,14 @@ class Model(object):
             elif wf_which == 2:
                 params[which] += (detector.detector_length)*dnest4.randh()
                 params[which] = dnest4.wrap(params[which] , 0, detector.detector_length)
-            # elif wf_which ==2: #theta
-            #   wf_idx = (which - len(priors)) % num_waveforms
-            #   rad_idx = len(priors) + wf_idx
-            #   rad = params[rad_idx]
-            # #   print "rad: %f" % rad
-            #   if rad < np.amin([detector.detector_radius - detector.taper_length, detector.detector_length]):
-            #       max_val = np.pi/2
-            #       min_val = 0
-            #     #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
-            #   else:
-            #       if rad < detector.detector_radius - detector.taper_length:
-            #           #can't possibly hit the taper
-            #         #   print "less than taper adjustment"
-            #           min_val = 0
-            #       elif rad < np.sqrt(detector.detector_radius**2 + detector.taper_length**2):
-            #           #low enough that it could hit the taper region
-            #         #   print "taper adjustment"
-            #           a = detector.detector_radius - detector.taper_length
-            #           z = 0.5 * (np.sqrt(2*rad**2-a**2) - a)
-            #           min_val = np.arcsin(z/rad)
-            #       else:
-            #           #longer than could hit the taper
-            #         #   print  " longer thantaper adjustment"
-            #           min_val = np.arccos(detector.detector_radius/rad)
-            #
-            #       if rad < detector.detector_length:
-            #           max_val = np.pi/2
-            #       else:
-            #           max_val = np.pi/2 - np.arccos(detector.detector_length/rad)
-            #     #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
-            #
-            #   params[which] += (max_val-min_val)*dnest4.randh()
-            #   params[which] = dnest4.wrap(params[which], min_val, max_val)
-            # #   params[which] = np.clip(params[which], min_val, max_val)
-            #   if params[which] < min_val or params[which] > max_val:
-            #     print "wtf theta"
 
             elif wf_which == 3: #scale
-              wf_idx = (which - len(priors)) % num_waveforms
-              wf = wfs[wf_idx]
-              params[which] += dnest4.randh()
-              params[which] = dnest4.wrap(params[which], wf.wfMax - 10*wf.baselineRMS, wf.wfMax + 10*wf.baselineRMS)
-              params[which] = np.clip(params[which], wf.wfMax - 50*wf.baselineRMS, wf.wfMax + 50*wf.baselineRMS)
+                wf_idx = (which - len(priors)) % num_waveforms
+                wf = wfs[wf_idx]
+                min_scale = wf.wfMax - 0.01*wf.wfMax
+                max_scale = wf.wfMax + 0.005*wf.wfMax
+                params[which] += (max_scale-min_scale)*dnest4.randh()
+                params[which] = dnest4.wrap(params[which], min_scale, max_scale)
             #   print "  adjusted scale to %f" %  ( params[which])
 
             elif wf_which == 4: #t0
@@ -379,8 +234,8 @@ class Model(object):
             #   print "  adjusted b to %f" %  ( params[which])
 
         elif which == ba_idx: #b over a
-          params[which] += 0.1*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], -0.9, 15)
+            params[which] += 600*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], -200, 400)
         elif which == c_idx: #b over a
             params[which] += 0.01*dnest4.randh()
             params[which] = dnest4.wrap(params[which], -0.9, -0.7)
@@ -446,14 +301,6 @@ class Model(object):
                               h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
                               grad, charge_trapping, baseline_origin_idx
                             ])
-                # sum_like += WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
-                #                scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
-                #                m_arr[wf_idx], b_arr[wf_idx],
-                #                b_over_a, c, d, rc1, rc2, rcfrac,
-                #                h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                #                charge_trapping, grad
-                #                )
-
 
             results = pool.map(WaveformLogLikeStar, args)
             sum_like = np.sum(results)
@@ -510,31 +357,12 @@ def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, b_over_a, c, dc, r
     model_err = wf.baselineRMS
     data_len = len(data)
 
+    print maxt
+
     model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max")
     if model is None:
       return -np.inf
     if np.any(np.isnan(model)): return -np.inf
-
-    # if np.amin(model) < 0:
-    #   return -np.inf
-    # if model[-1] < 0.9*wf.wfMax:
-    #   return -np.inf
-    # if np.argmax(model) <= len(model)-10:
-    #   return -np.inf
-    #
-    # #kill way too fast wfs
-    # t50_idx = findTimePointBeforeMax(model, 0.5)
-    # t50 = t50_idx - t0
-    # if t50 < 20 or t50 > 100:
-    #     return -np.inf
-    #
-    # #kill way too slow wfs
-    # t50_max = np.argmax(model) - t50_idx
-    #
-    # if t50_max > 30:
-    #     # print "killing ",
-    #     # print np.argmax(model), t50
-    #     return -np.inf
 
     start_idx = -bl_origin_idx
     end_idx = data_len - bl_origin_idx - 1
