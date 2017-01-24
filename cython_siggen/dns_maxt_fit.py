@@ -33,7 +33,8 @@ plotNum = 100 #for plotting during the Run
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
-fallPercentage = 0.97
+fallPercentage = 0.95
+fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
 
 wfFileName = "P42574A_24_spread.npz"
 # wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -43,30 +44,22 @@ if os.path.isfile(wfFileName):
     #wf 2 is super weird
 
     wfs = data['wfs']
-    results = data['results']
 
     #one slow waveform
-    # fitwfnum = 21
-    # wfs = wfs[:fitwfnum+1]
-    # results = results[:fitwfnum+1]
-    # wfs = np.delete(wfs, range(0,fitwfnum))
-    # results = np.delete(results, range(0,fitwfnum))
-    #
-    wfidxs = [0,18,13,21]
-    wfs = wfs[wfidxs]
-    results = results[wfidxs]
+    fitwfnum = 20
+    wfs = wfs[:fitwfnum+1]
+    wfs = np.delete(wfs, range(0,fitwfnum))
+
+    # wfidxs = [0,18,13,21]
+    # wfs = wfs[wfidxs]
 
     # 4 medium waveforms
     # wfs = wfs[:8]
-    # results = results[:8]
     # wfs = np.delete(wfs, [0,1,2,3])
-    # results = np.delete(results, [0,1,2,3])
 
     # #8 wfs questionable provenance
     # wfs = wfs[:11]
-    # results = results[:11]
     # wfs = np.delete(wfs, [1,2,3])
-    # results = np.delete(results, [1,2,3])
 
     numWaveforms = wfs.size
     print "Fitting %d waveforms" % numWaveforms,
@@ -118,11 +111,11 @@ output_wf_length = np.amax(wfLengths) + 1
 timeStepSize = 1 #ns
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length )
-det.LoadFieldsGrad("fields_impgrad_0-0.02.npz", pcLen=1.6, pcRad=2.5)
+det.LoadFieldsGrad(fieldFileName)
 
 def fit(directory):
 
-  initializeDetectorAndWaveforms(det, wfs, results, reinit=False)
+  initializeDetectorAndWaveforms(det, wfs, reinit=False)
   initMultiThreading(numThreads)
 
   # Create a model object and a sampler
@@ -132,7 +125,7 @@ def fit(directory):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=100, num_steps=100000, new_level_interval=25000,
+  gen = sampler.sample(max_num_levels=75, num_steps=100000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
