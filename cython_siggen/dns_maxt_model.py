@@ -58,9 +58,9 @@ ba_prior = 0.107213
 c_prior = -0.815152
 dc_prior = 0.822696/-0.815152
 
-rc1_prior = 74.
-rc2_prior = 2.08
-rc_frac_prior = 0.992
+rc1_prior =  73.085166
+rc2_prior = 1.138420
+rc_frac_prior = 0.997114
 
 h_100_mu0_prior, h_100_beta_prior, h_100_e0_prior = 66333., 0.744, 181.
 h_111_mu0_prior, h_111_beta_prior, h_111_e0_prior =  107270., 0.580, 100.
@@ -71,7 +71,7 @@ priors[velo_first_idx:velo_first_idx+3] = h_100_mu0_prior, h_100_beta_prior, h_1
 priors[velo_first_idx+3:velo_first_idx+6] = h_111_mu0_prior, h_111_beta_prior, h_111_e0_prior
 
 prior_vars =  np.empty(len(priors))
-prior_vars[rc1_idx:rc1_idx+3] = 5, 2, 0.05
+prior_vars[rc1_idx:rc1_idx+3] = 0.2, 0.3, 0.001
 
 velo_width = 10.
 velo_var = 1.
@@ -197,7 +197,7 @@ class Model(object):
         dc =  0.01 *rng.randn() + dc_prior
 
         #limit from 60 to 90
-        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 60, 90)
+        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 65, 80)
         rc2 = dnest4.wrap(prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx], 0.1, 10)
         rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
         charge_trapping = dnest4.wrap(prior_vars[trap_idx]*rng.randn() + priors[trap_idx], 50, 1000)
@@ -391,15 +391,12 @@ class Model(object):
             params[which] += 0.01*dnest4.randh()
             params[which] = dnest4.wrap(params[which], -1.05, -0.975)
 
-        elif which == rc1_idx:
-          params[which] += prior_vars[rc1_idx]*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 60, 90)
-        elif which == rc2_idx:
-          params[which] += prior_vars[rc2_idx]*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 0.1, 10)
-        elif which == rcfrac_idx:
-          params[which] += prior_vars[rcfrac_idx]*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 0.9, 1)
+        elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
+            #all normally distributed priors
+            logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            params[which] += prior_vars[which]*dnest4.randh()
+            logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+
         elif which == grad_idx:
           params[which] += (len(detector.gradList)-1)*dnest4.randh()
           params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
@@ -407,16 +404,16 @@ class Model(object):
             velo_which =  (which - velo_first_idx)%3
             #TODO: consider long transforming priors on two of these
             if velo_which ==0: #mu0 parameter
-                params[which] += (100E3 - 10E3)  *dnest4.randh()
-                params[which] = dnest4.wrap(params[which], 10E3, 100E3)
+                params[which] += (500E3 - 10E3)  *dnest4.randh()
+                params[which] = dnest4.wrap(params[which], 10E3, 500E3)
             elif velo_which ==1: #ln(1/beta)
                 space = np.log(1/.1)
                 params[which] += space *dnest4.randh()
                 params[which] = dnest4.wrap(params[which], 0, np.log(1/.1))
             elif velo_which == 2:
-                space = 10E3 * 100 - 100E3 * 300
+                space = 10E3 * 100 - 500E3 * 300
                 params[which] += space *dnest4.randh()
-                params[which] = dnest4.wrap(params[which], 10E3 * 100, 100E3 * 300)
+                params[which] = dnest4.wrap(params[which], 10E3 * 100, 500E3 * 300)
 
         elif which == trap_idx:
           params[which] += prior_vars[trap_idx]*dnest4.randh()
