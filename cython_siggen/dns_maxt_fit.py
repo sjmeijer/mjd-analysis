@@ -26,14 +26,14 @@ from dns_maxt_model import *
 doInitPlot =0
 # doWaveformPlot =0
 # doHists = 1
-# plotNum = 1000 #for plotting during the Run
+# plotNum = 500 #for plotting during the Run
 doWaveformPlot =1
 doHists = 0
 plotNum = 100 #for plotting during the Run
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
-fallPercentage = 0.95
+fallPercentage = 0.97
 fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
 
 wfFileName = "P42574A_24_spread.npz"
@@ -46,11 +46,11 @@ if os.path.isfile(wfFileName):
     wfs = data['wfs']
 
     #one slow waveform
-    fitwfnum = 20
+    fitwfnum = 21
     wfs = wfs[:fitwfnum+1]
     wfs = np.delete(wfs, range(0,fitwfnum))
 
-    # wfidxs = [0,18,13,21]
+    # wfidxs = [5, 19, 21, 23]
     # wfs = wfs[wfidxs]
 
     # 4 medium waveforms
@@ -125,7 +125,7 @@ def fit(directory):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=75, num_steps=100000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=225, num_steps=100000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -308,7 +308,7 @@ def plot(sample_file_name, directory):
         plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ], norm=LogNorm(), cmap=plt.get_cmap(colorbars[wf_idx]))
         rad_mean = np.mean(wf_params[wf_idx, 0,:])
         print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
-        print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
+        # print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
         # plt.colorbar()
     plt.xlabel("r from Point Contact (mm)")
     plt.ylabel("z from Point Contact (mm)")
