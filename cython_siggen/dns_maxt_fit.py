@@ -26,7 +26,7 @@ from dns_maxt_model import *
 doInitPlot =0
 # doWaveformPlot =0
 # doHists = 1
-# plotNum = 500 #for plotting during the Run
+# plotNum = 1000 #for plotting during the Run
 doWaveformPlot =1
 doHists = 0
 plotNum = 100 #for plotting during the Run
@@ -46,12 +46,12 @@ if os.path.isfile(wfFileName):
     wfs = data['wfs']
 
     #one slow waveform
-    fitwfnum = 21
-    wfs = wfs[:fitwfnum+1]
-    wfs = np.delete(wfs, range(0,fitwfnum))
+    # fitwfnum = 4
+    # wfs = wfs[:fitwfnum+1]
+    # wfs = np.delete(wfs, range(0,fitwfnum))
 
-    # wfidxs = [5, 19, 21, 23]
-    # wfs = wfs[wfidxs]
+    wfidxs = [4, 11, 19, 23]
+    wfs = wfs[wfidxs]
 
     # 4 medium waveforms
     # wfs = wfs[:8]
@@ -312,6 +312,8 @@ def plot(sample_file_name, directory):
         # plt.colorbar()
     plt.xlabel("r from Point Contact (mm)")
     plt.ylabel("z from Point Contact (mm)")
+    plt.xlim(0, det.detector_radius)
+    plt.ylim(0, det.detector_length)
     plt.axis('equal')
 
     if numWaveforms == 1:

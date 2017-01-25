@@ -52,8 +52,8 @@ rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
 
 #3 transfer function params for oscillatory decay
 ba_prior = 0.107213
-c_prior = -0.815152
-dc_prior = 0.822696/-0.815152
+c_prior = -0.808
+dc_prior = 0.815/c_prior
 
 rc1_prior =  73.085166
 rc2_prior = 1.138420
@@ -238,10 +238,10 @@ class Model(object):
             params[which] = dnest4.wrap(params[which], -200, 400)
         elif which == c_idx: #b over a
             params[which] += 0.01*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], -0.9, -0.7)
+            params[which] = dnest4.wrap(params[which], -0.82, -0.8)
         elif which == dc_idx: #b over a
             params[which] += 0.01*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], -1.05, -0.975)
+            params[which] = dnest4.wrap(params[which], -1.03, -0.98)
 
         elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
             #all normally distributed priors
