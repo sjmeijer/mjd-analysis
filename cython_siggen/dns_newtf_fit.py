@@ -50,14 +50,14 @@ if os.path.isfile(wfFileName):
     wfs = data['wfs']
 
     #one slow waveform
-    fitwfnum = 5
-    wfs = wfs[:fitwfnum+1]
-    wfs = np.delete(wfs, range(0,fitwfnum))
+    # fitwfnum = 4
+    # wfs = wfs[:fitwfnum+1]
+    # wfs = np.delete(wfs, range(0,fitwfnum))
 
 
     # wfidxs = [0, 5, 8, 14]
-    # wfidxs = [4, 11, 19, 23]
-    # wfs = wfs[wfidxs]
+    wfidxs = [4, 11, 19, 22]
+    wfs = wfs[wfidxs]
 
     # 4 medium waveforms
     # wfs = wfs[:8]

@@ -50,6 +50,10 @@ priors = np.empty(6 + 6 + 1 + 1) #6 + 2)
 ba_idx, c_idx, dc_idx = np.arange(3)+ tf_first_idx
 rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
 
+ba_prior = 0.107213
+c_prior = -0.808
+dc_prior = 0.815/c_prior
+
 rc1_prior =  73.085166
 rc2_prior = 1.138420
 rc_frac_prior = 0.997114
@@ -140,10 +144,10 @@ class Model(object):
             # print rad_arr[wf_idx], phi_arr[wf_idx]/np.pi, theta_arr[wf_idx]/np.pi, t0_arr[wf_idx]
             # print "  ", rad_arr[wf_idx], theta_arr[wf_idx]/np.pi
 
-            b = 5*rng.rand()
-            log_gain = 4*rng.rand() - 4
-            gain = np.exp(log_gain)
-            d =  0.25 *rng.rand() + 0.5
+
+        b = rng.rand() * 0
+        c = 0.05 *rng.randn() + c_prior
+        dc =  0.01 *rng.randn() + dc_prior
 
         #limit from 60 to 90
         rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 65, 80)
@@ -165,7 +169,7 @@ class Model(object):
         h_111_emu = .01 * (h_111_e0_prior*h_111_mu0_prior)*rng.randn() + h_111_e0_prior*h_111_mu0_prior
 
         return np.hstack([
-              b, gain, d,
+              b, c, dc,
               rc1, rc2, rcfrac,
               h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu,
               grad, charge_trapping,
@@ -228,20 +232,15 @@ class Model(object):
             #   params[which]=dnest4.wrap(params[which], -1, 1)
             #   print "  adjusted b to %f" %  ( params[which])
 
-        elif which == ba_idx: #b
+        elif which == ba_idx: #b over a
            params[which] += 15*dnest4.randh()
            params[which] = dnest4.wrap(params[which], -5, 10)
         elif which == c_idx: #b over a
-            #this is now 1/gain (so assume it goes from 1 to e^-...7?)
-            log_gain = np.log(params[which])
-            log_gain += 4*dnest4.randh()
-            log_gain = dnest4.wrap(log_gain, -4, 0.0)
-            params[which] = np.exp(log_gain)
-            #  params[which] += 4*dnest4.randh()
-            #  params[which] = dnest4.wrap(params[which], -2, 2)
+            params[which] += 0.01*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], -0.82, -0.8)
         elif which == dc_idx: #b over a
-             params[which] += 1*dnest4.randh()
-             params[which] = dnest4.wrap(params[which], 0, 1)
+            params[which] += 0.01*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], -1.03, -0.98)
 
         elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
             #all normally distributed priors
@@ -320,7 +319,7 @@ class Model(object):
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_b, tf_gain, tf_d, rc1, rc2, rcfrac,
+def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_b, tf_c, tf_dc, rc1, rc2, rcfrac,
         h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu,
         grad, charge_trapping, bl_origin_idx):
     # #TODO: This needs to be length normalized somehow
@@ -330,8 +329,8 @@ def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_b, tf_gain, tf_
     # print "theta is %f" % (theta/np.pi)
     # r = rad * np.cos(theta)
     # z = rad * np.sin(theta)
-    tf_d2 = tf_d**2
-    tf_2c = tf_gain - 1 - tf_d2
+
+    tf_d = tf_c * tf_dc
 
 
     # rc1 = -1./np.log(e_rc1)
@@ -350,7 +349,7 @@ def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_b, tf_gain, tf_
     if not detector.IsInDetector(r, phi, z):
       return -np.inf
 
-    detector.SetTransferFunction(tf_b, tf_2c, tf_d2, rc1, rc2, rcfrac, isDirect=True)
+    detector.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac, )
     detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
     detector.trapping_rc = charge_trapping
     detector.SetFieldsGradIdx(grad)
