@@ -15,7 +15,7 @@ from matplotlib.colors import LogNorm
 
 # import pandas as pd
 import numpy as np
-from scipy import signal
+from scipy import signal, interpolate
 import multiprocessing
 
 import helpers
@@ -24,6 +24,9 @@ from pysiggen import Detector
 from dns_maxt_model import *
 
 doInitPlot =0
+doContourHist = 0
+
+
 # doWaveformPlot =0
 # doHists = 1
 # plotNum = 1000 #for plotting during the Run
@@ -302,19 +305,46 @@ def plot(sample_file_name, directory):
     plt.clf()
     colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges", "Greys", "YlOrBr", "PuRd"]
 
-    for wf_idx in range(numWaveforms):
-        xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
-        yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
-        plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ], norm=LogNorm(), cmap=plt.get_cmap(colorbars[wf_idx]))
-        rad_mean = np.mean(wf_params[wf_idx, 0,:])
-        print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
-        # print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
-        # plt.colorbar()
-    plt.xlabel("r from Point Contact (mm)")
-    plt.ylabel("z from Point Contact (mm)")
-    plt.xlim(0, det.detector_radius)
-    plt.ylim(0, det.detector_length)
-    plt.axis('equal')
+    if not doContourHist:
+        for wf_idx in range(numWaveforms):
+            xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
+            yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
+            plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ], norm=LogNorm(), cmap=plt.get_cmap(colorbars[wf_idx]))
+            rad_mean = np.mean(wf_params[wf_idx, 0,:])
+            print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
+            # print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
+            # plt.colorbar()
+        plt.xlabel("r from Point Contact (mm)")
+        plt.ylabel("z from Point Contact (mm)")
+        plt.xlim(0, det.detector_radius)
+        plt.ylim(0, det.detector_length)
+        plt.axis('equal')
+    else:
+        for wf_idx in range(numWaveforms):
+            xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
+            yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
+            z, xe, ye = np.histogram2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ])
+              z /= z.sum()
+              n=100
+              t = np.linspace(0, z.max(), n)
+              integral = ((z >= t[:, None, None]) * z).sum(axis=(1,2))
+              from scipy import interpolate
+              f = interpolate.interp1d(integral, t)
+              t_contours = f(np.array([0.9]))
+
+              cs = plt.contourf(z.T, t_contours, extent=[0,det.detector_radius,0,det.detector_length],  alpha=0.7, colors = (colors[wf_idx]), extend='max')
+              cs.cmap.set_over(colors[wf_idx])
+
+              proxy = [plt.Rectangle((0,0),1,1,fc = pc.get_facecolor()[0])
+                for pc in cs.collections]
+
+          plt.legend(proxy, ["95% C.I.", "68% C.I.", "50% C.I.", "20% C.I."], loc=3)
+      plt.xlabel("r from Point Contact (mm)")
+      plt.ylabel("z from Point Contact (mm)")
+      plt.xlim(0, det.detector_radius)
+      plt.ylim(0, det.detector_length)
+      plt.axis('equal')
+      plt.savefig("credible_intervals.pdf")
 
     if numWaveforms == 1:
         #TODO: make this plot work for a bunch of wfs
