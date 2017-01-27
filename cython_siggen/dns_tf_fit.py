@@ -21,15 +21,15 @@ import multiprocessing
 import helpers
 from pysiggen import Detector
 
-from dns_maxt_model import *
+from dns_tf_model import *
 
 doInitPlot =0
 # doWaveformPlot =0
 # doHists = 1
 # plotNum = 1000 #for plotting during the Run
-doWaveformPlot =1
-doHists = 0
-plotNum = 100 #for plotting during the Run
+doWaveformPlot =0
+doHists = 1
+plotNum = 1000 #for plotting during the Run
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
@@ -44,9 +44,12 @@ if os.path.isfile(wfFileName):
     #wf 2 is super weird
 
     wfs = data['wfs']
+    #
+    # wfidxs = [0, 5, 8, 14]
+    # wfs = wfs[wfidxs]
 
-    #one slow waveform
-    fitwfnum = 20
+    # one slow waveform
+    fitwfnum = 5
     wfs = wfs[:fitwfnum+1]
     wfs = np.delete(wfs, range(0,fitwfnum))
 
@@ -99,13 +102,13 @@ output_wf_length = np.amax(wfLengths) + 1
 #Create a detector model
 timeStepSize = 1 #ns
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length )
+det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length, t0_padding=100 )
 det.LoadFieldsGrad(fieldFileName)
 det.SetFieldsGradIdx(10)
 
 def fit(directory):
 
-  initializeDetectorAndWaveforms(det, wfs, reinit=False)
+  initializeDetectorAndWaveforms(det, wfs,)
   initMultiThreading(numThreads)
 
   # Create a model object and a sampler
@@ -115,7 +118,7 @@ def fit(directory):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=75, num_steps=100000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=150, num_steps=100000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -167,21 +170,18 @@ def plot(sample_file_name, directory):
     tf = np.empty((6, num_samples))
     wf_params = np.empty((numWaveforms, 8, num_samples))
 
-    velo_priors, velo_lims = get_velo_params()
-    # t0_guess, t0_min, t0_max = get_t0_params()
-    tf_first_idx, velo_first_idx, grad_idx, trap_idx = get_param_idxs()
-
     for (idx,params) in enumerate(data[-num_samples:]):
-        b_over_a, c, dc, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
-        d = c*dc
-        tf[:,idx] = b_over_a, c, d, rc1, rc2, rcfrac
+        tf_b, gain, d2, rc1, rc2, rcfrac = params[0:6]
+        tf[:,idx] = tf_b, gain, d2, rc1, rc2, rcfrac
 
-        det.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
+        tf_2c = gain - 1 - d2
 
-        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[trap_idx+1:].reshape((8, numWaveforms))
+        det.SetTransferFunction(tf_b, tf_2c, d2, rc1, rc2, rcfrac, isDirect=True)
+
+        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[6:].reshape((8, numWaveforms))
         print "sample %d:" % idx
         print "  tf params: ",
-        print b_over_a, c, d, rc1, rc2, rcfrac
+        print params[0:6]
 
         for (wf_idx,wf) in enumerate(wfs):
           r, phi, z = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
@@ -219,36 +219,11 @@ def plot(sample_file_name, directory):
     vmodes, tfmodes = np.empty(6), np.empty(6)
     num_bins = 100
     for i in range(6):
-        idx = (i+1)*3
-        axis = vFig.add_subplot(6,3,idx-1)
-        axis.set_ylabel(vLabels[i])
-        [n, b, p] = axis.hist(velo[i,:], bins=num_bins)
-        # axis.axvline(x=(1-velo_lims)*velo_priors[i], color="r")
-        # axis.axvline(x=(1+velo_lims)*velo_priors[i], color="r")
-        # axis.axvline(x=velo_priors[i], color="g")
-        max_idx = np.argmax(n)
-        print "%s mode: %f" % (vLabels[i], b[max_idx])
-
-        axis = vFig.add_subplot(6,3,idx-2)
+        axis = vFig.add_subplot(6,1,i+1)
         axis.set_ylabel(tfLabels[i])
         [n, b, p] = axis.hist(tf[i,:], bins=num_bins)
         max_idx = np.argmax(n)
         print "%s mode: %f" % (tfLabels[i], b[max_idx])
-
-        if i==0:
-            axis = vFig.add_subplot(6,3,idx)
-            axis.set_ylabel("imp grad")
-            [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
-            max_idx = np.argmax(n)
-            print "%s mode: %f" % ("imp grad", b[max_idx])
-        if i==1:
-            axis = vFig.add_subplot(6,3,idx)
-            axis.set_ylabel("trapping_rc")
-            [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
-            max_idx = np.argmax(n)
-            print "%s mode: %f" % ("trapping_rc grad", b[max_idx])
-
-
 
     positionFig = plt.figure(3, figsize=(15,15))
     plt.clf()
@@ -260,7 +235,6 @@ def plot(sample_file_name, directory):
         plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ], norm=LogNorm(), cmap=plt.get_cmap(colorbars[wf_idx]))
         rad_mean = np.mean(wf_params[wf_idx, 0,:])
         print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
-        print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
         # plt.colorbar()
     plt.xlabel("r from Point Contact (mm)")
     plt.ylabel("z from Point Contact (mm)")

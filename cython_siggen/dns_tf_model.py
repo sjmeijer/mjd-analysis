@@ -2,10 +2,11 @@ import numpy as np
 import scipy.stats as stats
 import scipy.optimize as op
 import dnest4
+from multiprocessing import Pool
 
 import numpy.random as rng
 
-def initializeDetector(det, reinit=True):
+def initializeDetector(det):
   global detector
   detector = det
 
@@ -15,16 +16,16 @@ def initializeWaveforms( wfs_init, ):
   global num_waveforms
   num_waveforms = len(wfs)
 
-def initializeDetectorAndWaveform(det, wf_init):
-  initializeWaveform(wf_init)
+def initializeDetectorAndWaveforms(det, wf_init):
+  initializeWaveforms(wf_init)
   initializeDetector(det)
 
 def initMultiThreading(numThreads):
-global num_threads
-global pool
-num_threads = numThreads
-if num_threads > 1:
-    pool = Pool(num_threads, initializer=initializeDetector, initargs=[detector])
+    global num_threads
+    global pool
+    num_threads = numThreads
+    if num_threads > 1:
+        pool = Pool(num_threads, initializer=initializeDetector, initargs=[detector])
 
 def initT0Padding(maxt_pad, linear_baseline_origin):
   global maxt_guess, min_maxt, max_maxt, baseline_origin_idx
@@ -33,34 +34,21 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
   min_maxt = maxt_guess - 10
   baseline_origin_idx = linear_baseline_origin
 
- tf_first_idx = 0
- priors = np.empty(6) #6 + 2)
+tf_first_idx = 0
+priors = np.empty(6) #6 + 2)
 
- ba_idx, c_idx, dc_idx = np.arange(3)+ tf_first_idx
- rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
+ba_idx, c_idx, dc_idx = np.arange(3)+ tf_first_idx
+rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
 
- #3 transfer function params for oscillatory decay
- b_prior = 50
- c_prior = -0.815152
- dc_prior = 0.822696/-0.815152
+rc1_prior =  73.085166
+rc2_prior = 1.138420
+rc_frac_prior = 0.997114
+priors[rc1_idx:rc1_idx+3] = rc1_prior, rc2_prior, rc_frac_prior
 
- rc1_prior =  73.085166
- rc2_prior = 1.138420
- rc_frac_prior = 0.997114
- priors[tf_first_idx:tf_first_idx+3] = ba_prior, c_prior, dc_prior
- priors[rc1_idx:rc1_idx+3] = rc1_prior, rc2_prior, rc_frac_prior
+prior_vars =  np.empty(len(priors))
+prior_vars[rc1_idx:rc1_idx+3] = 0.2, 0.3, 0.001
 
- prior_vars =  np.empty(len(priors))
- prior_vars[rc1_idx:rc1_idx+3] = 0.2, 0.3, 0.001
-
- def get_velo_params():
-     return (priors[velo_first_idx:velo_first_idx+6], velo_var)
- def get_t0_params():
-     return (t0_guess, min_t0, max_t0, )
- def get_param_idxs():
-     return (tf_first_idx, velo_first_idx, grad_idx, trap_idx)
-
- def draw_position(wf_idx):
+def draw_position(wf_idx):
    r = rng.rand() * detector.detector_radius
    z = rng.rand() * detector.detector_radius
    scale = np.amax(wfs[wf_idx].windowedWf)
@@ -71,7 +59,7 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
    else:
      return (r,z, scale, t0)
 
- class Model(object):
+class Model(object):
      """
      Specify the model in Python.
      """
@@ -114,9 +102,12 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
              m_arr[wf_idx] =  0.0001*rng.randn() + 0.
              b_arr[wf_idx] =  0.001*rng.randn() + 0.
 
-         b = 20*rng.randn() + b_prior
-         c = 0.05 *rng.randn() + c_prior
-         dc =  0.01 *rng.randn() + dc_prior
+         b = 70*rng.rand() - 50
+
+         log_gain = 10*rng.rand() - 10
+         gain = np.exp(log_gain)
+
+         d2 =  0.25 *rng.rand() + 0.5
 
          #limit from 60 to 90
          rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 65, 80)
@@ -124,7 +115,7 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
          rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
 
          return np.hstack([
-               b_over_a, c, dc,
+               b, gain, d2,
                rc1, rc2, rcfrac,
                r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
              #   rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
@@ -185,14 +176,19 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
              #   print "  adjusted b to %f" %  ( params[which])
 
          elif which == ba_idx: #b over a
-           params[which] += 0.1*dnest4.randh()
-           params[which] = dnest4.wrap(params[which], -0.9, 15)
+           params[which] += 70*dnest4.randh()
+           params[which] = dnest4.wrap(params[which], -50, 20)
          elif which == c_idx: #b over a
-             params[which] += 0.01*dnest4.randh()
-             params[which] = dnest4.wrap(params[which], -0.9, -0.7)
+            #this is now 1/gain (so assume it goes from 1 to e^-...7?)
+            log_gain = np.log(params[which])
+            log_gain += 10*dnest4.randh()
+            log_gain = dnest4.wrap(log_gain, -10, 0.0)
+            params[which] = np.exp(log_gain)
+            #  params[which] += 4*dnest4.randh()
+            #  params[which] = dnest4.wrap(params[which], -2, 2)
          elif which == dc_idx: #b over a
-             params[which] += 0.01*dnest4.randh()
-             params[which] = dnest4.wrap(params[which], -1.05, -0.975)
+             params[which] += 1*dnest4.randh()
+             params[which] = dnest4.wrap(params[which], 0, 1)
 
          elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
              #all normally distributed priors
@@ -241,13 +237,11 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
          return sum_like
 
 
- def WaveformLogLikeStar(a_b):
+def WaveformLogLikeStar(a_b):
    return WaveformLogLike(*a_b)
 
- def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_b, tf_c, tf_dc, rc1, rc2, rcfrac,bl_origin_idx):
+def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_b, tf_gain, tf_d2, rc1, rc2, rcfrac,bl_origin_idx):
      # #TODO: This needs to be length normalized somehow
-
-     tf_d = tf_c * tf_dc
 
      if scale < 0:
        return -np.inf
@@ -256,7 +250,9 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
      if not detector.IsInDetector(r, phi, z):
        return -np.inf
 
-     detector.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac)
+     tf_2c = tf_gain - 1 - tf_d2
+
+     detector.SetTransferFunction(tf_b, tf_2c, tf_d2, rc1, rc2, rcfrac, isDirect=True)
 
      data = wf.windowedWf
      model_err = wf.baselineRMS
@@ -276,7 +272,7 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
      ln_like = -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
      return ln_like
 
- def findTimePointBeforeMax(data, percent):
+def findTimePointBeforeMax(data, percent):
 
    #don't screw up the data, bro
    int_data = np.copy(data)
