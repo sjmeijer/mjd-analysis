@@ -10,6 +10,7 @@ import matplotlib
 #matplotlib.use('CocoaAgg')
 import sys, os, shutil
 import matplotlib.pyplot as plt
+plt.style.use('presentation')
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
 
@@ -24,15 +25,15 @@ from pysiggen import Detector
 from dns_maxt_model import *
 
 doInitPlot =0
-doContourHist = 0
+doContourHist = 1
 
 
 # doWaveformPlot =0
 # doHists = 1
 # plotNum = 1000 #for plotting during the Run
-doWaveformPlot =1
-doHists = 0
-plotNum = 100 #for plotting during the Run
+doWaveformPlot =0
+doHists = 1
+plotNum = 1000 #for plotting during the Run
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
@@ -53,7 +54,9 @@ if os.path.isfile(wfFileName):
     # wfs = wfs[:fitwfnum+1]
     # wfs = np.delete(wfs, range(0,fitwfnum))
 
-    wfidxs = [4, 11, 19, 23]
+
+    wfidxs = [0, 5, 8, 14]
+    # wfidxs = [4, 11, 19, 23]
     wfs = wfs[wfidxs]
 
     # 4 medium waveforms
@@ -172,8 +175,10 @@ def plot(sample_file_name, directory):
 
     if sample_file_name== (directory+"sample_plot.txt"):
         if num_samples > plotNum: num_samples = plotNum
+
+    if doWaveformPlot:
+        if num_samples > plotNum: num_samples = plotNum
     print "plotting %d samples" % num_samples
-    # exit(0)
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
@@ -261,6 +266,8 @@ def plot(sample_file_name, directory):
     ax1.set_ylim(-20, 20)
 
     if not doHists:
+        plt.tight_layout()
+        plt.savefig("waveforms.png")
         plt.show()
         exit()
 
@@ -301,7 +308,7 @@ def plot(sample_file_name, directory):
 
 
 
-    positionFig = plt.figure(3, figsize=(15,15))
+    positionFig = plt.figure(3, figsize=(10,10))
     plt.clf()
     colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges", "Greys", "YlOrBr", "PuRd"]
 
@@ -324,27 +331,26 @@ def plot(sample_file_name, directory):
             xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
             yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
             z, xe, ye = np.histogram2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ])
-              z /= z.sum()
-              n=100
-              t = np.linspace(0, z.max(), n)
-              integral = ((z >= t[:, None, None]) * z).sum(axis=(1,2))
-              from scipy import interpolate
-              f = interpolate.interp1d(integral, t)
-              t_contours = f(np.array([0.9]))
+            z /= z.sum()
+            n=100
+            t = np.linspace(0, z.max(), n)
+            integral = ((z >= t[:, None, None]) * z).sum(axis=(1,2))
+            from scipy import interpolate
+            f = interpolate.interp1d(integral, t)
+            t_contours = f(np.array([0.9, 0.8]))
 
-              cs = plt.contourf(z.T, t_contours, extent=[0,det.detector_radius,0,det.detector_length],  alpha=0.7, colors = (colors[wf_idx]), extend='max')
-              cs.cmap.set_over(colors[wf_idx])
+            cs = plt.contourf(z.T, t_contours, extent=[0,det.detector_radius,0,det.detector_length],  alpha=1, colors = (colors[wf_idx]), extend='max')
+            # cs.cmap.set_over(colors[wf_idx])
 
-              proxy = [plt.Rectangle((0,0),1,1,fc = pc.get_facecolor()[0])
-                for pc in cs.collections]
+        plt.xlabel("r from Point Contact (mm)")
+        plt.ylabel("z from Point Contact (mm)")
+        # plt.axis('equal')
+        plt.xlim(0, det.detector_radius)
+        plt.ylim(0, det.detector_length)
+        plt.gca().set_aspect('equal', adjustable='box')
+        plt.tight_layout()
 
-          plt.legend(proxy, ["95% C.I.", "68% C.I.", "50% C.I.", "20% C.I."], loc=3)
-      plt.xlabel("r from Point Contact (mm)")
-      plt.ylabel("z from Point Contact (mm)")
-      plt.xlim(0, det.detector_radius)
-      plt.ylim(0, det.detector_length)
-      plt.axis('equal')
-      plt.savefig("credible_intervals.pdf")
+        plt.savefig("credible_intervals.pdf")
 
     if numWaveforms == 1:
         #TODO: make this plot work for a bunch of wfs
