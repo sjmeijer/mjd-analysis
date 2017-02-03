@@ -40,6 +40,7 @@ max_sample_idx = 200
 fallPercentage = 0.97
 fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
 
+
 wfFileName = "P42574A_24_spread.npz"
 # wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
@@ -50,14 +51,16 @@ if os.path.isfile(wfFileName):
     wfs = data['wfs']
 
     #one slow waveform
-    # fitwfnum = 4
+    # fitwfnum = 5
     # wfs = wfs[:fitwfnum+1]
     # wfs = np.delete(wfs, range(0,fitwfnum))
+    # numLevels = 150
 
-
-    # wfidxs = [0, 5, 8, 14]
-    wfidxs = [4, 11, 19, 22]
+    # wfs = wfs[0:16:2]
+    # wfidxs = [4, 11, 19, 22]
+    wfidxs = [0, 5, 8, 14]
     wfs = wfs[wfidxs]
+    numLevels = 450
 
     # 4 medium waveforms
     # wfs = wfs[:8]
@@ -77,7 +80,7 @@ else:
   print "Saved waveform file %s not available" % wfFileName
   exit(0)
 
-colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey" ]
+colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey", "chocolate" ]
 
 wfLengths = np.empty(numWaveforms)
 wfMaxes = np.empty(numWaveforms)
@@ -116,7 +119,7 @@ output_wf_length = np.amax(wfLengths) + 1
 #Create a detector model
 timeStepSize = 1 #ns
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length )
+det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length, t0_padding=100 )
 det.LoadFieldsGrad(fieldFileName)
 
 def fit(directory):
@@ -131,7 +134,7 @@ def fit(directory):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=150, num_steps=100000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=numLevels, num_steps=100000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -195,7 +198,15 @@ def plot(sample_file_name, directory):
         # params = data.iloc[-(idx+1)]
         # print params
 
-        tf_b, tf_gain, tf_d, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
+        tf_phi, tf_omega, d, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
+        #tf_d = tf_c * tf_dc
+        c = -d * np.cos(tf_omega)
+        b_ov_a = c - np.tan(tf_phi) * np.sqrt(d**2-c**2)
+        a = 1./(1+b_ov_a)
+        tf_b = a * b_ov_a
+        tf_c = c
+        tf_d = d
+
         h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu = params[velo_first_idx:velo_first_idx+6]
         charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
@@ -209,14 +220,12 @@ def plot(sample_file_name, directory):
         h_100_e0 = h_100_emu / h_100_mu0
         h_111_e0 = h_111_emu / h_111_mu0
 
-        tf_d2 = tf_d**2
-        tf_2c = tf_gain - 1 - tf_d2
-        tf[:,idx] = tf_b, tf_gain, tf_d, rc1, rc2, rcfrac
-        velo[:,idx] = h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
+        tf[:,idx] = tf_phi, tf_omega, tf_d, rc1, rc2, rcfrac
+        velo[:,idx] = h_100_mu0, h_100_beta, h_100_emu, h_111_mu0, h_111_beta, h_111_emu
         det_params[:,idx] = np.int(params[grad_idx]), charge_trapping
 
 
-        det.SetTransferFunction(tf_b, tf_2c, tf_d2, rc1, rc2, rcfrac, isDirect=True)
+        det.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac)
         det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
         det.trapping_rc = charge_trapping
         det.SetFieldsGradIdx(grad)
@@ -224,7 +233,7 @@ def plot(sample_file_name, directory):
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[trap_idx+1:].reshape((8, numWaveforms))
         print "sample %d:" % idx
         print "  tf params: ",
-        print tf_b, tf_gain, tf_d, rc1, rc2, rcfrac
+        print tf_phi, tf_omega, d, rc1, rc2, rcfrac
         print "  velo params: ",
         print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
         print "  charge trapping: ",
@@ -317,7 +326,7 @@ def plot(sample_file_name, directory):
         for wf_idx in range(numWaveforms):
             xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
             yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
-            plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ], norm=LogNorm(), cmap=plt.get_cmap(colorbars[wf_idx]))
+            plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ],  cmap=plt.get_cmap(colorbars[wf_idx]), cmin=0.1)
             rad_mean = np.mean(wf_params[wf_idx, 0,:])
             print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
             # print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
@@ -326,7 +335,7 @@ def plot(sample_file_name, directory):
         plt.ylabel("z from Point Contact (mm)")
         plt.xlim(0, det.detector_radius)
         plt.ylim(0, det.detector_length)
-        plt.axis('equal')
+        plt.gca().set_aspect('equal', adjustable='box')
     else:
         for wf_idx in range(numWaveforms):
             xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
