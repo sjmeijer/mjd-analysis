@@ -5,12 +5,13 @@ import dnest4
 
 import numpy.random as rng
 from multiprocessing import Pool
+from pysiggen import Detector
 
 def initializeDetector(det_state, reinit=True):
   global detector
   detector = Detector(setup_dict=det_state)
   if reinit:
-      detector.ReinitializeDetector
+      detector.ReinitializeDetector()
 
 def initializeWaveforms( wfs_init, ):
   global wfs
