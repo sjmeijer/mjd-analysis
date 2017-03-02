@@ -46,7 +46,8 @@ prior_vars[grad_idx] = 3
 priors[trap_idx] = 200.
 prior_vars[trap_idx] = 25.
 
-
+def global_get_indices():
+    return (tf_first_idx, velo_first_idx, grad_idx, trap_idx)
 
 class Model(object):
     """

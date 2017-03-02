@@ -26,7 +26,7 @@ def main():
         fm.set_indices( model.get_indices() )
         fm.wait_for_all_workers_to_report()
 
-        fm.fit(model, numLevels=500)
+        fm.fit(model, numLevels=100)
 
         fm.close_all_workers()
     else:
@@ -56,9 +56,8 @@ class MPIFitManager():
             data = np.load(wfFileName)
             wfs = data['wfs']
 
-            wfs = wfs[0:16]
+            wfs = wfs[12:16]
             # wfs = wfs[wfidxs]
-            numLevels = 450
 
             self.wfs = wfs
             self.num_waveforms = wfs.size
@@ -186,24 +185,27 @@ class MPIFitManager():
                 if tag == tags.READY:
                     comm.Recv(charge_wf, source=source, tag=tag, status=status)
                     ready_workers.append(source)
-                    # print "worker %d is added to the stack" % source
+                    print "worker %d is ready & added to the stack" % source
                 elif tag == tags.DONE_HOLE:
                     comm.Recv(charge_wf, source=source, tag=tag, status=status)
                     task_index_recd = workerToTaskMap[source]
                     hole_wfs[task_index_recd,:] = charge_wf
                     holes_and_electrons_received +=1
-                    # print("Got hole data for task %d from worker %d" % (task_index_recd, source))
+                    print("Got hole data for task %d from worker %d" % (task_index_recd, source))
                 elif tag == tags.DONE_ELECTRON:
                     comm.Recv(charge_wf, source=source, tag=tag, status=status)
                     task_index_recd = workerToTaskMap[source]
                     electron_wfs[task_index_recd,:] = charge_wf
                     holes_and_electrons_received +=1
-                    # print("Got electron data for task %d from worker %d" % (task_index_recd, source))
+                    print("Got electron data for task %d from worker %d" % (task_index_recd, source))
                 elif tag == tags.DONE_PROCESS:
                     comm.Recv(wf_like, source=source, tag=tag, status=status)
                     task_index_recd = workerToTaskMap[source]
-                    wf_likes[task_index_recd] = wf_like[0]
-                    # print("Got processed data for task %d from worker %d" % (task_index_recd, source))
+                    if wf_like[0] == 999.:
+                        wf_likes[task_index_recd] = -np.inf
+                    else:
+                        wf_likes[task_index_recd] = wf_like[0]
+                    print("    Recv wf %d with ln like %f from worker %d" % (task_index_recd,wf_likes[task_index_recd], source))
                     wfs_finished +=1
 
             #wait around for a worker to ready itself
@@ -212,7 +214,7 @@ class MPIFitManager():
 
             if task_index_hole < num_waveforms:
                 comm.Send([charge_tasks[task_index_hole,:], MPI.FLOAT], dest=current_worker, tag=tags.HOLE)
-                # print("Sending hole task %d to worker %d" % (task_index_hole, current_worker))
+                print("Sending hole task %d to worker %d" % (task_index_hole, current_worker))
                 workerToTaskMap[current_worker] = task_index_hole
                 task_index_hole += 1
                 job_number +=1
@@ -220,7 +222,7 @@ class MPIFitManager():
 
             elif task_index_electron < num_waveforms:
                 comm.Send([charge_tasks[task_index_electron,:], MPI.FLOAT], dest=current_worker, tag=tags.ELECTRON)
-                # print("Sending electron task %d to worker %d" % (task_index_electron, current_worker))
+                print("Sending electron task %d to worker %d" % (task_index_electron, current_worker))
                 workerToTaskMap[current_worker] = task_index_electron
                 task_index_electron += 1
                 job_number +=1
@@ -237,15 +239,19 @@ class MPIFitManager():
                 empty_process_task[2*calc_length:] = task_index_process, scale_arr[task_index_process], t0_arr[task_index_process], smooth_arr[task_index_process], m_arr[task_index_process], b_arr[task_index_process], tf_b, tf_c, tf_d, rc1, rc2, rcfrac, charge_trapping
 
                 comm.Send([empty_process_task, MPI.FLOAT], dest=current_worker, tag=tags.PROCESS)
-                # print("Sending process task %d to worker %d" % (task_index_process, current_worker))
+                print("Sending process task %d to worker %d" % (task_index_process, current_worker))
                 workerToTaskMap[current_worker] = task_index_process
                 task_index_process += 1
                 ready_workers.pop(0)
 
-        # for idx in range(num_waveforms):
+
+        for idx in range(num_waveforms):
+          print "    wf %d has ln like %f " % (idx, wf_likes[idx])
         #     print "Waveform %d: hole sum %f, electron sum %f, ln like %f" % (idx, np.sum(hole_wfs[idx,:]), np.sum(electron_wfs[idx,:]), wf_likes[idx] )
-        if np.finfo('d').min in wf_likes:
-            return -np.inf
+        print "  total lnlike is %f" % np.sum(wf_likes)
+        print "remaining ready workers: " + str(ready_workers)
+        print "\n-------------------------------------------------\n"
+
         return np.sum(wf_likes)
 
     def wait_for_all_workers_to_report(self):
@@ -286,6 +292,8 @@ class MPIFitManager():
         empty_wf = np.empty(calc_length, dtype='f4')
         process_task = np.empty(2*calc_length + self.extra_process_params, dtype='f4')
 
+        empty_double = np.empty(1)
+
         while True:
             #figure out what operation I'm meant to do
             comm.Send([empty_wf,MPI.FLOAT], dest=0, tag=tags.READY)
@@ -305,7 +313,8 @@ class MPIFitManager():
             elif tag == tags.PROCESS:
                 comm.Recv([process_task,MPI.FLOAT], source=0, tag=tags.PROCESS, status=status)
                 ln_like = self.do_wf_process_task(process_task)
-                comm.Send([ln_like, MPI.DOUBLE], dest=0, tag=tags.DONE_PROCESS)
+                empty_double[0] = ln_like
+                comm.Send([empty_double, MPI.DOUBLE], dest=0, tag=tags.DONE_PROCESS)
 
             elif tag == tags.EXIT:
                 break
@@ -335,7 +344,6 @@ class MPIFitManager():
         electron_wf    = wf_proc_task[self.siggen_wf_length:param_start_idx]
 
         wf_idx, energy, t0, smooth, m, b = wf_proc_task[param_start_idx:param_start_idx+6]
-
         d, tf_phi, tf_omega, rc1, rc2, rcfrac, charge_trapping = wf_proc_task[-7:]
 
         c = -d * np.cos(tf_omega)
@@ -354,9 +362,9 @@ class MPIFitManager():
         model = self.detector.TurnChargesIntoSignal(hole_wf, electron_wf, energy, t0, data_len, h_smoothing=smooth, trapType="fullSignal", alignPoint="max", doMaxInterp=False)
 
         if model is None:
-            return np.finfo('d').min
+            return 999.
         if np.any(np.isnan(model)):
-            return np.finfo('d').min
+            return 999.
 
         start_idx = -self.baseline_origin_idx
         end_idx = data_len - self.baseline_origin_idx - 1
@@ -365,7 +373,8 @@ class MPIFitManager():
 
         inv_sigma2 = 1.0/(model_err**2)
         ln_like = -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
-        return  ln_like
+        print "   source: wf %d has ln like %f" % (wf_idx, ln_like)
+        return ln_like
 
 
     def enum(self, *sequential, **named):
