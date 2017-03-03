@@ -9,7 +9,6 @@ from matplotlib import gridspec
 
 import helpers
 from pysiggen import Detector
-from probability_model_waveform import *
 
 from progressbar import ProgressBar, Percentage, Bar, ETA
 from multiprocessing import Pool
@@ -60,7 +59,7 @@ tf_b = a * b_ov_a
 tf_c = c
 tf_d = d
 
-detector.SetFieldsGradIdx(imp_grad)
+detector.SetFieldsGradIdx(np.int(imp_grad))
 detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
 detector.trapping_rc = trapping_rc
 detector.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac, )
@@ -73,6 +72,8 @@ z_mult = 10.
 scale_mult = 1000.
 maxt_mult = 100.
 smooth_mult = 10.
+
+out_file_name = "mle_wfs.txt"
 
 def main(argv):
 
@@ -88,7 +89,7 @@ def main(argv):
         print "No saved waveforms available."
         exit(0)
 
-    doPlot = 1
+    doPlot = 0
     if doPlot:
         plt.ion()
         fig1 = plt.figure(0, figsize=(15,7))
@@ -104,86 +105,92 @@ def main(argv):
     global waveform
 
     start = timer()
+    with open(out_file_name, "w") as text_file:
 
-    for (idx,wf) in enumerate(wfs):
-        wf_idx = idx
-        wf.WindowWaveformAroundMax(fallPercentage=fallPercentage, rmsMult=2, earlySamples=max_sample_idx)
-        waveform = wf
-        dataLen = wf.wfLength
-        t_data = np.arange(dataLen) * 10
+        for (idx,wf) in enumerate(wfs):
 
-        # rad = np.sqrt(15**2+15**2)
-        # theta = np.pi/4
-        r,phi, z, scale, maxt, smooth  = 25,np.pi/8, 25, wf.wfMax, max_sample_idx, 10
-        r /= rad_mult
-        phi /= phi_mult
-        z /= z_mult
-        scale /= scale_mult
-        maxt /= maxt_mult
-        smooth /= smooth_mult
+            # if idx < 16: continue
 
-        minresult = None
-        minlike = np.inf
+            wf_idx = idx
+            wf.WindowWaveformAroundMax(fallPercentage=fallPercentage, rmsMult=2, earlySamples=max_sample_idx)
+            waveform = wf
+            dataLen = wf.wfLength
+            t_data = np.arange(dataLen) * 10
 
-        # rsteps = 4
-        # rstepsize = detector.detector_radius / (rsteps+1)
-        #
-        # thetasteps = 4
-        # zstepsize = np.pi/
-        #
-        # for rad in np.linspace(np.sqrt(2*10**2), np.sqrt(2*30**2), rsteps):
-        #     for theta in np.linspace(np.pi/2/5, zsteps):
-        #         # r /= rad_mult
-        #         # z /= z_mult
-        #         startGuess = [r, phi, theta, scale, maxt, smooth ]
-        #         result = op.minimize(nll, startGuess,   method="Powell")
-        #         if result['fun'] < minlike:
-        #           minlike = result['fun']
-        #           minresult = result
+            # rad = np.sqrt(15**2+15**2)
+            # theta = np.pi/4
+            r,phi, z, scale, maxt, smooth  = 25,np.pi/8, 25, wf.wfMax, max_sample_idx, 10
+            r /= rad_mult
+            phi /= phi_mult
+            z /= z_mult
+            scale /= scale_mult
+            maxt /= maxt_mult
+            smooth /= smooth_mult
 
-        bounds =[(0, detector.detector_radius/rad_mult), (0, np.pi/4/phi_mult), (0, detector.detector_length/z_mult),
-                 (scale -50/scale_mult, scale+50/scale_mult), (maxt-5/maxt_mult, maxt+5/maxt_mult), (0,25./smooth_mult), ]
+            minresult = None
+            minlike = np.inf
 
+            # rsteps = 4
+            # rstepsize = detector.detector_radius / (rsteps+1)
+            #
+            # thetasteps = 4
+            # zstepsize = np.pi/
+            #
+            # for rad in np.linspace(np.sqrt(2*10**2), np.sqrt(2*30**2), rsteps):
+            #     for theta in np.linspace(np.pi/2/5, zsteps):
+            #         # r /= rad_mult
+            #         # z /= z_mult
+            #         startGuess = [r, phi, theta, scale, maxt, smooth ]
+            #         result = op.minimize(nll, startGuess,   method="Powell")
+            #         if result['fun'] < minlike:
+            #           minlike = result['fun']
+            #           minresult = result
 
-        result = op.differential_evolution(nll, bounds, polish=False,)# strategy='best1bin', mutation=(1, 1.5))
-
-        # startGuess = [r,phi, z, scale, maxt, smooth, 1]
-        # result = op.basinhopping(nll, startGuess, )
-
-        # result = op.minimize(nll, startGuess,   method="Nelder-Mead", options={"maxfev": 10E4})
-
-        r, phi, z, scale, maxt, smooth, = result["x"]
+            bounds =[(0, detector.detector_radius/rad_mult), (0, np.pi/4/phi_mult), (0, detector.detector_length/z_mult),
+                     (scale -50/scale_mult, scale+50/scale_mult), (maxt-5/maxt_mult, maxt+5/maxt_mult), (0,25./smooth_mult), ]
 
 
-        # startGuess = r, phi, z, scale, maxt, smooth,
-        # result = op.minimize(nll, startGuess,   method="Powell")
-        # r, phi, z, scale, maxt, smooth, = result["x"]
-        # r = rad * np.cos(theta)
-        # z = rad * np.sin(theta)
+            result = op.differential_evolution(nll, bounds, polish=False,)# strategy='best1bin', mutation=(1, 1.5))
+
+            # startGuess = [r,phi, z, scale, maxt, smooth, 1]
+            # result = op.basinhopping(nll, startGuess, )
+
+            # result = op.minimize(nll, startGuess,   method="Nelder-Mead", options={"maxfev": 10E4})
+
+            r, phi, z, scale, maxt, smooth, = result["x"]
+
+            # startGuess = r, phi, z, scale, maxt, smooth,
+            # result = op.minimize(nll, startGuess,   method="Powell")
+            # r, phi, z, scale, maxt, smooth, = result["x"]
+            # r = rad * np.cos(theta)
+            # z = rad * np.sin(theta)
 
 
+            r *= rad_mult
+            phi *= phi_mult
+            z *= z_mult
+            scale *= scale_mult
+            maxt *= maxt_mult
+            smooth *= smooth_mult
 
-        r *= rad_mult
-        phi *= phi_mult
-        z *= z_mult
-        scale *= scale_mult
-        maxt *= maxt_mult
-        smooth *= smooth_mult
+            print "wf %d best fit like %f" % (wf_idx,result["fun"])
+            print " --> at ",
+            print  r, phi, z, scale, maxt, smooth
 
-        print "wf %d best fit like %f" % (wf_idx,result["fun"])
-        print " --> at ",
-        print  r, phi, z, scale, maxt, smooth, b, c ,dc
+            if doPlot:
+                ax0.plot(t_data, wf.windowedWf, color="black")
+                mle_wf = detector.MakeSimWaveform(r, phi, z, scale, maxt, dataLen, h_smoothing=smooth, alignPoint="max", doMaxInterp=False)
+                # ax0.cla()
+                # ax1.cla()
+                ax0.plot(t_data, mle_wf, )
+                ax1.plot(t_data, mle_wf - wf.windowedWf, )
 
-        if doPlot:
-            ax0.plot(t_data, wf.windowedWf, color="black")
-            mle_wf = detector.MakeSimWaveform(r, phi, z, scale, maxt, dataLen, h_smoothing=smooth, alignPoint="max")
-            # ax0.cla()
-            # ax1.cla()
-            ax0.plot(t_data, mle_wf, )
-            ax1.plot(t_data, mle_wf - wf.windowedWf, )
+                value = raw_input('  --> Press q to quit, any other key to continue\n')
+                if value == 'q': exit(0)
 
-            # value = raw_input('  --> Press q to quit, any other key to continue\n')
-            # if value == 'q': exit(0)
+
+            string = "%d  %d  %d %f  %f  %f  %f  %f  %f %f\n" % (wf.runNumber, wf.entry_number, len(wf.windowedWf), result["fun"], r, phi, z, scale, maxt, smooth )
+            text_file.write(string)
 
     end = timer()
     print "total time: " + str(end-start)
@@ -223,7 +230,7 @@ def WaveformLogLike(theta):
     model_err = waveform.baselineRMS
     data_len = len(data)
 
-    model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max")
+    model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max", doMaxInterp=False)
     if model is None:
         return -np.inf
 
