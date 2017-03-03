@@ -1,24 +1,15 @@
 import numpy as np
-import sys, os
+import sys, os, shutil
 import dnest4
-
 
 import numpy.random as rng
 from multiprocessing import Pool
 from pysiggen import Detector
+import matplotlib.pyplot as plt
+from matplotlib import gridspec
 
 
 max_sample_idx = 125
-
-#Prepare detector
-timeStepSize = 1
-fitSamples = 200
-detName = "conf/P42574A_ben.conf"
-detector =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, maxWfOutputLength=fitSamples + max_sample_idx + 2 )
-fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
-#sets the impurity gradient.  Don't bother changing this
-detector.LoadFieldsGrad(fieldFileName)
-
 
 rc1 = 73.085166
 rc2 = 1.138420
@@ -53,17 +44,8 @@ tf_b = a * b_ov_a
 tf_c = c
 tf_d = d
 
-detector.SetFieldsGradIdx(np.int(imp_grad))
-detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
-detector.trapping_rc = trapping_rc
-detector.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac, )
-
-
 def main(argv):
-    if len(argv) == 0:
-        directory = ""
-    else:
-        directory = argv[0]
+
 
     wfFileName = "P42574A_24_spread.npz"
 
@@ -92,7 +74,40 @@ def main(argv):
         exit(0)
     initT0Padding(max_sample_idx, baseline_origin_idx)
 
+    siggen_wf_length = (max_sample_idx - baseline_length + 10)*10
 
+    global output_wf_length
+    output_wf_length = wf_length + 1
+
+    #setup .ector
+    timeStepSize = 1
+    fitSamples = 200
+    detName = "conf/P42574A_ben.conf"
+    det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length, )
+    fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
+    #sets the impurity gradient.  Don't bother changing this
+    det.LoadFieldsGrad(fieldFileName)
+
+    det.SetFieldsGradIdx(np.int(imp_grad))
+    det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
+    det.trapping_rc = trapping_rc
+    det.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac, )
+    global detector
+    detector = det
+
+
+
+    directory = ""
+
+    if len(argv) == 0:
+        fit(directory)
+    elif argv[0] == "plot":
+        if len(argv) > 1: directory = argv[1]
+        plot("sample.txt", directory)
+    else:
+        fit(argv[0])
+
+def fit(directory):
     # Create a model object and a sampler
     model = Model()
     sampler = dnest4.DNest4Sampler(model,
@@ -108,6 +123,68 @@ def main(argv):
     for i, sample in enumerate(gen):
       print("# Saved {k} particles.".format(k=(i+1)))
 
+def plot(sample_file_name, directory, plotNum=100):
+    fig1 = plt.figure(0, figsize=(20,10))
+    plt.clf()
+    gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
+    ax0 = plt.subplot(gs[0])
+    ax1 = plt.subplot(gs[1], sharex=ax0)
+    ax1.set_xlabel("Digitizer Time [ns]")
+    ax0.set_ylabel("Voltage [Arb.]")
+    ax1.set_ylabel("Residual")
+
+
+    dataLen = wf.wfLength
+    t_data = np.arange(dataLen) * 10
+    ax0.plot(t_data, wf.windowedWf, color="black")
+
+    sample_file_name = directory + sample_file_name
+    if sample_file_name == directory + "sample.txt":
+      shutil.copy(directory+ "sample.txt", directory+"sample_plot.txt")
+      sample_file_name = directory + "sample_plot.txt"
+
+    data = np.loadtxt( sample_file_name)
+    num_samples = len(data)
+    print "found %d samples" % num_samples,
+    print " , plotting %d" % plotNum
+
+    if sample_file_name== (directory+"sample_plot.txt"):
+        if num_samples > plotNum: num_samples = plotNum
+
+    r_arr = np.empty(num_samples)
+    z_arr = np.empty(num_samples)
+
+    for (idx,params) in enumerate(data[-num_samples:]):
+        r, phi, z, scale, t0, smooth = params
+        r_arr[idx], z_arr[idx] = r, z
+
+        ml_wf = detector.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth, alignPoint="max")
+        if ml_wf is None:
+            continue
+
+        dataLen = wf.wfLength
+        t_data = np.arange(dataLen) * 10
+        ax0.plot(t_data, ml_wf[:dataLen], color="g", alpha=0.1)
+        ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color="g",alpha=0.1)
+
+    ax0.set_ylim(-20, wf.wfMax*1.1)
+    ax1.set_ylim(-20, 20)
+
+
+
+    positionFig = plt.figure(3, figsize=(10,10))
+    plt.clf()
+    # colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges", "Greys", "YlOrBr", "PuRd"]
+    xedges = np.linspace(0, np.around(detector.detector_radius,1), np.around(detector.detector_radius,1)*10+1)
+    yedges = np.linspace(0, np.around(detector.detector_length,1), np.around(detector.detector_length,1)*10+1)
+    plt.hist2d(r_arr, z_arr,  bins=[ xedges,yedges  ],  cmap=plt.get_cmap("Greens"), cmin=0.1)
+    plt.xlabel("r from Point Contact (mm)")
+    plt.ylabel("z from Point Contact (mm)")
+    plt.xlim(0, detector.detector_radius)
+    plt.ylim(0, detector.detector_length)
+    plt.gca().set_aspect('equal', adjustable='box')
+
+    plt.show()
 
 
 def initMultiThreading(numThreads):
