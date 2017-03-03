@@ -57,7 +57,7 @@ def main(argv):
         exit(0)
 
     global wf
-    wf = wfs[16]
+    wf = wfs[20]
 
     max_sample_idx = 150
     fallPercentage = 0.99
