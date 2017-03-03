@@ -19,7 +19,7 @@ max_sample_idx = 125
 #Prepare detector
 timeStepSize = 1
 fitSamples = 200
-detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
+detName = "conf/P42574A_ben.conf"
 detector =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, maxWfOutputLength=fitSamples + max_sample_idx + 2 )
 fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
 #sets the impurity gradient.  Don't bother changing this
@@ -79,8 +79,8 @@ def main(argv):
 
     # numThreads = 8
 
-    # wfFileName = "ms_event_set_runs11530-11560.npz"
-    wfFileName = "P42574A_24_spread.npz"
+    wfFileName = "fep_event_set_runs11510-11539_channel626.npz"
+    #wfFileName = "P42574A_24_spread.npz"
     if os.path.isfile(wfFileName):
         data = np.load(wfFileName)
         wfs = data['wfs']
@@ -89,6 +89,8 @@ def main(argv):
         print "No saved waveforms available."
         exit(0)
 
+    print "attempting to fit %d waveforms" % numWaveforms
+    
     doPlot = 0
     if doPlot:
         plt.ion()
