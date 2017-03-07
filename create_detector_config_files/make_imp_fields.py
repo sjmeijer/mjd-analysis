@@ -20,22 +20,38 @@ from multiprocessing import Pool
 ortec_spreadsheet = "ortec_ORTEC_Measurements.csv"
 
 
-#detectorName = "P42574A"
-#depletionVoltage = 1500.
-#gradientRange = np.linspace(0.00, 0.001, 101)
-#pcRadiusRange = [2.5]#np.arange(2.5, 2.7, 0.05)
-#pcLengthRange = [1.6]#np.arange(1.5, 1.75, 0.05)
-
-
-detectorName = "P42662A"
-depletionVoltage = 2000
-pcRadiusRange = [2.]#np.arange(2.5, 2.7, 0.05)
-pcLengthRange = [1.55]#np.arange(1.5, 1.75, 0.05)
-gradientRange = np.linspace(0.025, 0.055, 101)
+detectorName = "P42574A"
+depletionVoltage = 1500.
 
 def main():
   numThreads = 4
 
+#  detectorName = "P42664A"
+#  depletionVoltage = 600.
+
+
+  gradientRange = np.linspace(0.00, 0.02, 25)
+  gradMultRange = np.linspace(1, 3, 25)
+  gradPow = 3.
+  
+#  import matplotlib.pyplot as plt
+#  plt.figure()
+#  r0 = -10
+#  for mult in np.linspace(1, 3, 11):
+#    print mult
+#    r = np.linspace(0, 33.7, 100)
+#    z = np.empty_like(r)
+#    z = r0 * (1 + (mult-1)*(r/33.7)**2)
+#  
+#    plt.plot(r,z)
+#  
+#  plt.show()
+#  exit()
+
+  print gradientRange
+  
+  pcRadiusRange = [2.5]#np.arange(2.5, 2.7, 0.05)
+  pcLengthRange = [1.6]#np.arange(1.5, 1.75, 0.05)
 
   startingFileName = detectorName + ".conf"
   if not os.path.exists(startingFileName):
@@ -43,32 +59,27 @@ def main():
     sys.exit()
 
   if not os.path.isdir("conf/fields"):
-    print "Make a directory called fields for the field files to be dumped in..."
+    print "Make a directory structure conf/fields for the field files to be dumped in..."
     sys.exit()
 
   args = []
   for g in gradientRange:
     startingFileName = detectorName + ".conf"
-    newFileStart = detectorName + "_grad%0.5f" % g
+    newFileStart = detectorName + "_grad%0.4f" % g
     print newFileStart
     newFileStr = copyConfFileWithNewGradient(startingFileName, g)
     print newFileStr
 
-    for r in pcRadiusRange:
-      for l in pcLengthRange:
-        newFileStr = copyConfFileWithNewPcRadius(newFileStr, r, l, newFileStart)
+    for mult in gradMultRange:
+        newFileStr = copyConfFileWithNewRadialGradient(startingFileName, mult, gradPow, newFileStart)
         print newFileStr
-
-#        generateConfigFile(g, r, l, newFileStr)
-
-#        field_name = "fields/" + detectorName +"_grad%0.2f_pcrad%0.2f_pclen%0.2f_ev.dat" % (g, r, l)
-#        if not os.path.exists(field_name):
-        args.append( [ g, r, l, newFileStr] )
+        
+        args.append( [ g,  newFileStr] )
 
   pool = Pool(numThreads)
   pool.map(gen_conf_star, args)
 
-def generateConfigFile( grad, pcRad, pcLen, newFileStr):
+def generateConfigFile(g,  newFileStr):
 
   realImpurityZ0 = findImpurityZ0(newFileStr, depletionVoltage)
   writeFieldFiles(newFileStr, realImpurityZ0)

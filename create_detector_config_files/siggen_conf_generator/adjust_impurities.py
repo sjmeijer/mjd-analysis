@@ -58,14 +58,39 @@ def main(argv):
 
 def copyConfFileWithNewGradient(fileName, newGradient):
     configFileSplit = fileName.split(".")
-    appendString = "_grad%0.2f." % newGradient
+    appendString = "_grad%0.5f." % newGradient
     newConfigFileStr = configFileSplit[0] + appendString +  configFileSplit[1]
     print "cp %s %s" % (fileName, newConfigFileStr)
     #os.rename(fileName, newConfigFileStr )
     shutil.copy(fileName, newConfigFileStr)
     replaceConfFileValue(newConfigFileStr, 'impurity_gradient', newGradient)
 
-    field_name= "fields/" + configFileSplit[0] + ("_grad%0.4f" %newGradient) + "_"
+    field_name= "conf/fields/" + configFileSplit[0] + ("_grad%0.5f" %newGradient) + "_"
+
+    replaceConfFileValue(newConfigFileStr, 'field_name', field_name + "ev.dat")
+    replaceConfFileValue(newConfigFileStr, 'wp_name', field_name + "wp.dat")
+
+    return newConfigFileStr
+
+    '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
+
+def copyConfFileWithNewRadialGradient(fileName, gradMult, gradPow, newFileStart=None):
+    configFileSplit = fileName.split(".")
+    appendString = "_radmult%0.1f_pow%d" % (gradMult, gradPow)
+    
+    if newFileStart is None:
+      newFileStart = configFileSplit[:-1]
+      
+    newConfigFileStr = newFileStart + appendString + "." + configFileSplit[-1]
+     
+    print "cp %s %s" % (fileName, newConfigFileStr)
+    #os.rename(fileName, newConfigFileStr )
+    shutil.copy(fileName, newConfigFileStr)
+    
+    replaceConfFileValue(newConfigFileStr, 'impurity_radial_mult', gradMult)
+    replaceConfFileValue(newConfigFileStr, 'impurity_rpower', gradPow)
+
+    field_name= "conf/fields/" + newFileStart + appendString + "_"
 
     replaceConfFileValue(newConfigFileStr, 'field_name', field_name + "ev.dat")
     replaceConfFileValue(newConfigFileStr, 'wp_name', field_name + "wp.dat")
@@ -89,7 +114,7 @@ def copyConfFileWithNewPcRadius(fileName, newRadius, newLength, newFileStart=Non
     replaceConfFileValue(newConfigFileStr, 'pc_length', newLength)
     replaceConfFileValue(newConfigFileStr, 'pc_radius', newRadius)
 
-    field_name= "fields/" + newFileStart + appendString + "_"
+    field_name= "conf/fields/" + newFileStart + appendString + "_"
 
     replaceConfFileValue(newConfigFileStr, 'field_name', field_name + "ev.dat")
     replaceConfFileValue(newConfigFileStr, 'wp_name', field_name + "wp.dat")
@@ -196,8 +221,8 @@ def findImpurityZ0(fileName, desiredDepletion):
     newImpurityZ0 = calcImpurityZ0(crystal_length, newAvgImpurity, impurity_grad)
 
     impurityAtTop = calcImpurityAtEnd(crystal_length, newAvgImpurity, impurity_grad)
-    print "Impurity at the top of the crystal is %0.3f" % impurityAtTop
-    print "Impurity at the bottom of the crystal is %0.3f" % newImpurityZ0
+    print "Impurity at the top of the crystal is %0.4f" % impurityAtTop
+    print "Impurity at the bottom of the crystal is %0.4f" % newImpurityZ0
 
     if impurityAtTop > 0:
       print "Impurity at the top of the crystal is positive!!"
