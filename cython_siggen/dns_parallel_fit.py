@@ -10,30 +10,34 @@ import matplotlib
 #matplotlib.use('CocoaAgg')
 import sys, os, shutil
 import matplotlib.pyplot as plt
+# plt.style.use('presentation')
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
 
 # import pandas as pd
 import numpy as np
-from scipy import signal
+from scipy import signal, interpolate
 import multiprocessing
 
 import helpers
 from pysiggen import Detector
 
-from dns_tf_model import *
+from dns_parallel_model import *
 
 doInitPlot =0
+doContourHist = 1
+
+
 # doWaveformPlot =0
 # doHists = 1
 # plotNum = 1000 #for plotting during the Run
-doWaveformPlot =0
-doHists = 1
-plotNum = 1000 #for plotting during the Run
+doWaveformPlot =1
+doHists = 0
+plotNum = 100 #for plotting during the Run
 numThreads = multiprocessing.cpu_count()
 
-max_sample_idx = 200
-fallPercentage = 0.95
+max_sample_idx = 150
+fallPercentage = 0.99
 fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
 
 wfFileName = "P42574A_24_spread.npz"
@@ -44,14 +48,26 @@ if os.path.isfile(wfFileName):
     #wf 2 is super weird
 
     wfs = data['wfs']
-    #
-    # wfidxs = [0, 5, 8, 14]
-    # wfs = wfs[wfidxs]
 
-    # one slow waveform
-    fitwfnum = 5
-    wfs = wfs[:fitwfnum+1]
-    wfs = np.delete(wfs, range(0,fitwfnum))
+    #one slow waveform
+    # fitwfnum = 5
+    # wfs = wfs[:fitwfnum+1]
+    # wfs = np.delete(wfs, range(0,fitwfnum))
+    # numLevels = 150
+
+    #wfs = wfs[0:24:3]
+    wfidxs = [0, 5, 8, 11, 14, 17, 20, 23]
+    # wfidxs = [0, 5, 8, 14]
+    wfs = wfs[wfidxs]
+    numLevels = 600
+
+    # 4 medium waveforms
+    # wfs = wfs[:8]
+    # wfs = np.delete(wfs, [0,1,2,3])
+
+    # #8 wfs questionable provenance
+    # wfs = wfs[:11]
+    # wfs = np.delete(wfs, [1,2,3])
 
     numWaveforms = wfs.size
     print "Fitting %d waveforms" % numWaveforms,
@@ -63,7 +79,7 @@ else:
   print "Saved waveform file %s not available" % wfFileName
   exit(0)
 
-colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey" ]
+colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey", "chocolate" ]
 
 wfLengths = np.empty(numWaveforms)
 wfMaxes = np.empty(numWaveforms)
@@ -104,11 +120,10 @@ timeStepSize = 1 #ns
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
 det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length, t0_padding=100 )
 det.LoadFieldsGrad(fieldFileName)
-det.SetFieldsGradIdx(10)
 
 def fit(directory):
 
-  initializeDetectorAndWaveforms(det, wfs,)
+  initializeDetectorAndWaveforms(det.__getstate__(), wfs, reinit=True)
   initMultiThreading(numThreads)
 
   # Create a model object and a sampler
@@ -118,7 +133,7 @@ def fit(directory):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=150, num_steps=100000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=numLevels, num_steps=100000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -162,26 +177,69 @@ def plot(sample_file_name, directory):
 
     if sample_file_name== (directory+"sample_plot.txt"):
         if num_samples > plotNum: num_samples = plotNum
+
+    if doWaveformPlot:
+        if num_samples > plotNum: num_samples = plotNum
     print "plotting %d samples" % num_samples
-    # exit(0)
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
     tf = np.empty((6, num_samples))
+    velo = np.empty((6, num_samples))
     wf_params = np.empty((numWaveforms, 8, num_samples))
+    det_params = np.empty((2, num_samples))
+
+    velo_priors, velo_lims = get_velo_params()
+    # t0_guess, t0_min, t0_max = get_t0_params()
+    tf_first_idx, velo_first_idx, grad_idx, trap_idx = get_param_idxs()
 
     for (idx,params) in enumerate(data[-num_samples:]):
-        tf_b, gain, d2, rc1, rc2, rcfrac = params[0:6]
-        tf[:,idx] = tf_b, gain, d2, rc1, rc2, rcfrac
+        # params = data.iloc[-(idx+1)]
+        # print params
 
-        tf_2c = gain - 1 - d2
+        tf_phi, tf_omega, d, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
+        #tf_d = tf_c * tf_dc
+        c = -d * np.cos(tf_omega)
+        b_ov_a = c - np.tan(tf_phi) * np.sqrt(d**2-c**2)
+        a = 1./(1+b_ov_a)
+        tf_b = a * b_ov_a
+        tf_c = c
+        tf_d = d
 
-        det.SetTransferFunction(tf_b, tf_2c, d2, rc1, rc2, rcfrac, isDirect=True)
+        h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu = params[velo_first_idx:velo_first_idx+6]
+        charge_trapping = params[trap_idx]
+        grad = np.int(params[grad_idx])
 
-        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[6:].reshape((8, numWaveforms))
+        # rc1 = -1./np.log(e_rc1)
+        # rc2 = -1./np.log(e_rc2)
+        # charge_trapping = -1./np.log(e_charge_trapping)
+
+        h_100_beta = 1./np.exp(h_100_lnbeta)
+        h_111_beta = 1./np.exp(h_111_lnbeta)
+        h_100_e0 = h_100_emu / h_100_mu0
+        h_111_e0 = h_111_emu / h_111_mu0
+
+        tf[:,idx] = tf_phi, tf_omega, tf_d, rc1, rc2, rcfrac
+        velo[:,idx] = h_100_mu0, h_100_beta, h_100_emu, h_111_mu0, h_111_beta, h_111_emu
+        det_params[:,idx] = np.int(params[grad_idx]), charge_trapping
+
+
+        det.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac)
+        det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
+        det.trapping_rc = charge_trapping
+        det.SetFieldsGradIdx(grad)
+
+        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[trap_idx+1:].reshape((8, numWaveforms))
         print "sample %d:" % idx
         print "  tf params: ",
-        print params[0:6]
+        print tf_phi, tf_omega, d, rc1, rc2, rcfrac
+        print "  velo params: ",
+        print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
+        print "  charge trapping: ",
+        print params[trap_idx]
+        print "  grad idx (grad): ",
+        print params[grad_idx],
+        print " (%0.3f)" % det.gradList[grad]
 
         for (wf_idx,wf) in enumerate(wfs):
           r, phi, z = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
@@ -189,6 +247,13 @@ def plot(sample_file_name, directory):
           m, b = m_arr[wf_idx], b_arr[wf_idx]
           wf_params[wf_idx, :, idx] = r, phi, z, scale, t0, smooth, m, b
 
+        #   r = rad * np.cos(theta)
+        #   z = rad * np.sin(theta)
+          print "  wf number %d:" % wf_idx
+          print "    r: %0.2f , phi: %0.4f, z:%0.2f" % (r, phi/np.pi, z)
+        #   print "    rad: %0.2f, theta: %0.4f" % (rad, theta/np.pi)
+          print "    t0: %0.2f" % t0
+          print "    m: %0.3e, b: %0.3e" % (m,b)
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
 
           if doWaveformPlot:
@@ -210,6 +275,8 @@ def plot(sample_file_name, directory):
     ax1.set_ylim(-20, 20)
 
     if not doHists:
+        plt.tight_layout()
+        plt.savefig("waveforms.png")
         plt.show()
         exit()
 
@@ -219,26 +286,80 @@ def plot(sample_file_name, directory):
     vmodes, tfmodes = np.empty(6), np.empty(6)
     num_bins = 100
     for i in range(6):
-        axis = vFig.add_subplot(6,1,i+1)
+        idx = (i+1)*3
+        axis = vFig.add_subplot(6,3,idx-1)
+        axis.set_ylabel(vLabels[i])
+        [n, b, p] = axis.hist(velo[i,:], bins=num_bins)
+        # axis.axvline(x=(1-velo_lims)*velo_priors[i], color="r")
+        # axis.axvline(x=(1+velo_lims)*velo_priors[i], color="r")
+        # axis.axvline(x=velo_priors[i], color="g")
+        max_idx = np.argmax(n)
+        print "%s mode: %f" % (vLabels[i], b[max_idx])
+
+        axis = vFig.add_subplot(6,3,idx-2)
         axis.set_ylabel(tfLabels[i])
         [n, b, p] = axis.hist(tf[i,:], bins=num_bins)
         max_idx = np.argmax(n)
         print "%s mode: %f" % (tfLabels[i], b[max_idx])
 
-    positionFig = plt.figure(3, figsize=(15,15))
+        if i==0:
+            axis = vFig.add_subplot(6,3,idx)
+            axis.set_ylabel("imp grad")
+            [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
+            max_idx = np.argmax(n)
+            print "%s mode: %f" % ("imp grad", b[max_idx])
+        if i==1:
+            axis = vFig.add_subplot(6,3,idx)
+            axis.set_ylabel("trapping_rc")
+            [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
+            max_idx = np.argmax(n)
+            print "%s mode: %f" % ("trapping_rc grad", b[max_idx])
+
+
+
+    positionFig = plt.figure(3, figsize=(10,10))
     plt.clf()
     colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges", "Greys", "YlOrBr", "PuRd"]
 
-    for wf_idx in range(numWaveforms):
-        xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
-        yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
-        plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ], norm=LogNorm(), cmap=plt.get_cmap(colorbars[wf_idx]))
-        rad_mean = np.mean(wf_params[wf_idx, 0,:])
-        print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
-        # plt.colorbar()
-    plt.xlabel("r from Point Contact (mm)")
-    plt.ylabel("z from Point Contact (mm)")
-    plt.axis('equal')
+    if not doContourHist:
+        for wf_idx in range(numWaveforms):
+            xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
+            yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
+            plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ],  cmap=plt.get_cmap(colorbars[wf_idx]), cmin=0.1)
+            rad_mean = np.mean(wf_params[wf_idx, 0,:])
+            print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
+            # print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
+            # plt.colorbar()
+        plt.xlabel("r from Point Contact (mm)")
+        plt.ylabel("z from Point Contact (mm)")
+        plt.xlim(0, det.detector_radius)
+        plt.ylim(0, det.detector_length)
+        plt.gca().set_aspect('equal', adjustable='box')
+    else:
+        for wf_idx in range(numWaveforms):
+            xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
+            yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
+            z, xe, ye = np.histogram2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ])
+            z /= z.sum()
+            n=100
+            t = np.linspace(0, z.max(), n)
+            integral = ((z >= t[:, None, None]) * z).sum(axis=(1,2))
+            from scipy import interpolate
+            f = interpolate.interp1d(integral, t)
+            t_contours = f(np.array([0.9, 0.8]))
+
+            cs = plt.contourf(z.T, t_contours, extent=[0,det.detector_radius,0,det.detector_length],  alpha=1, colors = (colors[wf_idx]), extend='max')
+            # cs.cmap.set_over(colors[wf_idx])
+
+        plt.xlabel("r from Point Contact (mm)")
+        plt.ylabel("z from Point Contact (mm)")
+        # plt.axis('equal')
+        plt.xlim(0, det.detector_radius)
+        plt.ylim(0, det.detector_length)
+        plt.gca().set_aspect('equal', adjustable='box')
+        plt.tight_layout()
+
+        plt.savefig("credible_intervals.pdf")
 
     if numWaveforms == 1:
         #TODO: make this plot work for a bunch of wfs

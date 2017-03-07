@@ -15,40 +15,33 @@ from progressbar import ProgressBar, Percentage, Bar, ETA
 from multiprocessing import Pool
 from timeit import default_timer as timer
 
-
+max_sample_idx = 150
 
 #Prepare detector
-
 timeStepSize = 1
 fitSamples = 200
 detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
-detector =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, maxWfOutputLength=500)
-detector.LoadFieldsGrad("fields_impgrad_0-0.06.npz",pcLen=1.6, pcRad=2.5)
+detector =  Detector(detName, timeStep=timeStepSize, numSteps=fitSamples*10./timeStepSize, maxWfOutputLength=fitSamples + max_sample_idx + 2 )
+fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
 #sets the impurity gradient.  Don't bother changing this
-detector.SetFieldsGradIdx(0)
+detector.LoadFieldsGrad(fieldFileName)
+detector.SetFieldsGradIdx(33)
 
-b_over_a = 0.085487
-d = 0.814511
-c = -0.807451
-rc1 = 74.
-rc2 = 2.08
-rcfrac = 0.992
+b = 169.722312
+c = -0.805889
+d = 0.813206
 
-charge_trapping  = 212.540970
+rc1 =  72.904982
+rc2 = 23.900887
+rcfrac = 0.996435
 
-h_100_mu0 = 73048.920673
-h_100_beta = 0.910594
-h_100_e0 = 125.410298
-h_111_mu0 = 76317.444771
-h_111_beta = 0.617693
-h_111_e0 = 168.208161
-
-max_sample_idx = 100
 fallPercentage = 0.99
 
-detector.SetTransferFunction(b_over_a, c, d, rc1, rc2, rcfrac)
+detector.SetTransferFunction(b, c, d, rc1, rc2, rcfrac)
+h_100_mu0, h_100_beta, h_100_e0 = 337372.980584, 0.545879, 30.952525,
+h_111_mu0, h_111_beta, h_111_e0 = 452053.925755, 0.430484, 23.900887
 detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
-detector.trapping_rc = charge_trapping
+detector.trapping_rc = 114.220357
 
 rad_mult = 10.
 phi_mult = 0.1
@@ -71,19 +64,17 @@ def main(argv):
         print "No saved waveforms available."
         exit(0)
 
-    # initializeDetector(det, )
-
-    plt.ion()
-    fig1 = plt.figure(0, figsize=(20,10))
-    plt.clf()
-    gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
-    ax0 = plt.subplot(gs[0])
-    ax1 = plt.subplot(gs[1], sharex=ax0)
-    ax1.set_xlabel("Digitizer Time [ns]")
-    ax0.set_ylabel("Voltage [Arb.]")
-    ax1.set_ylabel("Residual")
-
-
+    doPlot = 1
+    if doPlot:
+        plt.ion()
+        fig1 = plt.figure(0, figsize=(15,7))
+        plt.clf()
+        gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
+        ax0 = plt.subplot(gs[0])
+        ax1 = plt.subplot(gs[1], sharex=ax0)
+        ax1.set_xlabel("Digitizer Time [ns]")
+        ax0.set_ylabel("Voltage [Arb.]")
+        ax1.set_ylabel("Residual")
 
     # bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=len(wfs)).start()
     global waveform
@@ -91,15 +82,11 @@ def main(argv):
     start = timer()
 
     for (idx,wf) in enumerate(wfs):
-        ax0.cla()
-        ax1.cla()
-
+        wf_idx = idx
         wf.WindowWaveformAroundMax(fallPercentage=fallPercentage, rmsMult=2, earlySamples=max_sample_idx)
         waveform = wf
-
         dataLen = wf.wfLength
         t_data = np.arange(dataLen) * 10
-        ax0.plot(t_data, wf.windowedWf, color="black")
 
         # rad = np.sqrt(15**2+15**2)
         # theta = np.pi/4
@@ -113,25 +100,38 @@ def main(argv):
 
         minresult = None
         minlike = np.inf
-        for r in np.linspace(10, np.floor(detector.detector_radius)-5, 5):
-            for z in np.linspace(10, np.floor(detector.detector_length)-5, 5):
-                r /= rad_mult
-                z /= z_mult
-                startGuess = [r, phi, z, scale, maxt, smooth ]
-                result = op.minimize(nll, startGuess,   method="Powell")
-                if result['fun'] < minlike:
-                  minlike = result['fun']
-                  minresult = result
-        # bounds =[(0, detector.detector_radius/rad_mult), (0, np.pi/4), (0, detector.detector_length/rad_mult),
-        #          (scale - 0.02*scale, scale+0.02*scale), (maxt-2./maxt_mult, maxt+2./maxt_mult), (0,25./scale_mult)]
-        # result = op.differential_evolution(nll, bounds, polish=False)
+
+        # rsteps = 4
+        # rstepsize = detector.detector_radius / (rsteps+1)
         #
+        # thetasteps = 4
+        # zstepsize = np.pi/
+        #
+        # for rad in np.linspace(np.sqrt(2*10**2), np.sqrt(2*30**2), rsteps):
+        #     for theta in np.linspace(np.pi/2/5, zsteps):
+        #         # r /= rad_mult
+        #         # z /= z_mult
+        #         startGuess = [r, phi, theta, scale, maxt, smooth ]
+        #         result = op.minimize(nll, startGuess,   method="Powell")
+        #         if result['fun'] < minlike:
+        #           minlike = result['fun']
+        #           minresult = result
+
+        bounds =[(0, detector.detector_radius/rad_mult), (0, np.pi/4/phi_mult), (0, detector.detector_length/z_mult),
+                 (scale -50/scale_mult, scale+50/scale_mult), (maxt-5/maxt_mult, maxt+5/maxt_mult), (0,25./smooth_mult)]#, (-.85, -.75), (.75,.85)]
+
+
+        result = op.differential_evolution(nll, bounds, polish=False,)# strategy='best1bin', mutation=(1, 1.5))
+
+        # startGuess = [r,phi, z, scale, maxt, smooth]
+        # result = op.basinhopping(nll, startGuess, )
 
         # result = op.minimize(nll, startGuess,   method="Nelder-Mead", options={"maxfev": 10E4})
 
-        r, phi, z, scale, maxt, smooth, = minresult["x"]
+        r, phi, z, scale, maxt, smooth, = result["x"]
         # r = rad * np.cos(theta)
         # z = rad * np.sin(theta)
+        # detector.SetTransferFunction(b, new_c, new_d, rc1, rc2, rcfrac)
 
         r *= rad_mult
         phi *= phi_mult
@@ -140,17 +140,25 @@ def main(argv):
         maxt *= maxt_mult
         smooth *= smooth_mult
 
-        print r, phi, z, scale, maxt, smooth
-        mle_wf = detector.MakeSimWaveform(r, phi, z, scale, maxt, dataLen, h_smoothing=smooth, alignPoint="max")
+        print "wf %d best fit like %f" % (wf_idx,result["fun"])
+        print " --> at ",
+        print  r, phi, z, scale, maxt, smooth
 
-        ax0.plot(t_data, mle_wf, color="g")
-        ax1.plot(t_data, mle_wf - wf.windowedWf, color="g")
+        if doPlot:
+            ax0.plot(t_data, wf.windowedWf, color="black")
+            mle_wf = detector.MakeSimWaveform(r, phi, z, scale, maxt, dataLen, h_smoothing=smooth, alignPoint="max")
+            # ax0.cla()
+            # ax1.cla()
+            ax0.plot(t_data, mle_wf, )
+            ax1.plot(t_data, mle_wf - wf.windowedWf, )
 
-        # value = raw_input('  --> Press q to quit, any other key to continue\n')
-        # if value == 'q': exit(0)
+            # value = raw_input('  --> Press q to quit, any other key to continue\n')
+            # if value == 'q': exit(0)
 
     end = timer()
-    "print total time: %f" % str(end-start)
+    print "total time: " + str(end-start)
+    value = raw_input('  --> Press q to quit, any other key to continue\n')
+    if value == 'q': exit(0)
         # bar.finish()
         # wfFileName += "_mlefit.npz"
         # np.savez(wfFileName, wfs = wfs )
@@ -159,9 +167,10 @@ def nll(*args):
   return -WaveformLogLike(*args)
 
 def WaveformLogLike(theta):
-    rad, phi, theta, scale, maxt, smooth = theta
+    r, phi, z, scale, maxt, smooth,  = theta
 
-    r,z = rad,theta
+    # detector.SetTransferFunction(b, new_c, new_d, rc1, rc2, rcfrac)
+    # r,z = rad,theta
     # r = rad * np.cos(theta)
     # z = rad * np.sin(theta)
 
