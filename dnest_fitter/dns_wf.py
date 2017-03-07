@@ -60,7 +60,7 @@ def main(argv):
     wf = wfs[20]
 
     max_sample_idx = 150
-    fallPercentage = 0.99
+    fallPercentage = 0.97
     wf.WindowWaveformAroundMax(fallPercentage=fallPercentage, rmsMult=2, earlySamples=max_sample_idx)
     baseline_length = wf.t0Guess
 
@@ -96,7 +96,6 @@ def main(argv):
     detector = det
 
 
-
     directory = ""
 
     if len(argv) == 0:
@@ -118,7 +117,7 @@ def fit(directory):
                                                                     sep=" "))
 
     # Set up the sampler. The first argument is max_num_levels
-    gen = sampler.sample(max_num_levels=100, num_steps=10000, new_level_interval=10000,
+    gen = sampler.sample(max_num_levels=40, num_steps=10000, new_level_interval=10000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -163,6 +162,7 @@ def plot(sample_file_name, directory, plotNum=2000):
 
     for (idx,params) in enumerate(data[-num_samples:]):
         r, phi, z, scale, t0, smooth = params
+        # print r,z
         r_arr[idx], z_arr[idx] = r, z
         all_arr[idx, :] = params[:]
 
@@ -179,7 +179,6 @@ def plot(sample_file_name, directory, plotNum=2000):
     if plotWaveform:
         ax0.set_ylim(-20, wf.wfMax*1.1)
         ax1.set_ylim(-20, 20)
-
 
 
     positionFig = plt.figure(3, figsize=(10,10))
@@ -356,4 +355,7 @@ def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth):
     return  ln_like
 
 if __name__=="__main__":
+    if len (sys.argv )> 1 and sys.argv[1] == "post":
+        dnest4.postprocess()
+
     main(sys.argv[1:])
