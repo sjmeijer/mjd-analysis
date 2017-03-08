@@ -17,6 +17,7 @@ from siggen_conf_generator.adjust_impurities import *
 
 import multiprocessing
 from multiprocessing import Pool
+from progressbar import ProgressBar, Percentage, Bar, ETA
 
 ortec_spreadsheet = "ortec_ORTEC_Measurements.csv"
 
@@ -27,8 +28,8 @@ depletionVoltage = 1500.
 def main():
   numThreads = multiprocessing.cpu_count()
 
-  gradientRange = np.linspace(0.00, 0.001, 11)
-  gradAvgRange = np.linspace(-0.565, -0.545, 11)
+  gradientRange = np.linspace(0.00, 0.001, 21)
+  gradAvgRange = np.linspace(-0.565, -0.545, 21)
 
   pcRadiusRange = [2.5]#np.arange(2.5, 2.7, 0.05)
   pcLengthRange = [1.6]#np.arange(1.5, 1.75, 0.05)
@@ -46,17 +47,21 @@ def main():
       for avg in gradAvgRange:
         startingFileName = detectorName + ".conf"
         newFileStr = copyConfFileWithNewImpurities(startingFileName, g, avg)
-        print newFileStr
 
-        runFieldgen(newFileStr)
+        # runFieldgen(newFileStr)
 
         args.append( [ newFileStr] )
 
   pool = Pool(numThreads)
-  pool.map(gen_conf_star, args)
+
+  bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=len(args)).start()
+  for i, _ in enumerate(pool.imap_unordered(gen_conf_star, args )):
+      bar.update(i+1)
+  bar.finish()
+  pool.close()
 
 def generateConfigFile(newFileStr):
-  print newFileStr
+  # print newFileStr
   runFieldgen(newFileStr)
 
 def gen_conf_star(a_b):
