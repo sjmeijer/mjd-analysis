@@ -129,12 +129,14 @@ class Model(object):
         for (wf_idx, wf) in enumerate(wfs):
             (r,z, scale, t0) = draw_position(wf_idx)
             smooth_guess = 10
+            rad = np.sqrt(r**2+z**2)
+            theta = np.arctan(z/r)
 
             r_arr[wf_idx] = r
             z_arr[wf_idx] = z
-            # rad_arr[wf_idx] = rad
+            rad_arr[wf_idx] = rad
             phi_arr[wf_idx] = rng.rand() * np.pi/4
-            # theta_arr[wf_idx] = theta
+            theta_arr[wf_idx] = theta
             scale_arr[wf_idx] = 5*rng.randn() + scale - .005*scale
             t0_arr[wf_idx] = 3*rng.randn() + maxt_guess
             smooth_arr[wf_idx] = np.clip(rng.randn() + smooth_guess, 0, 20)
@@ -173,15 +175,13 @@ class Model(object):
         h_111_lnbeta = dnest4.wrap(lnbeta, 0, np.log(1/.1))
         h_111_emu = .01 * (h_111_e0_prior*h_111_mu0_prior)*rng.randn() + h_111_e0_prior*h_111_mu0_prior
 
-        self.changed_wfs[:] = 1
-
         return np.hstack([
               phi, omega, d,
               #b, c, dc,
               rc1, rc2, rcfrac,
               h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu,
               grad, charge_trapping,
-              r_arr[:], phi_arr[:], z_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
+              rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
             ])
 
     def perturb(self, params):
@@ -190,108 +190,175 @@ class Model(object):
         and modifies it in-place. The return value is still logH.
         """
         logH = 0.0
-        self.changed_wfs[:] = 0
 
-        det_or_wf = rng.randint(2)
-        if det_or_wf == 0:
-            which = rng.randint(len(priors))
-        else:
-            which = rng.randint(num_waveforms*8) + len(priors)
+        reps = 1;
+        if(rng.rand() < 0.5):
+            reps += np.int(np.power(100.0, rng.rand()));
 
-        if which < len(priors):
-            self.changed_wfs[:] = 1
+        for i in range(reps):
 
-        if which >= len(priors):
-            #this is a waveform variable!
-            wf_which =  np.int(np.floor((which - len(priors)) / num_waveforms))
-            wf_idx = (which - len(priors)) % num_waveforms
-            self.changed_wfs[wf_idx] = 1
+            det_or_wf = rng.randint(2)
+            if det_or_wf == 0:
+                which = rng.randint(len(priors))
+            else:
+                which = rng.randint(8*num_waveforms) + len(priors)
 
-            if wf_which == 0:
-                params[which] += (detector.detector_radius)*dnest4.randh()
-                params[which] = dnest4.wrap(params[which] , 0, detector.detector_radius)
-            elif wf_which == 1:
-                max_val = np.pi/4
-                params[which] += np.pi/4*dnest4.randh()
-                params[which] = dnest4.wrap(params[which], 0, max_val)
-                if params[which] < 0 or params[which] > np.pi/4:
-                    print "wtf phi"
-                #params[which] = np.clip(params[which], 0, max_val)
-            elif wf_which == 2:
-                params[which] += (detector.detector_length)*dnest4.randh()
-                params[which] = dnest4.wrap(params[which] , 0, detector.detector_length)
+            if which >= len(priors):
+                #this is a waveform variable!
+                wf_which =  np.int(np.floor((which - len(priors)) / num_waveforms))
+                wf_idx = (which - len(priors)) % num_waveforms
 
-            elif wf_which == 3: #scale
-                wf = wfs[wf_idx]
-                min_scale = wf.wfMax - 0.01*wf.wfMax
-                max_scale = wf.wfMax + 0.005*wf.wfMax
-                params[which] += (max_scale-min_scale)*dnest4.randh()
-                params[which] = dnest4.wrap(params[which], min_scale, max_scale)
-            #   print "  adjusted scale to %f" %  ( params[which])
+                wf_idx = (which - len(priors)) % num_waveforms
+                rad_idx = len(priors) + wf_idx
+                theta_idx =  len(priors) + 2*num_waveforms+ wf_idx
+                self.changed_wfs[wf_idx] = 1
 
-            elif wf_which == 4: #t0
-              params[which] += 1*dnest4.randh()
-              params[which] = dnest4.wrap(params[which], min_maxt, max_maxt)
-            elif wf_which == 5: #smooth
-              params[which] += 0.1*dnest4.randh()
-              params[which] = dnest4.wrap(params[which], 0, 25)
-            #   print "  adjusted smooth to %f" %  ( params[which])
+                if wf_which == 0:
+                  theta = params[theta_idx]
 
-            elif wf_which == 6: #wf baseline slope (m)
-                logH -= -0.5*(params[which]/1E-4)**2
-                params[which] += 1E-4*dnest4.randh()
-                logH += -0.5*(params[which]/1E-4)**2
-            elif wf_which == 7: #wf baseline incercept (b)
-                logH -= -0.5*(params[which]/1E-2)**2
-                params[which] += 1E-2*dnest4.randh()
-                logH += -0.5*(params[which]/1E-2)**2
+                  #FIND THE MAXIMUM RADIUS STILL INSIDE THE DETECTOR
+                  theta_eq = np.arctan(detector.detector_length/detector.detector_radius)
+                  theta_taper = np.arctan(detector.taper_length/detector.detector_radius)
+                #   print "theta: %f pi" % (theta / np.pi)
+                  if theta <= theta_taper:
+                     z = np.tan(theta)*(detector.detector_radius - detector.taper_length) / (1-np.tan(theta))
+                     max_rad = z / np.sin(theta)
+                  elif theta <= theta_eq:
+                      max_rad = detector.detector_radius / np.cos(theta)
+                    #   print "max rad radius: %f" %  max_rad
+                  else:
+                      theta_comp = np.pi/2 - theta
+                      max_rad = detector.detector_length / np.cos(theta_comp)
+                    #   print "max rad length: %f" %  max_rad
 
-            #   params[which] += 0.01*dnest4.randh()
-            #   params[which]=dnest4.wrap(params[which], -1, 1)
-            #   print "  adjusted b to %f" %  ( params[which])
+                  #AND THE MINIMUM (from PC dimple)
+                  #min_rad  = 1./ ( np.cos(theta)**2/detector.pcRad**2  +  np.sin(theta)**2/detector.pcLen**2 )
 
-        elif which == ba_idx: #lets call this phi
-           params[which] += np.pi*dnest4.randh()
-           params[which] = dnest4.wrap(params[which], -np.pi/2, np.pi/2)
-        elif which == c_idx: #call it omega
-            params[which] += 0.1*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0.13, 0.14)
-        elif which == dc_idx: #d
-            params[which] += 0.01*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0.81, 0.82)
+                  min_rad = np.amax([detector.pcRad, detector.pcLen])
 
-        elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
-            #all normally distributed priors
-            logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
-            params[which] += prior_vars[which]*dnest4.randh()
-            logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+                  total_max_rad = np.sqrt(detector.detector_length**2 + detector.detector_radius**2 )
 
-        elif which == grad_idx:
-          params[which] += (len(detector.gradList)-1)*dnest4.randh()
-          params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
-        elif which >= velo_first_idx and which < velo_first_idx+6:
-            mu_max = 100E5
-            velo_which =  (which - velo_first_idx)%3
-            #TODO: consider long transforming priors on two of these
-            if velo_which ==0: #mu0 parameter
-                params[which] += (mu_max - 10E3)  *dnest4.randh()
-                params[which] = dnest4.wrap(params[which], 10E3, mu_max)
-            elif velo_which ==1: #ln(1/beta)
-                space = np.log(1/.1)
-                params[which] += space *dnest4.randh()
-                params[which] = dnest4.wrap(params[which], 0, np.log(1/.1))
-            elif velo_which == 2:
-                minval, maxval = 5E6, 1E8
-                params[which] += (maxval-minval) *dnest4.randh()
-                params[which] = dnest4.wrap(params[which], minval, maxval)
+                  params[which] += total_max_rad*dnest4.randh()
+                  params[which] = dnest4.wrap(params[which] , min_rad, max_rad)
 
-        elif which == trap_idx:
-          params[which] += prior_vars[trap_idx]*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 50, 1000)
+                elif wf_which ==2: #theta
+                  rad = params[rad_idx]
 
-        else: #velocity or rc params: cant be below 0, can be arb. large
-            print "which value %d not supported" % which
-            exit(0)
+                #   print "rad: %f" % rad
+                  if rad < np.amin([detector.detector_radius - detector.taper_length, detector.detector_length]):
+                      max_val = np.pi/2
+                      min_val = 0
+                    #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
+                  else:
+                      if rad < detector.detector_radius - detector.taper_length:
+                          #can't possibly hit the taper
+                        #   print "less than taper adjustment"
+                          min_val = 0
+                      elif rad < np.sqrt(detector.detector_radius**2 + detector.taper_length**2):
+                          #low enough that it could hit the taper region
+                        #   print "taper adjustment"
+                          a = detector.detector_radius - detector.taper_length
+                          z = 0.5 * (np.sqrt(2*rad**2-a**2) - a)
+                          min_val = np.arcsin(z/rad)
+                      else:
+                          #longer than could hit the taper
+                        #   print  " longer thantaper adjustment"
+                          min_val = np.arccos(detector.detector_radius/rad)
+
+                      if rad < detector.detector_length:
+                          max_val = np.pi/2
+                      else:
+                          max_val = np.pi/2 - np.arccos(detector.detector_length/rad)
+                    #   print "theta: min %f pi, max %f pi" % (min_val, max_val)
+
+                  params[which] += np.pi/2*dnest4.randh()
+                  params[which] = dnest4.wrap(params[which], min_val, max_val)
+
+                # if wf_which == 0:
+                #     params[which] += (detector.detector_radius)*dnest4.randh()
+                #     params[which] = dnest4.wrap(params[which] , 0, detector.detector_radius)
+                elif wf_which == 1:
+                    max_val = np.pi/4
+                    params[which] += np.pi/4*dnest4.randh()
+                    params[which] = dnest4.wrap(params[which], 0, max_val)
+                    if params[which] < 0 or params[which] > np.pi/4:
+                        print "wtf phi"
+
+                # elif wf_which == 2:
+                #     params[which] += (detector.detector_length)*dnest4.randh()
+                #     params[which] = dnest4.wrap(params[which] , 0, detector.detector_length)
+
+                elif wf_which == 3: #scale
+                    wf = wfs[wf_idx]
+                    min_scale = wf.wfMax - 0.01*wf.wfMax
+                    max_scale = wf.wfMax + 0.005*wf.wfMax
+                    params[which] += (max_scale-min_scale)*dnest4.randh()
+                    params[which] = dnest4.wrap(params[which], min_scale, max_scale)
+                #   print "  adjusted scale to %f" %  ( params[which])
+
+                elif wf_which == 4: #t0
+                  params[which] += 1*dnest4.randh()
+                  params[which] = dnest4.wrap(params[which], min_maxt, max_maxt)
+                elif wf_which == 5: #smooth
+                  params[which] += 0.1*dnest4.randh()
+                  params[which] = dnest4.wrap(params[which], 0, 25)
+                #   print "  adjusted smooth to %f" %  ( params[which])
+
+                elif wf_which == 6: #wf baseline slope (m)
+                    logH -= -0.5*(params[which]/1E-4)**2
+                    params[which] += 1E-4*dnest4.randh()
+                    logH += -0.5*(params[which]/1E-4)**2
+                elif wf_which == 7: #wf baseline incercept (b)
+                    logH -= -0.5*(params[which]/1E-2)**2
+                    params[which] += 1E-2*dnest4.randh()
+                    logH += -0.5*(params[which]/1E-2)**2
+
+                #   params[which] += 0.01*dnest4.randh()
+                #   params[which]=dnest4.wrap(params[which], -1, 1)
+                #   print "  adjusted b to %f" %  ( params[which])
+
+            elif which == ba_idx: #lets call this phi
+               params[which] += np.pi*dnest4.randh()
+               params[which] = dnest4.wrap(params[which], -np.pi/2, np.pi/2)
+            elif which == c_idx: #call it omega
+                params[which] += 0.1*dnest4.randh()
+                params[which] = dnest4.wrap(params[which], 0.13, 0.14)
+            elif which == dc_idx: #d
+                params[which] += 0.01*dnest4.randh()
+                params[which] = dnest4.wrap(params[which], 0.81, 0.82)
+
+            elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
+                #all normally distributed priors
+                logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
+                params[which] += prior_vars[which]*dnest4.randh()
+                logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+
+            elif which == grad_idx:
+              params[which] += (len(detector.gradList)-1)*dnest4.randh()
+              params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
+            elif which >= velo_first_idx and which < velo_first_idx+6:
+                mu_max = 100E5
+                velo_which =  (which - velo_first_idx)%3
+                #TODO: consider long transforming priors on two of these
+                if velo_which ==0: #mu0 parameter
+                    params[which] += (mu_max - 10E3)  *dnest4.randh()
+                    params[which] = dnest4.wrap(params[which], 10E3, mu_max)
+                elif velo_which ==1: #ln(1/beta)
+                    space = np.log(1/.1)
+                    params[which] += space *dnest4.randh()
+                    params[which] = dnest4.wrap(params[which], 0, np.log(1/.1))
+                elif velo_which == 2:
+                    minval, maxval = 5E6, 1E8
+                    params[which] += (maxval-minval) *dnest4.randh()
+                    params[which] = dnest4.wrap(params[which], minval, maxval)
+
+            elif which == trap_idx:
+              params[which] += prior_vars[trap_idx]*dnest4.randh()
+              params[which] = dnest4.wrap(params[which], 50, 1000)
+
+            else: #velocity or rc params: cant be below 0, can be arb. large
+                print "which value %d not supported" % which
+                exit(0)
 
 
         return logH
@@ -347,7 +414,7 @@ class Model(object):
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_phi, tf_omega, d, rc1, rc2, rcfrac,
+def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_omega, d, rc1, rc2, rcfrac,
         h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu,
         grad, charge_trapping, bl_origin_idx, wf_idx):
     # #TODO: This needs to be length normalized somehow
@@ -355,8 +422,8 @@ def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_phi, tf_omega, 
     # exit(0)
 
     # print "theta is %f" % (theta/np.pi)
-    # r = rad * np.cos(theta)
-    # z = rad * np.sin(theta)
+    r = rad * np.cos(theta)
+    z = rad * np.sin(theta)
 
     # tf_d = tf_c * tf_dc
     c = -d * np.cos(tf_omega)
@@ -390,7 +457,7 @@ def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_phi, tf_omega, 
     model_err = wf.baselineRMS
     data_len = len(data)
 
-    model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max")
+    model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max", doMaxInterp=True)
     if model is None:
       return  {'wf_idx':wf_idx, 'ln_like':-np.inf}
     if np.any(np.isnan(model)):  return {'wf_idx':wf_idx, 'ln_like':-np.inf}

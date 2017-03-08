@@ -28,16 +28,16 @@ doInitPlot =0
 doContourHist = 1
 
 
-# doWaveformPlot =0
-# doHists = 1
-# plotNum = 1000 #for plotting during the Run
-doWaveformPlot =1
-doHists = 0
-plotNum = 100 #for plotting during the Run
+doWaveformPlot =0
+doHists = 1
+plotNum = 1000 #for plotting during the Run
+# doWaveformPlot =1
+# doHists = 0
+# plotNum = 100 #for plotting during the Run
 numThreads = multiprocessing.cpu_count()
 
-max_sample_idx = 150
-fallPercentage = 0.99
+max_sample_idx = 200
+fallPercentage = 0.97
 fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
 
 wfFileName = "P42574A_24_spread.npz"
@@ -56,9 +56,10 @@ if os.path.isfile(wfFileName):
     # numLevels = 150
 
     #wfs = wfs[0:24:3]
-    wfidxs = [0, 5, 8, 11, 14, 17, 20, 23]
+    # wfidxs = [0, 5, 8, 11, 14, 17, 20, 23]
     # wfidxs = [0, 5, 8, 14]
-    wfs = wfs[wfidxs]
+    # wfs = wfs[wfidxs]
+    wfs = wfs[16:24]
     numLevels = 600
 
     # 4 medium waveforms
@@ -117,7 +118,7 @@ output_wf_length = np.amax(wfLengths) + 1
 
 #Create a detector model
 timeStepSize = 1 #ns
-detName = "conf/P42574A_grad%0.2f_pcrad%0.2f_pclen%0.2f.conf" % (0.05,2.5, 1.65)
+detName = "conf/P42574A_ben.conf"
 det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length, t0_padding=100 )
 det.LoadFieldsGrad(fieldFileName)
 
@@ -220,7 +221,7 @@ def plot(sample_file_name, directory):
         h_111_e0 = h_111_emu / h_111_mu0
 
         tf[:,idx] = tf_phi, tf_omega, tf_d, rc1, rc2, rcfrac
-        velo[:,idx] = h_100_mu0, h_100_beta, h_100_emu, h_111_mu0, h_111_beta, h_111_emu
+        velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
         det_params[:,idx] = np.int(params[grad_idx]), charge_trapping
 
 
@@ -242,13 +243,13 @@ def plot(sample_file_name, directory):
         print " (%0.3f)" % det.gradList[grad]
 
         for (wf_idx,wf) in enumerate(wfs):
-          r, phi, z = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
+          rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
           scale, t0, smooth =  scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]
           m, b = m_arr[wf_idx], b_arr[wf_idx]
-          wf_params[wf_idx, :, idx] = r, phi, z, scale, t0, smooth, m, b
+          wf_params[wf_idx, :, idx] = rad, phi, theta, scale, t0, smooth, m, b
 
-        #   r = rad * np.cos(theta)
-        #   z = rad * np.sin(theta)
+          r = rad * np.cos(theta)
+          z = rad * np.sin(theta)
           print "  wf number %d:" % wf_idx
           print "    r: %0.2f , phi: %0.4f, z:%0.2f" % (r, phi/np.pi, z)
         #   print "    rad: %0.2f, theta: %0.4f" % (rad, theta/np.pi)
@@ -257,7 +258,7 @@ def plot(sample_file_name, directory):
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
 
           if doWaveformPlot:
-            ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth, alignPoint="max")
+            ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth, alignPoint="max", doMaxInterp=True)
             if ml_wf is None:
                 continue
 
@@ -281,8 +282,8 @@ def plot(sample_file_name, directory):
         exit()
 
     vFig = plt.figure(2, figsize=(20,10))
-    tfLabels = ['b_ov_a', 'c', 'd', 'rc1', 'rc2', 'rcfrac']
-    vLabels = ['h_100_mu0', 'h_100_beta', 'h_100_e0','h_111_mu0','h_111_beta', 'h_111_e0']
+    tfLabels = ['tf_phi', 'tf_omega', 'd', 'rc1', 'rc2', 'rcfrac']
+    vLabels = ['h_100_mu0', 'h_100_lnbeta', 'h_100_emu', 'h_111_mu0', 'h_111_lnbeta', 'h_111_emu']
     vmodes, tfmodes = np.empty(6), np.empty(6)
     num_bins = 100
     for i in range(6):
@@ -307,13 +308,13 @@ def plot(sample_file_name, directory):
             axis.set_ylabel("imp grad")
             [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
             max_idx = np.argmax(n)
-            print "%s mode: %f" % ("imp grad", b[max_idx])
+            print "%s mode: %f" % ("imp_grad", b[max_idx])
         if i==1:
             axis = vFig.add_subplot(6,3,idx)
             axis.set_ylabel("trapping_rc")
             [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
             max_idx = np.argmax(n)
-            print "%s mode: %f" % ("trapping_rc grad", b[max_idx])
+            print "%s mode: %f" % ("trapping_rc", b[max_idx])
 
 
 
