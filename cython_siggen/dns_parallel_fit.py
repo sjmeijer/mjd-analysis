@@ -26,6 +26,7 @@ from dns_parallel_model import *
 
 
 doMaxInterp = 1
+reinitializeDetector = 0
 
 doInitPlot =0
 doContourHist = 1
@@ -127,8 +128,10 @@ det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWf
 det.LoadFieldsGrad(fieldFileName)
 
 def fit(directory):
-
-  initializeDetectorAndWaveforms(det.__getstate__(), wfs, reinit=True, doInterp=doMaxInterp)
+  if reinitializeDetector:
+      initializeDetectorAndWaveforms(det.__getstate__(), wfs, reinit=reinitializeDetector, doInterp=doMaxInterp)
+  else:
+      initializeDetectorAndWaveforms(det, wfs, reinit=reinitializeDetector, doInterp=doMaxInterp)
   initMultiThreading(numThreads)
 
   # Create a model object and a sampler

@@ -9,9 +9,12 @@ from pysiggen import Detector
 
 def initializeDetector(det_state, reinit=True):
   global detector
-  detector = Detector(setup_dict=det_state)
+
   if reinit:
+      detector = Detector(setup_dict=det_state)
       detector.ReinitializeDetector()
+  else:
+      detector = det_state
 
 def initializeWaveforms( wfs_init, ):
   global wfs
@@ -196,17 +199,23 @@ class Model(object):
         """
         logH = 0.0
 
+        #choose which set of params to adjust (detector, wf 1, wf2...)
+
+        num_sets = num_waveforms+1
+        set_idx = rng.randint(num_sets)
+
+        #choose how many t
         reps = 1;
         if(rng.rand() < 0.5):
             reps += np.int(np.power(100.0, rng.rand()));
 
         for i in range(reps):
-            if(rng.rand() < 0.5):
+            if set_idx == 0:
                 #detector param
                 which = rng.randint(len(priors))
             else:
-                #waveform param (from any of the waveforms)
-                which = rng.randint(8*num_waveforms) + len(priors)
+                #waveform param (from the one waveform we're adjusting this go-around
+                which = rng.randint(8) + len(priors) + (set_idx-1)*num_waveforms
 
             if which >= len(priors):
                 #this is a waveform variable!
@@ -317,6 +326,9 @@ class Model(object):
                     logH -= -0.5*(params[which]/1E-2)**2
                     params[which] += 1E-2*dnest4.randh()
                     logH += -0.5*(params[which]/1E-2)**2
+                else:
+                    print "wf which value %d (which value %d) not supported" % (wf_which, which)
+                    exit(0)
 
                 #   params[which] += 0.01*dnest4.randh()
                 #   params[which]=dnest4.wrap(params[which], -1, 1)
