@@ -21,9 +21,12 @@ def initializeWaveforms( wfs_init, ):
   num_waveforms = len(wfs)
 
 
-def initializeDetectorAndWaveforms(det_state, wfs_init, reinit=True):
+def initializeDetectorAndWaveforms(det_state, wfs_init, reinit=True, doInterp=True):
   initializeWaveforms(wfs_init)
   initializeDetector(det_state, reinit)
+
+  global doMaxInterp
+  doMaxInterp = doInterp
 
 def initMultiThreading(numThreads):
   global num_threads
@@ -390,7 +393,7 @@ def WaveformLogLike(wf, r, phi, z, scale, maxt, smooth, m, b, tf_phi, tf_omega, 
     model_err = wf.baselineRMS
     data_len = len(data)
 
-    model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max")
+    model = detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max", doMaxInterp=doMaxInterp)
     if model is None:
       return  {'wf_idx':wf_idx, 'ln_like':-np.inf}
     if np.any(np.isnan(model)):  return {'wf_idx':wf_idx, 'ln_like':-np.inf}

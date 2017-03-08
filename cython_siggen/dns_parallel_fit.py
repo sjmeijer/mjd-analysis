@@ -24,6 +24,9 @@ from pysiggen import Detector
 
 from dns_parallel_model import *
 
+
+doMaxInterp = 1
+
 doInitPlot =0
 doContourHist = 1
 
@@ -56,8 +59,8 @@ if os.path.isfile(wfFileName):
     # numLevels = 150
 
     #wfs = wfs[0:24:3]
-    wfidxs = [0, 5, 8, 11, 14, 17, 20, 23]
-    # wfidxs = [0, 5, 8, 14]
+    # wfidxs = [1, 5, 11, 14, 16, 19, 21, 22]
+    wfidxs = [0, 5, 8, 14]
     wfs = wfs[wfidxs]
     numLevels = 600
 
@@ -123,7 +126,7 @@ det.LoadFieldsGrad(fieldFileName)
 
 def fit(directory):
 
-  initializeDetectorAndWaveforms(det.__getstate__(), wfs, reinit=True)
+  initializeDetectorAndWaveforms(det.__getstate__(), wfs, reinit=True, doInterp=doMaxInterp)
   initMultiThreading(numThreads)
 
   # Create a model object and a sampler
@@ -257,7 +260,7 @@ def plot(sample_file_name, directory):
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
 
           if doWaveformPlot:
-            ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth, alignPoint="max")
+            ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth, alignPoint="max", doMaxInterp=doMaxInterp)
             if ml_wf is None:
                 continue
 
