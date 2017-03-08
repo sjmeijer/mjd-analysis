@@ -46,10 +46,11 @@ traprc_min = 100
 
 tf_first_idx = 0
 velo_first_idx = 6
-trap_idx = 13
+trap_idx = 14
 grad_idx = 12
+imp_avg_idx = 13
 
-priors = np.empty(6 + 6 + 1 + 1) #6 + 2)
+priors = np.empty(trap_idx+1) #6 + 2)
 
 ba_idx, c_idx, dc_idx = np.arange(3)+ tf_first_idx
 rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
@@ -165,7 +166,8 @@ class Model(object):
         rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
         charge_trapping = dnest4.wrap(prior_vars[trap_idx]*rng.randn() + priors[trap_idx], 50, 1000)
 
-        grad = np.int(np.clip(prior_vars[grad_idx]*np.int(rng.randn()) + priors[grad_idx], 0, len(detector.gradList)-1))
+        grad = rng.randint(len(detector.gradList))
+        avgImp = rng.randint(len(detector.impAvgList))
 
         #6 hole drift params
         h_100_mu0 = .01 * h_100_mu0_prior*rng.randn() + h_100_mu0_prior
@@ -183,7 +185,7 @@ class Model(object):
               #b, c, dc,
               rc1, rc2, rcfrac,
               h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu,
-              grad, charge_trapping,
+              grad, avgImp, charge_trapping,
               rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
             ])
 
@@ -199,11 +201,11 @@ class Model(object):
             reps += np.int(np.power(100.0, rng.rand()));
 
         for i in range(reps):
-
-            det_or_wf = rng.randint(2)
-            if det_or_wf == 0:
+            if(rng.rand() < 0.5):
+                #detector param
                 which = rng.randint(len(priors))
             else:
+                #waveform param (from any of the waveforms)
                 which = rng.randint(8*num_waveforms) + len(priors)
 
             if which >= len(priors):
@@ -339,6 +341,10 @@ class Model(object):
             elif which == grad_idx:
               params[which] += (len(detector.gradList)-1)*dnest4.randh()
               params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.gradList)-1))
+            elif which == imp_avg_idx:
+              params[which] += (len(detector.impAvgList)-1)*dnest4.randh()
+              params[which] = np.int(dnest4.wrap(params[which], 0, len(detector.impAvgList)-1))
+
             elif which >= velo_first_idx and which < velo_first_idx+6:
                 mu_max = 100E5
                 velo_which =  (which - velo_first_idx)%3
@@ -374,6 +380,7 @@ class Model(object):
         h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0 = params[velo_first_idx:velo_first_idx+6]
         charge_trapping = params[trap_idx]
         grad = np.int(params[grad_idx])
+        avg_imp = np.int(params[imp_avg_idx])
 
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[len(priors):].reshape((8, num_waveforms))
 
@@ -393,7 +400,7 @@ class Model(object):
                               m_arr[wf_idx], b_arr[wf_idx],
                               b_over_a, c, dc, rc1, rc2, rcfrac,
                               h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                              grad, charge_trapping, baseline_origin_idx, wf_idx
+                              grad, avg_imp, charge_trapping, baseline_origin_idx, wf_idx
                             ])
 
             results = pool.map(WaveformLogLikeStar, args)
@@ -408,7 +415,7 @@ class Model(object):
                               m_arr[wf_idx], b_arr[wf_idx],
                               b_over_a, c, dc, rc1, rc2, rcfrac,
                               h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0,
-                              grad, charge_trapping, baseline_origin_idx, wf_idx
+                              grad, avg_imp, charge_trapping, baseline_origin_idx, wf_idx
                             )
                 self.ln_likes[result['wf_idx']] = result['ln_like']
         return np.sum(self.ln_likes)
@@ -419,7 +426,7 @@ def WaveformLogLikeStar(a_b):
 
 def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_omega, d, rc1, rc2, rcfrac,
         h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu,
-        grad, charge_trapping, bl_origin_idx, wf_idx):
+        grad, avg_imp, charge_trapping, bl_origin_idx, wf_idx):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
     # exit(0)
@@ -454,7 +461,7 @@ def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_o
     detector.SetTransferFunction(tf_b, c, d, rc1, rc2, rcfrac, )
     detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
     detector.trapping_rc = charge_trapping
-    detector.SetFieldsGradIdx(grad)
+    detector.SetFieldsGradAvgIdx(grad, avg_imp)
 
     data = wf.windowedWf
     model_err = wf.baselineRMS

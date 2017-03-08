@@ -41,7 +41,7 @@ numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
 fallPercentage = 0.97
-fieldFileName = "P42574A_fields_impgrad_0.00000-0.00100.npz"
+fieldFileName = "P42574A_fields_impAndAvg_21by21.npz"
 
 wfFileName = "P42574A_24_spread.npz"
 # wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
@@ -192,7 +192,7 @@ def plot(sample_file_name, directory):
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
     wf_params = np.empty((numWaveforms, 8, num_samples))
-    det_params = np.empty((2, num_samples))
+    det_params = np.empty((3, num_samples))
 
     velo_priors, velo_lims = get_velo_params()
     # t0_guess, t0_min, t0_max = get_t0_params()
@@ -213,7 +213,7 @@ def plot(sample_file_name, directory):
 
         h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu = params[velo_first_idx:velo_first_idx+6]
         charge_trapping = params[trap_idx]
-        grad = np.int(params[grad_idx])
+        grad, avg_imp = np.int(params[grad_idx]), np.int(params[grad_idx+1])
 
         # rc1 = -1./np.log(e_rc1)
         # rc2 = -1./np.log(e_rc2)
@@ -226,13 +226,13 @@ def plot(sample_file_name, directory):
 
         tf[:,idx] = tf_phi, tf_omega, tf_d, rc1, rc2, rcfrac
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
-        det_params[:,idx] = np.int(params[grad_idx]), charge_trapping
+        det_params[:,idx] = grad, avg_imp, charge_trapping
 
 
         det.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac)
         det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
         det.trapping_rc = charge_trapping
-        det.SetFieldsGradIdx(grad)
+        det.SetFieldsGradAvgIdx(grad, avg_imp)
 
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[trap_idx+1:].reshape((8, numWaveforms))
         print "sample %d:" % idx
@@ -314,6 +314,12 @@ def plot(sample_file_name, directory):
             max_idx = np.argmax(n)
             print "%s mode: %f" % ("imp_grad", b[max_idx])
         if i==1:
+            axis = vFig.add_subplot(6,3,idx)
+            axis.set_ylabel("imp average")
+            [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
+            max_idx = np.argmax(n)
+            print "%s mode: %f" % ("avg_imp", b[max_idx])
+        if i==2:
             axis = vFig.add_subplot(6,3,idx)
             axis.set_ylabel("trapping_rc")
             [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
