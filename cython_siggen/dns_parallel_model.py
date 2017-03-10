@@ -199,23 +199,37 @@ class Model(object):
         """
         logH = 0.0
 
+        #this adjusts one wf at a time
         #choose which set of params to adjust (detector, wf 1, wf2...)
+        #
+        # num_sets = num_waveforms+1
+        # set_idx = rng.randint(num_sets)
+        #
+        # #choose how many t
+        # reps = 1;
+        # if(rng.rand() < 0.5):
+        #     reps += np.int(np.power(100.0, rng.rand()));
+        #
+        # for i in range(reps):
+        #     if set_idx == 0:
+        #         #detector param
+        #         which = rng.randint(len(priors))
+        #     else:
+        #         #waveform param (from the one waveform we're adjusting this go-around
+        #         which = rng.randint(8) + len(priors) + (set_idx-1)*num_waveforms
 
-        num_sets = num_waveforms+1
-        set_idx = rng.randint(num_sets)
-
-        #choose how many t
+        #this adjusts wfs simultaneouslt
         reps = 1;
         if(rng.rand() < 0.5):
             reps += np.int(np.power(100.0, rng.rand()));
 
         for i in range(reps):
-            if set_idx == 0:
+            if(rng.rand() < 0.5):
                 #detector param
                 which = rng.randint(len(priors))
             else:
-                #waveform param (from the one waveform we're adjusting this go-around
-                which = rng.randint(8) + len(priors) + (set_idx-1)*num_waveforms
+                #waveform param (from any of the waveforms)
+                which = rng.randint(8*num_waveforms) + len(priors)
 
             if which >= len(priors):
                 #this is a waveform variable!
