@@ -29,12 +29,12 @@ doMaxInterp = 1
 reinitializeDetector = 0
 
 doInitPlot =0
-doContourHist = 1
 
-
+doContourHist = 0
 doWaveformPlot =0
 doHists = 1
 plotNum = 1000 #for plotting during the Run
+
 # doWaveformPlot =1
 # doHists = 0
 # plotNum = 100 #for plotting during the Run
@@ -141,7 +141,7 @@ def fit(directory):
                                                                     sep=" "))
 
   # Set up the sampler. The first argument is max_num_levels
-  gen = sampler.sample(max_num_levels=numLevels, num_steps=100000, new_level_interval=10000,
+  gen = sampler.sample(max_num_levels=numLevels, num_steps=100000, new_level_interval=25000,
                         num_per_step=1000, thread_steps=100,
                         num_particles=5, lam=10, beta=100, seed=1234)
 
@@ -199,7 +199,7 @@ def plot(sample_file_name, directory):
 
     velo_priors, velo_lims = get_velo_params()
     # t0_guess, t0_min, t0_max = get_t0_params()
-    tf_first_idx, velo_first_idx, grad_idx, trap_idx = get_param_idxs()
+    tf_first_idx, velo_first_idx,  grad_idx, trap_idx = get_param_idxs()
 
     for (idx,params) in enumerate(data[-num_samples:]):
         # params = data.iloc[-(idx+1)]
@@ -215,8 +215,9 @@ def plot(sample_file_name, directory):
         tf_d = d
 
         h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu = params[velo_first_idx:velo_first_idx+6]
+        # k0_0, k0_1, k0_2, k0_3 = params[k0_first_idx:k0_first_idx+4]
         charge_trapping = params[trap_idx]
-        grad, avg_imp = np.int(params[grad_idx]), np.int(params[grad_idx+1])
+        grad, avg_imp = params[grad_idx], params[grad_idx+1]
 
         # rc1 = -1./np.log(e_rc1)
         # rc2 = -1./np.log(e_rc2)
@@ -234,8 +235,9 @@ def plot(sample_file_name, directory):
 
         det.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac)
         det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
+        # det.siggenInst.set_k0_params(k0_0, k0_1, k0_2, k0_3)
         det.trapping_rc = charge_trapping
-        det.SetFieldsGradAvgIdx(grad, avg_imp)
+        det.SetGrads(grad, avg_imp)
 
         rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[trap_idx+1:].reshape((8, numWaveforms))
         print "sample %d:" % idx
@@ -245,9 +247,9 @@ def plot(sample_file_name, directory):
         print h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0
         print "  charge trapping: ",
         print params[trap_idx]
-        print "  grad idx (grad): ",
-        print params[grad_idx],
-        print " (%0.3f)" % det.gradList[grad]
+        print "  grad & imp: ",
+        print params[grad_idx], params[grad_idx+1]
+        # print " (%0.3f)" % det.gradList[grad]
 
         for (wf_idx,wf) in enumerate(wfs):
           rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
