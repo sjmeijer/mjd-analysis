@@ -155,19 +155,21 @@ def fit(directory):
 
 
 def plot(sample_file_name, directory):
-    fig1 = plt.figure(0, figsize=(20,10))
-    plt.clf()
-    gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
-    ax0 = plt.subplot(gs[0])
-    ax1 = plt.subplot(gs[1], sharex=ax0)
-    ax1.set_xlabel("Digitizer Time [ns]")
-    ax0.set_ylabel("Voltage [Arb.]")
-    ax1.set_ylabel("Residual")
 
-    for wf in wfs:
-      dataLen = wf.wfLength
-      t_data = np.arange(dataLen) * 10
-      ax0.plot(t_data, wf.windowedWf, color="black")
+    if doWaveformPlot:
+        fig1 = plt.figure(0, figsize=(20,10))
+        plt.clf()
+        gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
+        ax0 = plt.subplot(gs[0])
+        ax1 = plt.subplot(gs[1], sharex=ax0)
+        ax1.set_xlabel("Digitizer Time [ns]")
+        ax0.set_ylabel("Voltage [Arb.]")
+        ax1.set_ylabel("Residual")
+
+        for wf in wfs:
+          dataLen = wf.wfLength
+          t_data = np.arange(dataLen) * 10
+          ax0.plot(t_data, wf.windowedWf, color="black")
 
     sample_file_name = directory + sample_file_name
     if sample_file_name == directory + "sample.txt":
@@ -180,8 +182,6 @@ def plot(sample_file_name, directory):
     # data = pd.read_csv("sample_plot.txt", delim_whitespace=True, header=None)
     # num_samples = len(data.index)
     print "found %d samples" % num_samples
-
-    print sample_file_name
 
     if sample_file_name== (directory+"sample_plot.txt"):
         if num_samples > plotNum: num_samples = plotNum
@@ -232,7 +232,6 @@ def plot(sample_file_name, directory):
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
         det_params[:,idx] = grad, avg_imp, charge_trapping
 
-
         det.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac)
         det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
         # det.siggenInst.set_k0_params(k0_0, k0_1, k0_2, k0_3)
@@ -267,6 +266,7 @@ def plot(sample_file_name, directory):
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
 
           if doWaveformPlot:
+            plt.figure(fig1.number)
             ml_wf = det.MakeSimWaveform(r, phi, z, scale, t0,  np.int(output_wf_length), h_smoothing = smooth, alignPoint="max", doMaxInterp=doMaxInterp)
             if ml_wf is None:
                 continue
@@ -281,10 +281,11 @@ def plot(sample_file_name, directory):
             ax0.plot(t_data, ml_wf[:dataLen], color=colors[wf_idx], alpha=0.1)
             ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color=colors[wf_idx],alpha=0.1)
 
-    ax0.set_ylim(-20, wf.wfMax*1.1)
-    ax1.set_ylim(-20, 20)
+    if doWaveformPlot:
+        ax0.set_ylim(-20, wf.wfMax*1.1)
+        ax1.set_ylim(-20, 20)
 
-    if not doHists:
+    if doWaveformPlot and not doHists:
         plt.tight_layout()
         plt.savefig("waveforms.png")
         plt.show()
@@ -377,6 +378,7 @@ def plot(sample_file_name, directory):
 
         plt.savefig("credible_intervals.pdf")
 
+
     if numWaveforms == 1:
         #TODO: make this plot work for a bunch of wfs
         vFig = plt.figure(4, figsize=(20,10))
@@ -391,8 +393,36 @@ def plot(sample_file_name, directory):
             #     axis.axvline(x=t0_max, color="r")
             #     axis.axvline(x=t0_guess, color="g")
 
+    if doVeloPlot:
+        velo_plot = plt.figure(5)
+        fields = np.linspace(np.log(1E-3), np.log(1e12), 100)
+
+        for  h_100_mu0, h_100_lnbeta, h_100_emu, h_111_mu0, h_111_lnbeta, h_111_emu in velo:
+            h100 = np.empty_like(fields)
+            h111 = np.empty_like(fields)
+
+            h_100_beta = 1./np.exp(h_100_lnbeta)
+            h_111_beta = 1./np.exp(h_111_lnbeta)
+            h_100_e0 = h_100_emu / h_100_mu0
+            h_111_e0 = h_111_emu / h_111_mu0
+
+            for field in fields:
+                h100[:] = find_drift_velocity_bruyneel(fields, h_100_mu0, h_100_beta,h_100_e0)
+                h111[:] = find_drift_velocity_bruyneel(fields, h_111_mu0, h_111_beta,h_111_e0)
+
+            plt.plot(h100, color="b", alpha=0.1)
+            plt.plot(h111, color="r", alpha=0.1)
+
 
     plt.show()
+
+def find_drift_velocity_bruyneel(E, mu_0, beta, E_0, mu_n = 0):
+#  mu_0 = 61824
+#  beta = 0.942
+#  E_0 = 185.
+  v = (mu_0 * E) / np.power(1+(E/E_0)**beta, 1./beta) - mu_n*E
+
+  return v #* 10 * 1E-9
 
 if __name__=="__main__":
     if len(sys.argv) < 2:
