@@ -74,10 +74,13 @@ rc_frac_prior = 0.997114
 # h_100_mu0_prior, h_100_beta_prior, h_100_e0_prior = 66333., 0.744, 181.
 # h_111_mu0_prior, h_111_beta_prior, h_111_e0_prior =  107270., 0.580, 100.
 
-mu0_lims = [1E4, 1E6]
-log_beta_lims = [0., np.log(1/.1)]
-h_111_max_lims = [1E6, 2E7]
-h_100_mult_lims = [1., 2.]
+E_lo = 250
+E_hi = 1000
+
+vlo_lims = [2.5E6, 7.5E6]
+vhi_lims = [5E6, 1.1E7]
+log_beta_lims = [1E-10, np.log(1/.1)]
+
 
 priors = np.empty(trap_idx+1) #6 + 2)
 prior_vars =  np.empty(len(priors))
@@ -190,19 +193,27 @@ class Model(object):
         grad = rng.rand()*( detector.gradList[-1] - detector.gradList[0] ) + detector.gradList[0]
         avgImp = rng.rand()*( detector.impAvgList[-1] - detector.impAvgList[0] ) + detector.impAvgList[0]
 
-        h_100_mu0 =(mu0_lims[1] - mu0_lims[0]) * rng.rand() + mu0_lims[0]
-        h_111_mu0 =(mu0_lims[1] - mu0_lims[0]) * rng.rand() + mu0_lims[0]
+        h_100_vlo = (vlo_lims[1] - vlo_lims[0]) * rng.rand() + vlo_lims[0]
+        h_100_vhi = (vhi_lims[1] - vhi_lims[0]) * rng.rand() + vhi_lims[0]
         h_100_lnbeta = (log_beta_lims[1] - log_beta_lims[0]) * rng.rand() + log_beta_lims[0]
+
+        h_111_vlo = (vlo_lims[1] - vlo_lims[0]) * rng.rand() + vlo_lims[0]
+        h_111_vhi = (vhi_lims[1] - vhi_lims[0]) * rng.rand() + vhi_lims[0]
         h_111_lnbeta = (log_beta_lims[1] - log_beta_lims[0]) * rng.rand() + log_beta_lims[0]
-        h_111_emu =  (h_111_max_lims[1] - h_111_max_lims[0]) * rng.rand() + h_111_max_lims[0]
-        h_100_mult =  (h_100_mult_lims[1] - h_100_mult_lims[0]) * rng.rand() + h_100_mult_lims[0]
+
+        # h_100_mu0 =(mu0_lims[1] - mu0_lims[0]) * rng.rand() + mu0_lims[0]
+        # h_111_mu0 =(mu0_lims[1] - mu0_lims[0]) * rng.rand() + mu0_lims[0]
+        # h_100_lnbeta = (log_beta_lims[1] - log_beta_lims[0]) * rng.rand() + log_beta_lims[0]
+        # h_111_lnbeta = (log_beta_lims[1] - log_beta_lims[0]) * rng.rand() + log_beta_lims[0]
+        # h_111_emu =  (h_111_max_lims[1] - h_111_max_lims[0]) * rng.rand() + h_111_max_lims[0]
+        # h_100_mult =  (h_100_mult_lims[1] - h_100_mult_lims[0]) * rng.rand() + h_100_mult_lims[0]
 
 
         return np.hstack([
               phi, omega, d,
               #b, c, dc,
               rc1, rc2, rcfrac,
-              h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult,
+              h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta,
             #   k0_0, k0_1, k0_2, k0_3,
               grad, avgImp, charge_trapping,
               rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
@@ -388,8 +399,18 @@ class Model(object):
               params[which] = dnest4.wrap(params[which], detector.impAvgList[0], detector.impAvgList[-1])
 
 
-            elif which >= velo_first_idx and which < velo_first_idx+6:
-                params[velo_first_idx:velo_first_idx+6] = self.gen_new_velo_param(which - velo_first_idx, params[velo_first_idx:velo_first_idx+6])
+            elif which == velo_first_idx or which == velo_first_idx+1:
+              params[which] += (vlo_lims[1] - vlo_lims[0])  *dnest4.randh()
+              params[which] = dnest4.wrap(params[which], vlo_lims[0], vlo_lims[1])
+            elif which == velo_first_idx+2 or which == velo_first_idx+3:
+              params[which] += (vhi_lims[1] - vhi_lims[0])  *dnest4.randh()
+              params[which] = dnest4.wrap(params[which], vhi_lims[0], vhi_lims[1])
+            elif which == velo_first_idx+4 or which == velo_first_idx+5:
+              params[which] += (log_beta_lims[1] - log_beta_lims[0])  *dnest4.randh()
+              params[which] = dnest4.wrap(params[which], log_beta_lims[0], log_beta_lims[1])
+
+            # elif which >= velo_first_idx and which < velo_first_idx+6:
+            #     params[velo_first_idx:velo_first_idx+6] = self.gen_new_velo_param(which - velo_first_idx, params[velo_first_idx:velo_first_idx+6])
 
             # elif which >= k0_first_idx and which < k0_first_idx+4:
             #     minval, maxval = -50, 50
@@ -407,59 +428,62 @@ class Model(object):
 
         return logH
 
-    def gen_new_velo_param(self, velo_which, velo_params):
-
-        h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult = velo_params
-
-        if velo_which == 0:
-          h_100_mu0 += (mu0_lims[1] - mu0_lims[0])  *dnest4.randh()
-          h_100_mu0 = dnest4.wrap(h_100_mu0, mu0_lims[0], mu0_lims[1])
-        elif velo_which == 1:
-            h_111_mu0 += (mu0_lims[1] - mu0_lims[0])  *dnest4.randh()
-            h_111_mu0 = dnest4.wrap(h_111_mu0, mu0_lims[0], mu0_lims[1])
-        elif velo_which == 2:
-            h_100_lnbeta += (log_beta_lims[1] - log_beta_lims[0])  *dnest4.randh()
-            h_100_lnbeta = dnest4.wrap(h_100_lnbeta, log_beta_lims[0], log_beta_lims[1])
-        elif velo_which == 3:
-            h_111_lnbeta += (log_beta_lims[1] - log_beta_lims[0])  *dnest4.randh()
-            h_111_lnbeta = dnest4.wrap(h_111_lnbeta, log_beta_lims[0], log_beta_lims[1])
-        elif velo_which == 4: #h111 e*mu0 param
-            h_111_emu += (h_111_max_lims[1] - h_111_max_lims[0])  *dnest4.randh()
-            h_111_emu = dnest4.wrap(h_111_emu, h_111_max_lims[0], h_111_max_lims[1])
-        elif velo_which == 5: #h100 mult param
-            h_100_mult += (h_100_mult_lims[1] - h_100_mult_lims[0])  *dnest4.randh()
-            h_100_mult = dnest4.wrap(h_100_mult, h_100_mult_lims[0], h_100_mult_lims[1])
-
-        h_100_beta = 1./np.exp(h_100_lnbeta)
-        h_111_beta = 1./np.exp(h_111_lnbeta)
-
-        h_111_e0 = h_111_emu / h_111_mu0
-        h_100_e0 = h_100_mult * h_111_emu / h_100_mu0
-
-        test_fields = [10, 500,2000]
-        is_ok = 1
-
-        for field in test_fields:
-            v_100 = find_drift_velocity(field, h_100_mu0, h_100_beta, h_100_e0)
-            v_111 = find_drift_velocity(field, h_111_mu0, h_111_beta, h_111_e0)
-
-            if v_100 < v_111:
-                is_ok = 0
-                break
-
-        if not is_ok:
-            return gen_new_velo_param(velo_which, velo_params)
-        else:
-            velo_params = [h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult]
-            return velo_params
-
+    # def gen_new_velo_param(self, velo_which, velo_params):
+    #             h_100_vlo = vlo_lims[1] - vlo_lims[0]) * rng.rand() + vlo_lims[0]
+    #             h_100_vhi = vhi_lims[1] - vhi_lims[0]) * rng.rand() + vhi_lims[0]
+    #             h_100_lnbeta = (log_beta_lims[1] - log_beta_lims[0]) * rng.rand() + log_beta_lims[0]
+    #
+    #     h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult = velo_params
+    #
+    #     if velo_which == 0:
+    #       h_100_mu0 += (mu0_lims[1] - mu0_lims[0])  *dnest4.randh()
+    #       h_100_mu0 = dnest4.wrap(h_100_mu0, mu0_lims[0], mu0_lims[1])
+    #     elif velo_which == 1:
+    #         h_111_mu0 += (mu0_lims[1] - mu0_lims[0])  *dnest4.randh()
+    #         h_111_mu0 = dnest4.wrap(h_111_mu0, mu0_lims[0], mu0_lims[1])
+    #     elif velo_which == 2:
+    #         h_100_lnbeta += (log_beta_lims[1] - log_beta_lims[0])  *dnest4.randh()
+    #         h_100_lnbeta = dnest4.wrap(h_100_lnbeta, log_beta_lims[0], log_beta_lims[1])
+    #     elif velo_which == 3:
+    #         h_111_lnbeta += (log_beta_lims[1] - log_beta_lims[0])  *dnest4.randh()
+    #         h_111_lnbeta = dnest4.wrap(h_111_lnbeta, log_beta_lims[0], log_beta_lims[1])
+    #     elif velo_which == 4: #h111 e*mu0 param
+    #         h_111_emu += (h_111_max_lims[1] - h_111_max_lims[0])  *dnest4.randh()
+    #         h_111_emu = dnest4.wrap(h_111_emu, h_111_max_lims[0], h_111_max_lims[1])
+    #     elif velo_which == 5: #h100 mult param
+    #         h_100_mult += (h_100_mult_lims[1] - h_100_mult_lims[0])  *dnest4.randh()
+    #         h_100_mult = dnest4.wrap(h_100_mult, h_100_mult_lims[0], h_100_mult_lims[1])
+    #
+    #     # h_100_beta = 1./np.exp(h_100_lnbeta)
+    #     # h_111_beta = 1./np.exp(h_111_lnbeta)
+    #     #
+    #     # h_111_e0 = h_111_emu / h_111_mu0
+    #     # h_100_e0 = h_100_mult * h_111_emu / h_100_mu0
+    #     #
+    #     # test_fields = [10, 500,2000]
+    #     # is_ok = 1
+    #     #
+    #     # for field in test_fields:
+    #     #     v_100 = find_drift_velocity(field, h_100_mu0, h_100_beta, h_100_e0)
+    #     #     v_111 = find_drift_velocity(field, h_111_mu0, h_111_beta, h_111_e0)
+    #     #
+    #     #     if v_100 < v_111:
+    #     #         is_ok = 0
+    #     #         break
+    #     is_ok = 1
+    #     if not is_ok:
+    #         return gen_new_velo_param(velo_which, velo_params)
+    #     else:
+    #         velo_params = [h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult]
+    #         return velo_params
+    #
 
     def log_likelihood(self, params):
         """
         Gaussian sampling distribution.
         """
         b_over_a, c, dc, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
-        h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult  = params[velo_first_idx:velo_first_idx+6]
+        h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta,  = params[velo_first_idx:velo_first_idx+6]
         # k0_0, k0_1, k0_2, k0_3 = params[k0_first_idx:k0_first_idx+4]
         charge_trapping = params[trap_idx]
         grad = (params[grad_idx])
@@ -482,7 +506,7 @@ class Model(object):
                               scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
                               m_arr[wf_idx], b_arr[wf_idx],
                               b_over_a, c, dc, rc1, rc2, rcfrac,
-                              h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult,
+                              h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta,
                             #   k0_0, k0_1, k0_2, k0_3,
                               grad, avg_imp, charge_trapping, baseline_origin_idx, wf_idx
                             ])
@@ -498,7 +522,7 @@ class Model(object):
                               scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
                               m_arr[wf_idx], b_arr[wf_idx],
                               b_over_a, c, dc, rc1, rc2, rcfrac,
-                              h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult,
+                              h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta,
                             #   k0_0, k0_1, k0_2, k0_3,
                               grad, avg_imp, charge_trapping, baseline_origin_idx, wf_idx
                             )
@@ -506,11 +530,24 @@ class Model(object):
         return np.sum(self.ln_likes)
 
 
+def get_velo_params(v_a, v_c, logb):
+    E_a = E_lo
+    E_c = E_hi
+
+    beta = 1./np.exp(logb)
+
+    psi = (E_a * v_c) / ( E_c * v_a )
+    E_0 = np.power((psi**beta* E_c**beta - E_a**beta) / (1-psi**beta), 1./beta)
+    mu_0 = (v_a / E_a) * (1 + (E_a / E_0)**beta )**(1./beta)
+
+    return (mu_0,  beta, E_0)
+
+
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
 def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_omega, d, rc1, rc2, rcfrac,
-        h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult,
+        h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta,
         grad, avg_imp, charge_trapping, bl_origin_idx, wf_idx):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
@@ -526,16 +563,18 @@ def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_o
     a = 1./(1+b_ov_a)
     tf_b = a * b_ov_a
 
+    h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_vlo, h_100_vhi, h_100_lnbeta)
+    h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_vlo, h_111_vhi, h_111_lnbeta)
 
     # rc1 = -1./np.log(e_rc1)
     # rc2 = -1./np.log(e_rc2)
     # charge_trapping = -1./np.log(e_charge_trapping)
 
-    h_100_beta = 1./np.exp(h_100_lnbeta)
-    h_111_beta = 1./np.exp(h_111_lnbeta)
+    # h_100_beta = 1./np.exp(h_100_lnbeta)
+    # h_111_beta = 1./np.exp(h_111_lnbeta)
 
-    h_111_e0 = h_111_emu / h_111_mu0
-    h_100_e0 = h_100_mult * h_111_emu / h_100_mu0
+    # h_111_e0 = h_111_emu / h_111_mu0
+    # h_100_e0 = h_100_mult * h_111_emu / h_100_mu0
 
     if scale < 0:
       return  {'wf_idx':wf_idx, 'ln_like':-np.inf}

@@ -30,16 +30,16 @@ reinitializeDetector = 0
 
 doInitPlot =0
 
-doContourHist = 0
-doWaveformPlot =0
-doHists = 1
-plotNum = 200 #for plotting during the Run
-doVeloPlot = 1
+# doContourHist = 0
+# doWaveformPlot =0
+# doHists = 1
+# plotNum = 1000 #for plotting during the Run
+# doVeloPlot = 1
 
-# doWaveformPlot =1
-# doHists = 0
-# doVeloPlot = 0
-# plotNum = 100 #for plotting during the Run
+doWaveformPlot =1
+doHists = 0
+doVeloPlot = 0
+plotNum = 100 #for plotting during the Run
 
 
 numThreads = multiprocessing.cpu_count()
@@ -67,7 +67,7 @@ if os.path.isfile(wfFileName):
     # wfidxs = [0, 5, 8, 11, 14, 17, 20, 23]
     # wfidxs = [0, 5, 8, 14]
     # wfs = wfs[wfidxs]
-    wfs = wfs[16:24]
+    wfs = wfs[8:24:2]
 
     numLevels = 600
 
@@ -217,7 +217,7 @@ def plot(sample_file_name, directory):
         tf_c = c
         tf_d = d
 
-        h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult = params[velo_first_idx:velo_first_idx+6]
+        h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta, = params[velo_first_idx:velo_first_idx+6]
         # k0_0, k0_1, k0_2, k0_3 = params[k0_first_idx:k0_first_idx+4]
         charge_trapping = params[trap_idx]
         grad, avg_imp = params[grad_idx], params[grad_idx+1]
@@ -230,11 +230,8 @@ def plot(sample_file_name, directory):
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
         det_params[:,idx] = grad, avg_imp, charge_trapping
 
-        h_100_beta = 1./np.exp(h_100_lnbeta)
-        h_111_beta = 1./np.exp(h_111_lnbeta)
-
-        h_111_e0 = h_111_emu / h_111_mu0
-        h_100_e0 = h_100_mult * h_111_emu / h_100_mu0
+        h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_vlo, h_100_vhi, h_100_lnbeta)
+        h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_vlo, h_111_vhi, h_111_lnbeta)
 
         det.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac)
         det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
@@ -391,22 +388,25 @@ def plot(sample_file_name, directory):
         fields = np.exp(fields_log)
 
         for  idx in range(num_samples):
-            h_100_mu0, h_111_mu0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult = velo[:,idx]
+            h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta, = velo[:,idx]
             # print "v params: ",
             # print mu_0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult
 
             h100 = np.empty_like(fields)
             h111 = np.empty_like(fields)
 
-            h_100_beta = 1./np.exp(h_100_lnbeta)
-            h_111_beta = 1./np.exp(h_111_lnbeta)
+            h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_vlo, h_100_vhi, h_100_lnbeta)
+            h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_vlo, h_111_vhi, h_111_lnbeta)
 
-            h_111_e0 = h_111_emu / h_111_mu0
-            h_100_e0 = h_100_mult * h_111_emu / h_100_mu0
 
             for (idx,field) in enumerate(fields):
                 h100[idx] = find_drift_velocity_bruyneel(field, h_100_mu0, h_100_beta,h_100_e0)
                 h111[idx] = find_drift_velocity_bruyneel(field, h_111_mu0, h_111_beta,h_111_e0)
+
+            # if h100[-1] > 2E7:
+            #     print  h_100_vlo, h_100_vhi, h_100_lnbeta
+            # if h111[idx] > 2E7:
+            #     print  h_111_vlo, h_111_vhi, h_111_lnbeta
 
             # test_fields = [10, 500,2000]
             # for (idx,field) in enumerate(test_fields):
@@ -416,8 +416,8 @@ def plot(sample_file_name, directory):
             #     if v100 < v111: print "bad! %d V" % field
 
 
-            plt.plot(fields, h100, color="r", alpha=0.1)
-            plt.plot(fields, h111, color="b", alpha=0.1)
+            plt.plot(fields, h100, color="r", alpha=1./100)
+            plt.plot(fields, h111, color="b", alpha=1./100)
 
         plt.xscale('log')
         # plt.yscale('log')
