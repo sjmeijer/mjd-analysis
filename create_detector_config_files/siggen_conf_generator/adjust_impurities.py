@@ -77,8 +77,7 @@ def copyConfFileWithNewGradient(fileName, newGradient):
 def copyConfFileWithNewImpurities(fileName, newGradient, newAvgImpurity):
 
     oldParams = readConfigurationFile(fileName)
-    det_z = oldParams['xtal_length']
-
+    det_z = oldParams['xtal_length']/10. # in cm
     if det_z == 0:
         print "zero det_Z: some bug is here"
         exit(0)

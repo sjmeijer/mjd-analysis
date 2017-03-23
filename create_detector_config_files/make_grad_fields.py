@@ -32,7 +32,7 @@ def main():
   pcRadiusRange = [2.5]
   pcLengthRange = [1.7]
 
-  startingFileName = detectorName +  "_bull.conf"
+  startingFileName = "conf/%s_bull.conf" % detectorName
   if not os.path.exists(startingFileName):
     print "The starting file %s does not exist." % startingFileName
     sys.exit()
@@ -48,6 +48,7 @@ def main():
         # runFieldgen(newFileStr)
         args.append( [ newFileStr] )
 
+  exit(0)
   pool = Pool(numThreads)
 
   bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=len(args)).start()
