@@ -41,15 +41,19 @@ def readConfigurationFile(fileName):
             impurity_z0 = readParameter(line)
         elif findParameter("impurity_gradient", line) is not None:
             impurity_grad = readParameter(line)
-        elif findParameter("xtal_length", line) is not None:
-            xtal_length = readParameter(line)
+        elif findStringParameter("field_name", line) is not None:
+            field_name = line.split()[1]
+        elif findStringParameter("wp_name", line) is not None:
+            wp_name =line.split()[1]
 
     configFile.close()
 
     configMap = {'bias':bias,
                 'impurity_grad':impurity_grad,
                 'impurity_z0':impurity_z0,
-                'xtal_length':xtal_length}
+                'xtal_length':xtal_length,
+                'wp_name':wp_name,
+                'field_name':field_name}
 
     return configMap
 

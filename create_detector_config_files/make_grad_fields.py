@@ -28,13 +28,13 @@ depletionVoltage = 1500.
 def main():
   numThreads = multiprocessing.cpu_count()
 
-  gradientRange = np.linspace(0.00, 0.001, 21)
-  gradAvgRange = np.linspace(-0.565, -0.545, 21)
+  gradientRange = np.linspace(0, 0.02, 4)
+  gradAvgRange = np.linspace(-0.55, -0.5, 4)
 
-  pcRadiusRange = [2.5]#np.arange(2.5, 2.7, 0.05)
-  pcLengthRange = [1.6]#np.arange(1.5, 1.75, 0.05)
+  pcRadiusRange = [2.5]
+  pcLengthRange = [1.7]
 
-  startingFileName = detectorName + ".conf"
+  startingFileName = detectorName +  ".conf"
   if not os.path.exists(startingFileName):
     print "The starting file %s does not exist." % startingFileName
     sys.exit()
@@ -45,7 +45,6 @@ def main():
   args = []
   for g in gradientRange:
       for avg in gradAvgRange:
-        startingFileName = detectorName + ".conf"
         newFileStr = copyConfFileWithNewImpurities(startingFileName, g, avg)
 
         # runFieldgen(newFileStr)
