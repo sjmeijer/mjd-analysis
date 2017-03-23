@@ -28,8 +28,8 @@ depletionVoltage = 1500.
 def main():
   numThreads = multiprocessing.cpu_count()
 
-  gradientRange = np.linspace(0, 0.04, 21)
-  gradAvgRange = np.linspace(-0.55, -0.4, 21)
+  gradientRange = np.linspace(0, 0.1, 31)
+  gradAvgRange = np.linspace(-0.7, -0.5, 31)
 
   pcRadiusRange = [2.5]
   pcLengthRange = [1.7]
@@ -43,11 +43,11 @@ def main():
     sys.exit()
 
   args = []
+
   for g in gradientRange:
       for avg in gradAvgRange:
         newFileStr = copyConfFileWithNewImpurities(startingFileName, g, avg)
-
-        # runFieldgen(newFileStr)
+        runFieldgen(newFileStr)
         args.append( [ newFileStr] )
 
   pool = Pool(numThreads)

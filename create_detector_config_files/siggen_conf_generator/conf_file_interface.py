@@ -45,6 +45,8 @@ def readConfigurationFile(fileName):
             field_name = line.split()[1]
         elif findStringParameter("wp_name", line) is not None:
             wp_name =line.split()[1]
+        elif findParameter("xtal_length", line) is not None:
+            xtal_length =readParameter(line)
 
     configFile.close()
 
