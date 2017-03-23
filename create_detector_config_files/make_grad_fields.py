@@ -32,7 +32,7 @@ def main():
   pcRadiusRange = [2.5]
   pcLengthRange = [1.7]
 
-  startingFileName = "conf/%s_bull.conf" % detectorName
+  startingFileName = "%s_bull.conf" % detectorName
   if not os.path.exists(startingFileName):
     print "The starting file %s does not exist." % startingFileName
     sys.exit()
@@ -45,8 +45,11 @@ def main():
   for g in gradientRange:
       for avg in gradAvgRange:
         newFileStr = copyConfFileWithNewImpurities(startingFileName, g, avg)
-        # runFieldgen(newFileStr)
         args.append( [ newFileStr] )
+
+        # print "on %f,%f" % (g,avg)
+        # runFieldgen(newFileStr)
+
 
   pool = Pool(numThreads)
 
@@ -59,6 +62,7 @@ def main():
 def generateConfigFile(newFileStr):
   # print newFileStr
   runFieldgen(newFileStr)
+  shutil.move(newFileStr, "conf/"+newFileStr)
 
 def gen_conf_star(a_b):
   return generateConfigFile(*a_b)
