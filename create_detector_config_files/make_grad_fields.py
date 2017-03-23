@@ -21,9 +21,7 @@ from progressbar import ProgressBar, Percentage, Bar, ETA
 
 ortec_spreadsheet = "ortec_ORTEC_Measurements.csv"
 
-
 detectorName = "P42574A"
-depletionVoltage = 1500.
 
 def main():
   numThreads = multiprocessing.cpu_count()
@@ -47,7 +45,7 @@ def main():
   for g in gradientRange:
       for avg in gradAvgRange:
         newFileStr = copyConfFileWithNewImpurities(startingFileName, g, avg)
-        runFieldgen(newFileStr)
+        # runFieldgen(newFileStr)
         args.append( [ newFileStr] )
 
   pool = Pool(numThreads)
