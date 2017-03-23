@@ -10,21 +10,21 @@ import pandas as pd
 def main(argv):
 
   detectorName = "P42574A"
-  numGrads = 4
-  numImps  = 4
+  numGrads = 21
+  numImps  = 21
   # gradList = np.linspace(0.00, 0.001, numGrads)
   # impAvgList = np.linspace(-0.565, -0.545, numImps)
-  gradList = np.linspace(0, 0.02, numGrads)
-  impAvgList = np.linspace(-0.55, -0.5, numImps)
+  gradList = np.linspace(0, 0.04, numGrads)
+  impAvgList = np.linspace(-0.55, -0.4, numImps)
 
   pcRad = 2.5
-  pcLen = 1.6
+  pcLen = 1.7
 
   print "grad step = %f" % (gradList[1] - gradList[0])
   print "imp step = %f" % (impAvgList[1] - impAvgList[0])
   # exit(0)
 
-  filename = detectorName + "_fields_impAndAvg_%dby%d.npz" % (numGrads, numImps)
+  filename = detectorName + "_bull_fields_impAndAvg_%dby%d.npz" % (numGrads, numImps)
 
   wpArray  = None
   efld_rArray = None
@@ -35,7 +35,7 @@ def main(argv):
   for (gradIdx,grad) in enumerate(gradList):
       for (avgIdx, impAvg) in enumerate(impAvgList):
         print "on %d of %d" % (gradIdx*len(impAvgList) + avgIdx, len(impAvgList)*len(impAvgList))
-        detName = "conf/%s_grad%0.5f_avgimp%0.5f.conf" % (detectorName, grad, impAvg)
+        detName = "conf/%s_bull_grad%0.5f_avgimp%0.5f.conf" % (detectorName, grad, impAvg)
 
         if not os.path.isfile(detName):
           print "Detector file %s not available" % detName
