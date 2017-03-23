@@ -48,7 +48,6 @@ def main():
         # runFieldgen(newFileStr)
         args.append( [ newFileStr] )
 
-  exit(0)
   pool = Pool(numThreads)
 
   bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=len(args)).start()
