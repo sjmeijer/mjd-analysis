@@ -30,25 +30,26 @@ reinitializeDetector = 0
 
 doInitPlot =0
 
-# doContourHist = 0
-# doWaveformPlot =0
-# doHists = 1
-# plotNum = 1000 #for plotting during the Run
-# doVeloPlot = 1
+doContourHist = 0
+doWaveformPlot =0
+doHists = 1
+plotNum = 500 #for plotting during the Run
+doVeloPlot = 1
 
-doWaveformPlot =1
-doHists = 0
-doVeloPlot = 0
-plotNum = 100 #for plotting during the Run
+# doWaveformPlot =1
+# doHists = 0
+# doVeloPlot = 0
+# plotNum = 100 #for plotting during the Run
 
 
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
 fallPercentage = 0.97
-fieldFileName = "P42574A_fields_impAndAvg_21by21.npz"
-
+fieldFileName = "P42574A_bull_fields_impAndAvg_11by11.npz"
+detName = "conf/P42574A_bull.conf"
 wfFileName = "P42574A_24_spread.npz"
+
 # wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
     data = np.load(wfFileName)
@@ -67,7 +68,11 @@ if os.path.isfile(wfFileName):
     # wfidxs = [0, 5, 8, 11, 14, 17, 20, 23]
     # wfidxs = [0, 5, 8, 14]
     # wfs = wfs[wfidxs]
-    wfs = wfs[8:24:2]
+
+    #it looks like wf10 is bad.  Let's try something else
+    wfidxs = [8, 11, 12, 14, 16, 18, 20, 22]
+    # wfidxs = [7, 8, 9, 11, 12, 13, 14, 15]
+    wfs = wfs[wfidxs]
 
     numLevels = 600
 
@@ -101,7 +106,7 @@ for (wf_idx,wf) in enumerate(wfs):
   wf.WindowWaveformAroundMax(fallPercentage=fallPercentage, rmsMult=2, earlySamples=max_sample_idx)
   baselineLengths[wf_idx] = wf.t0Guess
 
-  print "wf %d length %d (entry %d from run %d)" % (wf_idx, wf.wfLength, wf.entry_number, wf.runNumber)
+  print "wf %d length %d (entry %d from run %d, color is %s)" % (wf_idx, wf.wfLength, wf.entry_number, wf.runNumber, colors[wf_idx])
   wfLengths[wf_idx] = wf.wfLength
   wfMaxes[wf_idx] = np.argmax(wf.windowedWf)
 
@@ -127,7 +132,6 @@ output_wf_length = np.amax(wfLengths) + 1
 
 #Create a detector model
 timeStepSize = 1 #ns
-detName = "conf/P42574A_ben.conf"
 det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWfOutputLength =output_wf_length, t0_padding=100 )
 det.LoadFieldsGrad(fieldFileName)
 
@@ -196,6 +200,8 @@ def plot(sample_file_name, directory):
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
+    phi_hist_arr = np.empty((numWaveforms, num_samples))
+
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
     wf_params = np.empty((numWaveforms, 8, num_samples))
@@ -251,6 +257,7 @@ def plot(sample_file_name, directory):
           r = rad * np.cos(theta)
           z = rad * np.sin(theta)
           r_arr[wf_idx, idx], z_arr[wf_idx, idx] = r,z
+          phi_hist_arr[wf_idx,idx] = phi
 
           if doWaveformPlot:
             plt.figure(fig1.number)
@@ -280,7 +287,7 @@ def plot(sample_file_name, directory):
 
     vFig = plt.figure(2, figsize=(20,10))
     tfLabels = ['tf_phi', 'tf_omega', 'd', 'rc1', 'rc2', 'rcfrac']
-    vLabels = ['h_100_mu0', 'h_111_mu0', 'h_100_lnbeta', 'h_111_lnbeta', 'h_111_emu', 'h_100_mult']
+    vLabels = ['h_100_vlo', 'h_111_vlo', 'h_100_vhi', 'h_111_vhi', 'h_100_beta', 'h_111_beta']
     vmodes, tfmodes = np.empty(6), np.empty(6)
     num_bins = 100
     for i in range(6):
@@ -403,6 +410,8 @@ def plot(sample_file_name, directory):
                 h100[idx] = find_drift_velocity_bruyneel(field, h_100_mu0, h_100_beta,h_100_e0)
                 h111[idx] = find_drift_velocity_bruyneel(field, h_111_mu0, h_111_beta,h_111_e0)
 
+
+
             # if h100[-1] > 2E7:
             #     print  h_100_vlo, h_100_vhi, h_100_lnbeta
             # if h111[idx] > 2E7:
@@ -419,12 +428,35 @@ def plot(sample_file_name, directory):
             plt.plot(fields, h100, color="r", alpha=1./100)
             plt.plot(fields, h111, color="b", alpha=1./100)
 
+        h100_reg = np.zeros_like(h100)
+        h111_reg = np.zeros_like(h100)
+        h100_bruy = np.zeros_like(h100)
+        h111_bruy = np.zeros_like(h100)
+        for (idx,field) in enumerate(fields):
+            h100_reg[idx] = find_drift_velocity_bruyneel(field, 66333., 0.744, 181.)
+            h111_reg[idx] = find_drift_velocity_bruyneel(field, 107270., 0.580, 100.)
+            h100_bruy[idx] = find_drift_velocity_bruyneel(field, 61824., 0.942, 185.)
+            h111_bruy[idx] = find_drift_velocity_bruyneel(field, 61215., 0.662, 182.)
+
+        plt.plot(fields, h100_reg, color="g")
+        plt.plot(fields, h111_reg, color="g", ls="--")
+        plt.plot(fields, h100_bruy, color="purple")
+        plt.plot(fields, h111_bruy, color="purple", ls="--")
+
+        plt.axvline(x=250, color="black", ls=":")
+        plt.axvline(x=1000, color="black", ls=":")
         plt.xscale('log')
         # plt.yscale('log')
         # plt.xlim(.45, 1E5)
         # plt.ylim(1E4, 1E8)
 
 
+    plt.figure(6)
+    for wf_idx in range(numWaveforms):
+        plt.hist(phi_hist_arr[wf_idx,:], color=colors[wf_idx])
+    plt.axvline(x=0, color="r", ls=":")
+    plt.axvline(x=np.pi/4, color="r", ls=":")
+    plt.xlabel("Azimuthal Angle (0 to pi/4)")
     plt.show()
 
 def find_drift_velocity_bruyneel(E, mu_0, beta, E_0, mu_n = 0):
