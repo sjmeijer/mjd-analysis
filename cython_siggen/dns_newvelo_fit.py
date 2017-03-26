@@ -33,20 +33,23 @@ doInitPlot =0
 doContourHist = 0
 doWaveformPlot =0
 doHists = 1
-plotNum = 500 #for plotting during the Run
+plotNum = 1000 #for plotting during the Run
 doVeloPlot = 1
 
 # doWaveformPlot =1
 # doHists = 0
 # doVeloPlot = 0
 # plotNum = 100 #for plotting during the Run
-
+#
 
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
 fallPercentage = 0.97
-fieldFileName = "P42574A_bull_fields_impAndAvg_11by11.npz"
+fieldFileName = "P42574A_mar25_21by21.npz"
+# fieldFileName = "P42574A_bull_fields_impAndAvg_11by11.npz"
+#fieldFileName = "P42574A_bull_fields_lowimp_impAndAvg_11by11.npz"
+#
 detName = "conf/P42574A_bull.conf"
 wfFileName = "P42574A_24_spread.npz"
 
@@ -443,8 +446,8 @@ def plot(sample_file_name, directory):
         plt.plot(fields, h100_bruy, color="purple")
         plt.plot(fields, h111_bruy, color="purple", ls="--")
 
-        plt.axvline(x=250, color="black", ls=":")
-        plt.axvline(x=1000, color="black", ls=":")
+        # plt.axvline(x=250, color="black", ls=":")
+        plt.axvline(x=500, color="black", ls=":")
         plt.xscale('log')
         # plt.yscale('log')
         # plt.xlim(.45, 1E5)
