@@ -40,18 +40,18 @@ doVeloPlot = 1
 # doHists = 0
 # doVeloPlot = 0
 # plotNum = 100 #for plotting during the Run
-#
+
 
 numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
 fallPercentage = 0.97
-fieldFileName = "P42574A_mar25_21by21.npz"
+fieldFileName = "P42574A_mar28_21by21.npz"
 # fieldFileName = "P42574A_bull_fields_impAndAvg_11by11.npz"
 #fieldFileName = "P42574A_bull_fields_lowimp_impAndAvg_11by11.npz"
 #
 detName = "conf/P42574A_bull.conf"
-wfFileName = "P42574A_24_spread.npz"
+wfFileName = "P42574A_64_spread.npz"
 
 # wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
@@ -60,6 +60,9 @@ if os.path.isfile(wfFileName):
     #wf 2 is super weird
 
     wfs = data['wfs']
+    wfidxs = range(64)
+    wfs = wfs[wfidxs]
+
 
     #one slow waveform
     # fitwfnum = 5
@@ -72,10 +75,10 @@ if os.path.isfile(wfFileName):
     # wfidxs = [0, 5, 8, 14]
     # wfs = wfs[wfidxs]
 
-    #it looks like wf10 is bad.  Let's try something else
-    wfidxs = [8, 11, 12, 14, 16, 18, 20, 22]
-    # wfidxs = [7, 8, 9, 11, 12, 13, 14, 15]
-    wfs = wfs[wfidxs]
+    #it looks like wf2 is bad.  Let's try something else
+    # wfidxs = [0,1,4,6,8,10,12,14,16,17,18,19,20,21,22,23]
+    # # wfidxs = [7, 8, 9, 11, 12, 13, 14, 15]
+    # wfs = wfs[wfidxs]
 
     numLevels = 600
 
@@ -106,10 +109,12 @@ wfMaxes = np.empty(numWaveforms)
 if doInitPlot: plt.figure(500)
 baselineLengths = np.empty(numWaveforms)
 for (wf_idx,wf) in enumerate(wfs):
+  color_idx = wf_idx % len(colors)
   wf.WindowWaveformAroundMax(fallPercentage=fallPercentage, rmsMult=2, earlySamples=max_sample_idx)
   baselineLengths[wf_idx] = wf.t0Guess
 
-  print "wf %d length %d (entry %d from run %d, color is %s)" % (wf_idx, wf.wfLength, wf.entry_number, wf.runNumber, colors[wf_idx])
+  print "wf %d (%d of %d):" % (wfidxs[wf_idx], wf_idx, len(wfidxs))
+  print "   length %d (entry %d from run %d, color is %s)" % ( wf.wfLength, wf.entry_number, wf.runNumber, colors[color_idx])
   wfLengths[wf_idx] = wf.wfLength
   wfMaxes[wf_idx] = np.argmax(wf.windowedWf)
 
@@ -208,16 +213,18 @@ def plot(sample_file_name, directory):
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
     wf_params = np.empty((numWaveforms, 8, num_samples))
-    det_params = np.empty((3, num_samples))
+    det_params = np.empty((4, num_samples))
+    residWarnings = np.zeros(numWaveforms)
 
-
-    tf_first_idx, velo_first_idx,  grad_idx, trap_idx = get_param_idxs()
+    tf_first_idx, velo_first_idx, grad_idx, trap_idx = get_param_idxs()
 
     for (idx,params) in enumerate(data[-num_samples:]):
         # params = data.iloc[-(idx+1)]
         # print params
 
-        tf_phi, tf_omega, d, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
+        tf_phi, tf_omega, d, rc1, rc2, rcfrac, aliasrc = params[tf_first_idx:tf_first_idx+7]
+        # tf_phi, tf_omega, d, rc1, rc2, rcfrac,  = params[tf_first_idx:tf_first_idx+6]
+
         #tf_d = tf_c * tf_dc
         c = -d * np.cos(tf_omega)
         b_ov_a = c - np.tan(tf_phi) * np.sqrt(d**2-c**2)
@@ -226,7 +233,7 @@ def plot(sample_file_name, directory):
         tf_c = c
         tf_d = d
 
-        h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta, = params[velo_first_idx:velo_first_idx+6]
+        h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta,  = params[velo_first_idx:velo_first_idx+6]
         # k0_0, k0_1, k0_2, k0_3 = params[k0_first_idx:k0_first_idx+4]
         charge_trapping = params[trap_idx]
         grad, avg_imp = params[grad_idx], params[grad_idx+1]
@@ -237,12 +244,16 @@ def plot(sample_file_name, directory):
 
         tf[:,idx] = tf_phi, tf_omega, tf_d, rc1, rc2, rcfrac
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
-        det_params[:,idx] = grad, avg_imp, charge_trapping
+        det_params[:,idx] = grad, avg_imp, charge_trapping, aliasrc
 
-        h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_vlo, h_100_vhi, h_100_lnbeta)
-        h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_vlo, h_111_vhi, h_111_lnbeta)
+        h_100_va = h_100_multa * h_111_va
+        h_100_vmax = h_100_multmax * h_111_vmax
+
+        h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_va, h_100_vmax, h_100_beta)
+        h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_va, h_111_vmax, h_111_beta)
 
         det.SetTransferFunction(tf_b, tf_c, tf_d, rc1, rc2, rcfrac)
+        det.SetAntialiasingRC(aliasrc)
         det.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
         # det.siggenInst.set_k0_params(k0_0, k0_1, k0_2, k0_3)
         det.trapping_rc = charge_trapping
@@ -275,8 +286,15 @@ def plot(sample_file_name, directory):
 
             dataLen = wf.wfLength
             t_data = np.arange(dataLen) * 10
-            ax0.plot(t_data, ml_wf[:dataLen], color=colors[wf_idx], alpha=0.1)
-            ax1.plot(t_data, ml_wf[:dataLen] -  wf.windowedWf, color=colors[wf_idx],alpha=0.1)
+            color_idx = wf_idx % len(colors)
+            ax0.plot(t_data, ml_wf[:dataLen], color=colors[color_idx], alpha=0.1)
+            resid = ml_wf[:dataLen] -  wf.windowedWf
+
+            if np.amax(np.abs(resid)) > 20 and residWarnings[wf_idx] == 0:
+                print "wf %d has a big residual!" % wf_idx
+                residWarnings[wf_idx] = 1
+
+            ax1.plot(t_data, resid, color=colors[color_idx],alpha=0.1)
 
     if doWaveformPlot:
         ax0.set_ylim(-20, wf.wfMax*1.1)
@@ -330,7 +348,12 @@ def plot(sample_file_name, directory):
             [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
             max_idx = np.argmax(n)
             print "%s mode: %f" % ("trapping_rc", b[max_idx])
-
+        if i==3:
+            axis = vFig.add_subplot(6,3,idx)
+            axis.set_ylabel("alias_rc")
+            [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
+            max_idx = np.argmax(n)
+            print "%s mode: %f" % ("alias_rc", b[max_idx])
 
 
     positionFig = plt.figure(3, figsize=(10,10))
@@ -339,9 +362,10 @@ def plot(sample_file_name, directory):
 
     if not doContourHist:
         for wf_idx in range(numWaveforms):
+            colorbar_idx = wf_idx % len(colorbars)
             xedges = np.linspace(0, np.around(det.detector_radius,1), np.around(det.detector_radius,1)*10+1)
             yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
-            plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ],  cmap=plt.get_cmap(colorbars[wf_idx]), cmin=0.1)
+            plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ],  cmap=plt.get_cmap(colorbars[colorbar_idx]), cmin=0.01)
             rad_mean = np.mean(wf_params[wf_idx, 0,:])
             print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
             # print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
@@ -398,15 +422,18 @@ def plot(sample_file_name, directory):
         fields = np.exp(fields_log)
 
         for  idx in range(num_samples):
-            h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_lnbeta, h_111_lnbeta, = velo[:,idx]
+            h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta, = velo[:,idx]
             # print "v params: ",
             # print mu_0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult
+
+            h_100_va = h_100_multa * h_111_va
+            h_100_vmax = h_100_multmax * h_111_vmax
 
             h100 = np.empty_like(fields)
             h111 = np.empty_like(fields)
 
-            h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_vlo, h_100_vhi, h_100_lnbeta)
-            h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_vlo, h_111_vhi, h_111_lnbeta)
+            h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_va, h_100_vmax, h_100_beta)
+            h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_va, h_111_vmax, h_111_beta)
 
 
             for (idx,field) in enumerate(fields):
@@ -443,8 +470,8 @@ def plot(sample_file_name, directory):
 
         plt.plot(fields, h100_reg, color="g")
         plt.plot(fields, h111_reg, color="g", ls="--")
-        plt.plot(fields, h100_bruy, color="purple")
-        plt.plot(fields, h111_bruy, color="purple", ls="--")
+        plt.plot(fields, h100_bruy, color="orange")
+        plt.plot(fields, h111_bruy, color="orange", ls="--")
 
         # plt.axvline(x=250, color="black", ls=":")
         plt.axvline(x=500, color="black", ls=":")
@@ -454,12 +481,13 @@ def plot(sample_file_name, directory):
         # plt.ylim(1E4, 1E8)
 
 
-    plt.figure(6)
-    for wf_idx in range(numWaveforms):
-        plt.hist(phi_hist_arr[wf_idx,:], color=colors[wf_idx])
-    plt.axvline(x=0, color="r", ls=":")
-    plt.axvline(x=np.pi/4, color="r", ls=":")
-    plt.xlabel("Azimuthal Angle (0 to pi/4)")
+    # plt.figure(6)
+    # for wf_idx in range(numWaveforms):
+    #     color_idx = wf_idx % len(colors)
+    #     plt.hist(phi_hist_arr[wf_idx,:], color=colors[color_idx])
+    # plt.axvline(x=0, color="r", ls=":")
+    # plt.axvline(x=np.pi/4, color="r", ls=":")
+    # plt.xlabel("Azimuthal Angle (0 to pi/4)")
     plt.show()
 
 def find_drift_velocity_bruyneel(E, mu_0, beta, E_0, mu_n = 0):

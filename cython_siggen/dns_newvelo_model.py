@@ -46,21 +46,19 @@ def initT0Padding(maxt_pad, linear_baseline_origin):
     baseline_origin_idx = linear_baseline_origin
 
 traprc_min = 150
-tf_phi_max = np.pi/2
+tf_phi_max = -1.2
 
 tf_first_idx = 0
-velo_first_idx = 6
-# k0_first_idx = 12
+velo_first_idx = 7
 
 grad_idx = velo_first_idx + 6
 imp_avg_idx = grad_idx + 1
 trap_idx = imp_avg_idx + 1
 
-
-
 ba_idx, c_idx, dc_idx = np.arange(3)+ tf_first_idx
 rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
-# k0_0_idx, k0_1_idx, k0_2_idx, k0_3_idx = np.arange(4)+ k0_first_idx
+aliasrc_idx = tf_first_idx+6
+
 
 ba_prior = 0.107213
 c_prior = -0.808
@@ -70,7 +68,6 @@ rc1_prior =  73.085166
 rc2_prior = 1.138420
 rc_frac_prior = 0.997114
 
-
 # h_100_mu0_prior, h_100_beta_prior, h_100_e0_prior = 66333., 0.744, 181.
 # h_111_mu0_prior, h_111_beta_prior, h_111_e0_prior =  107270., 0.580, 100.
 
@@ -79,24 +76,14 @@ va_lims = [2.5E6, 10E6]
 vmax_lims = [7.5E6, 1.5E7]
 beta_lims = [0.4, 1]
 
-
 priors = np.empty(trap_idx+1) #6 + 2)
 prior_vars =  np.empty(len(priors))
 
 priors[rc1_idx:rc1_idx+3] = rc1_prior, rc2_prior, rc_frac_prior
 prior_vars[rc1_idx:rc1_idx+3] = 0.2, 0.3, 0.001
 
-# priors[velo_first_idx:velo_first_idx+3] = h_100_mu0_prior, h_100_beta_prior, h_100_e0_prior
-# priors[velo_first_idx+3:velo_first_idx+6] = h_111_mu0_prior, h_111_beta_prior, h_111_e0_prior
-
-# velo_width = 10.
-# velo_var = 1.
-# prior_vars[velo_first_idx:velo_first_idx+6] = velo_var*priors[velo_first_idx:velo_first_idx+6]
-
-# k0_var = 0.1
-# k0_0_prior, k0_1_prior, k0_2_prior, k0_3_prior = 9.2652, -26.3467, 29.6137, -12.3689
-# priors[k0_first_idx:k0_first_idx+4] = k0_0_prior, k0_1_prior, k0_2_prior, k0_3_prior
-# prior_vars[k0_first_idx:k0_first_idx+4] = k0_var*priors[k0_first_idx:k0_first_idx+4]
+priors[aliasrc_idx] = 3.
+prior_vars[aliasrc_idx] = 3.
 
 priors[grad_idx] = 100
 prior_vars[grad_idx] = 3
@@ -146,8 +133,8 @@ class Model(object):
         scale_arr  = np.empty(num_waveforms)
         t0_arr     = np.empty(num_waveforms)
         smooth_arr = np.empty(num_waveforms)
-        m_arr      = np.empty(num_waveforms)
-        b_arr      = np.empty(num_waveforms)
+        # m_arr      = np.empty(num_waveforms)
+        # b_arr      = np.empty(num_waveforms)
 
         print "\n"
         #draw 8 waveform params for each waveform
@@ -165,8 +152,8 @@ class Model(object):
             scale_arr[wf_idx] = 5*rng.randn() + scale - .005*scale
             t0_arr[wf_idx] = 3*rng.randn() + maxt_guess
             smooth_arr[wf_idx] = np.clip(rng.randn() + smooth_guess, 0, 20)
-            m_arr[wf_idx] =  0.0001*rng.randn() + 0.
-            b_arr[wf_idx] =  0.001*rng.randn() + 0.
+            # m_arr[wf_idx] =  0.0001*rng.randn() + 0.
+            # b_arr[wf_idx] =  0.001*rng.randn() + 0.
 
             # print "  creating wf %d" % wf_idx
             # print "  >>",
@@ -182,8 +169,10 @@ class Model(object):
         rc2 = dnest4.wrap(prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx], 0.1, 10)
         rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
 
-        grad = rng.randint(len(detector.gradList))
-        avgImp = rng.randint(len(detector.impAvgList))
+        aliasrc = dnest4.wrap(prior_vars[aliasrc_idx]*rng.randn() + priors[aliasrc_idx], 0.01, 10)
+
+        # grad = rng.randint(len(detector.gradList))
+        # avgImp = rng.randint(len(detector.impAvgList))
         charge_trapping = rng.rand()*(1000 - traprc_min) +  traprc_min
 
         # grad = rng.randint(len(detector.gradList))
@@ -191,8 +180,12 @@ class Model(object):
         grad = rng.rand()*( detector.gradList[-1] - detector.gradList[0] ) + detector.gradList[0]
         avgImp = rng.rand()*( detector.impAvgList[-1] - detector.impAvgList[0] ) + detector.impAvgList[0]
 
-        h_100_va = (va_lims[1] - va_lims[0]) * rng.rand() + va_lims[0]
-        h_100_vmax = (vmax_lims[1] - vmax_lims[0]) * rng.rand() + vmax_lims[0]
+
+        h_100_multa = rng.rand()* + 1.
+        h_100_multmax = rng.rand()* + 1.
+
+        # h_100_va = (va_lims[1] - va_lims[0]) * rng.rand() + va_lims[0]
+        # h_100_vmax = (vmax_lims[1] - vmax_lims[0]) * rng.rand() + vmax_lims[0]
         h_100_beta = (beta_lims[1] - beta_lims[0]) * rng.rand() + beta_lims[0]
 
         h_111_va = (va_lims[1] - va_lims[0]) * rng.rand() + va_lims[0]
@@ -210,11 +203,11 @@ class Model(object):
         return np.hstack([
               phi, omega, d,
               #b, c, dc,
-              rc1, rc2, rcfrac,
-              h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
+              rc1, rc2, rcfrac, aliasrc,
+              h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta,
             #   k0_0, k0_1, k0_2, k0_3,
               grad, avgImp, charge_trapping,
-              rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], m_arr[:], b_arr[:]
+              rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:],
             ])
 
     def perturb(self, params):
@@ -224,44 +217,113 @@ class Model(object):
         """
         logH = 0.0
 
-        #this adjusts one wf at a time
-        #choose which set of params to adjust (detector, wf 1, wf2...)
-        #
-        # num_sets = num_waveforms+1
-        # set_idx = rng.randint(num_sets)
-        #
-        # #choose how many t
-        # reps = 1;
-        # if(rng.rand() < 0.5):
-        #     reps += np.int(np.power(100.0, rng.rand()));
-        #
-        # for i in range(reps):
-        #     if set_idx == 0:
-        #         #detector param
-        #         which = rng.randint(len(priors))
-        #     else:
-        #         #waveform param (from the one waveform we're adjusting this go-around
-        #         which = rng.randint(8) + len(priors) + (set_idx-1)*num_waveforms
+        #decide whether to adjust just waveforms, or both wfs and detector params
 
-        #this adjusts wfs simultaneouslt
-        reps = 1;
-        if(rng.rand() < 0.5):
+        if rng.rand() <= 0.5:
+            #adjust detector only
+            reps = 1;
+            if(rng.rand() < 0.5):
+                reps += np.int(np.power(100.0, rng.rand()));
+
+            for i in range(reps):
+                which = rng.randint(len(priors))
+                logH += self.perturb_detector(params, which)
+        else:
+            #adjust at least one waveform:
+            self.changed_wfs.fill(0)
+            randt2 = rng.randn()/np.sqrt(-np.log(rng.rand()));
+            chance = np.power(10.0, -3*np.abs(randt2));
+
+            for wf_idx in range(num_waveforms):
+                if rng.rand() <= chance:
+                     self.changed_wfs[wf_idx] = True
+                #make sure one waveform is changed:
+            if np.any(self.changed_wfs) == 0:
+                self.changed_wfs[rng.randint(num_waveforms)] = 1
+
+            for wf_idx in range(num_waveforms):
+                if self.changed_wfs[wf_idx] == 1:
+                    logH += self.perturb_wf(params, wf_idx)
+        return logH
+
+    def perturb_detector(self, params, which):
+        logH = 0.0
+
+        if which == ba_idx: #lets call this phi
+           params[which] += (tf_phi_max + np.pi/2)*dnest4.randh()
+           params[which] = dnest4.wrap(params[which], -np.pi/2, tf_phi_max)
+        elif which == c_idx: #call it omega
+            params[which] += 0.1*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], 0.07, 0.2)
+        elif which == dc_idx: #d
+            params[which] += 0.01*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], 0.7, 0.9)
+
+        elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
+            #all normally distributed priors
+            logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            params[which] += prior_vars[which]*dnest4.randh()
+            logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+
+        elif which == aliasrc_idx:
+          params[which] += 9.9*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], 0.1, 10)
+
+        elif which == grad_idx:
+          params[which] += (detector.gradList[-1] - detector.gradList[0])*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], detector.gradList[0], detector.gradList[-1])
+        elif which == imp_avg_idx:
+          params[which] += (detector.impAvgList[-1] - detector.impAvgList[0])*dnest4.randh()
+          params[which] = dnest4.wrap(params[which], detector.impAvgList[0], detector.impAvgList[-1])
+        elif which == trap_idx:
+            params[which] += (1000 - traprc_min)*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], traprc_min, 1000)
+
+        elif which == velo_first_idx:
+          params[which] += (va_lims[1] - va_lims[0])  *dnest4.randh()
+          params[which] = dnest4.wrap(params[which], va_lims[0], va_lims[1])
+        elif which == velo_first_idx+1:
+          params[which] += (vmax_lims[1] - vmax_lims[0])  *dnest4.randh()
+          params[which] = dnest4.wrap(params[which], vmax_lims[0], vmax_lims[1])
+        elif which == velo_first_idx+2 or  which == velo_first_idx+3:
+          params[which] += 1.  *dnest4.randh()
+          params[which] = dnest4.wrap(params[which], 1., 2.)
+        elif which == velo_first_idx+4 or which == velo_first_idx+5:
+          params[which] += (beta_lims[1] - beta_lims[0])  *dnest4.randh()
+          params[which] = dnest4.wrap(params[which], beta_lims[0], beta_lims[1])
+
+        else: #velocity or rc params: cant be below 0, can be arb. large
+            print "which value %d not supported" % which
+            exit(0)
+
+        return logH
+
+
+    def perturb_wf(self, params, wf_idx, ):
+    #do both wf and detector params in case theres strong correlation
+        logH = 0.0
+
+        reps = 1
+        if rng.rand() < 0.5:
             reps += np.int(np.power(100.0, rng.rand()));
 
         for i in range(reps):
-            if(rng.rand() < 0.5):
-                #detector param
-                which = rng.randint(len(priors))
-            else:
-                #waveform param (from any of the waveforms)
-                which = rng.randint(8*num_waveforms) + len(priors)
+            wf_which = rng.randint(6)
 
-            if which >= len(priors):
+            # my_which = rng.randint(len(priors) + 8)
+
+            # if my_which < len(priors):
+            #     #detector variable
+            #     logH += self.perturb_detector(params, my_which)
+            #
+            # else:
+            if wf_which < 6:
                 #this is a waveform variable!
-                wf_which =  np.int(np.floor((which - len(priors)) / num_waveforms))
-                wf_idx = (which - len(priors)) % num_waveforms
+                # wf_which =  np.int(my_which - len(priors))
 
-                wf_idx = (which - len(priors)) % num_waveforms
+                #which idx of the global params array
+                which = len(priors) + wf_which*num_waveforms + wf_idx
+
                 rad_idx = len(priors) + wf_idx
                 theta_idx =  len(priors) + 2*num_waveforms+ wf_idx
                 self.changed_wfs[wf_idx] = 1
@@ -357,14 +419,14 @@ class Model(object):
                   params[which] = dnest4.wrap(params[which], 0, 25)
                 #   print "  adjusted smooth to %f" %  ( params[which])
 
-                elif wf_which == 6: #wf baseline slope (m)
-                    logH -= -0.5*(params[which]/1E-4)**2
-                    params[which] += 1E-4*dnest4.randh()
-                    logH += -0.5*(params[which]/1E-4)**2
-                elif wf_which == 7: #wf baseline incercept (b)
-                    logH -= -0.5*(params[which]/1E-2)**2
-                    params[which] += 1E-2*dnest4.randh()
-                    logH += -0.5*(params[which]/1E-2)**2
+                # elif wf_which == 6: #wf baseline slope (m)
+                #     logH -= -0.5*(params[which]/1E-4)**2
+                #     params[which] += 1E-4*dnest4.randh()
+                #     logH += -0.5*(params[which]/1E-4)**2
+                # elif wf_which == 7: #wf baseline incercept (b)
+                #     logH -= -0.5*(params[which]/1E-2)**2
+                #     params[which] += 1E-2*dnest4.randh()
+                #     logH += -0.5*(params[which]/1E-2)**2
                 else:
                     print "wf which value %d (which value %d) not supported" % (wf_which, which)
                     exit(0)
@@ -372,57 +434,6 @@ class Model(object):
                 #   params[which] += 0.01*dnest4.randh()
                 #   params[which]=dnest4.wrap(params[which], -1, 1)
                 #   print "  adjusted b to %f" %  ( params[which])
-
-            elif which == ba_idx: #lets call this phi
-               params[which] += (tf_phi_max + np.pi/2)*dnest4.randh()
-               params[which] = dnest4.wrap(params[which], -np.pi/2, tf_phi_max)
-            elif which == c_idx: #call it omega
-                params[which] += 0.1*dnest4.randh()
-                params[which] = dnest4.wrap(params[which], 0.13, 0.14)
-            elif which == dc_idx: #d
-                params[which] += 0.01*dnest4.randh()
-                params[which] = dnest4.wrap(params[which], 0.81, 0.82)
-
-            elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
-                #all normally distributed priors
-                logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
-                params[which] += prior_vars[which]*dnest4.randh()
-                logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
-
-            elif which == grad_idx:
-              params[which] += (detector.gradList[-1] - detector.gradList[0])*dnest4.randh()
-              params[which] = dnest4.wrap(params[which], detector.gradList[0], detector.gradList[-1])
-            elif which == imp_avg_idx:
-              params[which] += (detector.impAvgList[-1] - detector.impAvgList[0])*dnest4.randh()
-              params[which] = dnest4.wrap(params[which], detector.impAvgList[0], detector.impAvgList[-1])
-
-
-            elif which == velo_first_idx or which == velo_first_idx+1:
-              params[which] += (va_lims[1] - va_lims[0])  *dnest4.randh()
-              params[which] = dnest4.wrap(params[which], va_lims[0], va_lims[1])
-            elif which == velo_first_idx+2 or which == velo_first_idx+3:
-              params[which] += (vmax_lims[1] - vmax_lims[0])  *dnest4.randh()
-              params[which] = dnest4.wrap(params[which], vmax_lims[0], vmax_lims[1])
-            elif which == velo_first_idx+4 or which == velo_first_idx+5:
-              params[which] += (beta_lims[1] - beta_lims[0])  *dnest4.randh()
-              params[which] = dnest4.wrap(params[which], beta_lims[0], beta_lims[1])
-
-            # elif which >= velo_first_idx and which < velo_first_idx+6:
-            #     params[velo_first_idx:velo_first_idx+6] = self.gen_new_velo_param(which - velo_first_idx, params[velo_first_idx:velo_first_idx+6])
-
-            # elif which >= k0_first_idx and which < k0_first_idx+4:
-            #     minval, maxval = -50, 50
-            #     params[which] += (maxval-minval) *dnest4.randh()
-            #     params[which] = dnest4.wrap(params[which], minval, maxval)
-
-            elif which == trap_idx:
-              params[which] += (1000 - traprc_min)*dnest4.randh()
-              params[which] = dnest4.wrap(params[which], traprc_min, 1000)
-
-            else: #velocity or rc params: cant be below 0, can be arb. large
-                print "which value %d not supported" % which
-                exit(0)
-
 
         return logH
 
@@ -480,14 +491,14 @@ class Model(object):
         """
         Gaussian sampling distribution.
         """
-        b_over_a, c, dc, rc1, rc2, rcfrac = params[tf_first_idx:tf_first_idx+6]
-        h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,  = params[velo_first_idx:velo_first_idx+6]
+        b_over_a, c, dc, rc1, rc2, rcfrac, aliasrc = params[tf_first_idx:tf_first_idx+7]
+        h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta,  = params[velo_first_idx:velo_first_idx+6]
         # k0_0, k0_1, k0_2, k0_3 = params[k0_first_idx:k0_first_idx+4]
         charge_trapping = params[trap_idx]
         grad = (params[grad_idx])
         avg_imp = (params[imp_avg_idx])
 
-        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[len(priors):].reshape((8, num_waveforms))
+        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr,  = params[len(priors):].reshape((6, num_waveforms))
 
         # print self.changed_wfs
         # print self.ln_likes
@@ -502,9 +513,9 @@ class Model(object):
                 # print rad_arr[wf_idx]
                 args.append([wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
                               scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
-                              m_arr[wf_idx], b_arr[wf_idx],
-                              b_over_a, c, dc, rc1, rc2, rcfrac,
-                              h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
+                            #   m_arr[wf_idx], b_arr[wf_idx],
+                              b_over_a, c, dc, rc1, rc2, rcfrac,aliasrc,
+                              h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta,
                             #   k0_0, k0_1, k0_2, k0_3,
                               grad, avg_imp, charge_trapping, baseline_origin_idx, wf_idx
                             ])
@@ -518,9 +529,9 @@ class Model(object):
                 # if not self.changed_wfs[wf_idx]: continue
                 result = WaveformLogLike(wf,  rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx],
                               scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx],
-                              m_arr[wf_idx], b_arr[wf_idx],
-                              b_over_a, c, dc, rc1, rc2, rcfrac,
-                              h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
+                            #   m_arr[wf_idx], b_arr[wf_idx],
+                              b_over_a, c, dc, rc1, rc2, rcfrac,aliasrc,
+                              h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta,
                             #   k0_0, k0_1, k0_2, k0_3,
                               grad, avg_imp, charge_trapping, baseline_origin_idx, wf_idx
                             )
@@ -550,8 +561,8 @@ def get_velo_params(v_a, v_max, beta):
 def WaveformLogLikeStar(a_b):
   return WaveformLogLike(*a_b)
 
-def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_omega, d, rc1, rc2, rcfrac,
-        h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
+def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth,  tf_phi, tf_omega, d, rc1, rc2, rcfrac,aliasrc,
+        h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta,
         grad, avg_imp, charge_trapping, bl_origin_idx, wf_idx):
     # #TODO: This needs to be length normalized somehow
     # print "think about length normalization, you damn fool"
@@ -566,6 +577,9 @@ def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_o
     b_ov_a = c - np.tan(tf_phi) * np.sqrt(d**2-c**2)
     a = 1./(1+b_ov_a)
     tf_b = a * b_ov_a
+
+    h_100_va = h_100_multa * h_111_va
+    h_100_vmax = h_100_multmax * h_111_vmax
 
     h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_va, h_100_vmax, h_100_beta)
     h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_va, h_111_vmax, h_111_beta)
@@ -588,6 +602,8 @@ def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_o
       return  {'wf_idx':wf_idx, 'ln_like':-np.inf}
 
     detector.SetTransferFunction(tf_b, c, d, rc1, rc2, rcfrac, )
+    detector.SetAntialiasingRC(aliasrc)
+
     detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
     # detector.siggenInst.set_k0_params(k0_0, k0_1, k0_2, k0_3)
     detector.trapping_rc = charge_trapping
@@ -602,10 +618,10 @@ def WaveformLogLike(wf, rad, phi, theta, scale, maxt, smooth, m, b, tf_phi, tf_o
       return  {'wf_idx':wf_idx, 'ln_like':-np.inf}
     if np.any(np.isnan(model)):  return {'wf_idx':wf_idx, 'ln_like':-np.inf}
 
-    start_idx = -bl_origin_idx
-    end_idx = data_len - bl_origin_idx - 1
-    baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, data_len)
-    model += baseline_trend
+    # start_idx = -bl_origin_idx
+    # end_idx = data_len - bl_origin_idx - 1
+    # baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, data_len)
+    # model += baseline_trend
 
     inv_sigma2 = 1.0/(model_err**2)
     ln_like = -0.5*(np.sum((data-model)**2*inv_sigma2 - np.log(inv_sigma2)))
