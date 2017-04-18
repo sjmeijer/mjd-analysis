@@ -96,6 +96,7 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
       baseline.TransformInPlace(waveform)
 
       print( "Waveform number %d in run %d" % (entryNumber, iRun))
+
       #fitWaveform(waveform, fig, fig2, iRun, entryNumber, channelNumber)
 
       np_data = waveform.GetVectorData()
@@ -119,7 +120,7 @@ def GetWaveforms(runRanges, channelNumber, numWaveforms, cutStr):
 
       energy = getWaveformEnergy(gatTree, builtTree, entryNumber, channelNumber)
 
-      waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineRMS(),  energy=energy) )
+      waveformArray.append( Waveform(np_data, channelNumber, iRun, entryNumber ,baseline.GetBaselineMean(), baseline.GetBaselineRMS(),  energy=energy) )
       if len(waveformArray) >= numWaveforms: break
 
     gat_file.Close()
