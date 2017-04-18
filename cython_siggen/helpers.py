@@ -209,5 +209,5 @@ def findTimePoint(data, percent, timePointIdx=0):
     return np.where(np.greater(int_data, percent))[0][timePointIdx]
 
   else:
-    print "timepointidx %d is not supported" % timePointIdx
+    print( "timepointidx %d is not supported" % timePointIdx)
     exit(0)
