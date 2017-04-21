@@ -212,7 +212,7 @@ def plot(sample_file_name, directory):
 
     tf = np.empty((6, num_samples))
     velo = np.empty((6, num_samples))
-    wf_params = np.empty((numWaveforms, 8, num_samples))
+    wf_params = np.empty((numWaveforms, 6, num_samples))
     det_params = np.empty((4, num_samples))
     residWarnings = np.zeros(numWaveforms)
 
@@ -259,14 +259,14 @@ def plot(sample_file_name, directory):
         det.trapping_rc = charge_trapping
         det.SetGrads(grad, avg_imp)
 
-        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, m_arr, b_arr = params[trap_idx+1:].reshape((8, numWaveforms))
+        rad_arr, phi_arr, theta_arr, scale_arr, t0_arr, smooth_arr, = params[trap_idx+1:].reshape((6, numWaveforms))
 
 
         for (wf_idx,wf) in enumerate(wfs):
           rad, phi, theta = rad_arr[wf_idx], phi_arr[wf_idx], theta_arr[wf_idx]
           scale, t0, smooth =  scale_arr[wf_idx], t0_arr[wf_idx], smooth_arr[wf_idx]
-          m, b = m_arr[wf_idx], b_arr[wf_idx]
-          wf_params[wf_idx, :, idx] = rad, phi, theta, scale, t0, smooth, m, b
+        #   m, b = m_arr[wf_idx], b_arr[wf_idx]
+          wf_params[wf_idx, :, idx] = rad, phi, theta, scale, t0, smooth,
 
           r = rad * np.cos(theta)
           z = rad * np.sin(theta)
@@ -279,10 +279,10 @@ def plot(sample_file_name, directory):
             if ml_wf is None:
                 continue
 
-            start_idx = -baseline_origin_idx
-            end_idx = output_wf_length - baseline_origin_idx - 1
-            baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, output_wf_length)
-            ml_wf += baseline_trend
+            # start_idx = -baseline_origin_idx
+            # end_idx = output_wf_length - baseline_origin_idx - 1
+            # baseline_trend = np.linspace(m*start_idx+b, m*end_idx+b, output_wf_length)
+            # ml_wf += baseline_trend
 
             dataLen = wf.wfLength
             t_data = np.arange(dataLen) * 10
@@ -407,7 +407,7 @@ def plot(sample_file_name, directory):
         vFig = plt.figure(4, figsize=(20,10))
         wfLabels = ['rad', 'phi', 'theta', 'scale', 't0', 'smooth', 'm', 'b']
         num_bins = 100
-        for i in range(8):
+        for i in range(6):
             axis = vFig.add_subplot(4,2,i+1)
             axis.set_ylabel(wfLabels[i])
             [n, b, p] = axis.hist(wf_params[0, i,:], bins=num_bins)
