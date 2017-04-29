@@ -33,7 +33,7 @@ doInitPlot =0
 doContourHist = 0
 doWaveformPlot =0
 doHists = 1
-plotNum = 1000 #for plotting during the Run
+plotNum = 5000 #for plotting during the Run
 doVeloPlot = 1
 
 # doWaveformPlot =1
@@ -46,12 +46,10 @@ numThreads = multiprocessing.cpu_count()
 
 max_sample_idx = 200
 fallPercentage = 0.97
-fieldFileName = "P42574A_mar28_21by21.npz"
-# fieldFileName = "P42574A_bull_fields_impAndAvg_11by11.npz"
-#fieldFileName = "P42574A_bull_fields_lowimp_impAndAvg_11by11.npz"
-#
-detName = "conf/P42574A_bull.conf"
-wfFileName = "P42574A_64_spread.npz"
+
+fieldFileName = "P42661A_apr27_21by21.npz"
+detName = "conf/P42661A_bull.conf"
+wfFileName = "P42661A_64_spread.npz"
 
 # wfFileName = "P42574A_12_fastandslow_oldwfs.npz"
 if os.path.isfile(wfFileName):
@@ -60,44 +58,22 @@ if os.path.isfile(wfFileName):
     #wf 2 is super weird
 
     wfs = data['wfs']
-    wfidxs = range(64)
+    wfidxs = range(0,64, 8)
     wfs = wfs[wfidxs]
-
-
-    #one slow waveform
-    # fitwfnum = 5
-    # wfs = wfs[:fitwfnum+1]
-    # wfs = np.delete(wfs, range(0,fitwfnum))
-    # numLevels = 150
-
-    #wfs = wfs[0:24:3]
-    # wfidxs = [0, 5, 8, 11, 14, 17, 20, 23]
-    # wfidxs = [0, 5, 8, 14]
-    # wfs = wfs[wfidxs]
-
-    #it looks like wf2 is bad.  Let's try something else
-    # wfidxs = [0,1,4,6,8,10,12,14,16,17,18,19,20,21,22,23]
-    # # wfidxs = [7, 8, 9, 11, 12, 13, 14, 15]
-    # wfs = wfs[wfidxs]
+    rc1 = data['rc1']
+    rc2 = data['rc2']
+    rcfrac = data['rcfrac']
 
     numLevels = 600
 
-    # 4 medium waveforms
-    # wfs = wfs[:8]
-    # wfs = np.delete(wfs, [0,1,2,3])
-
-    # #8 wfs questionable provenance
-    # wfs = wfs[:11]
-    # wfs = np.delete(wfs, [1,2,3])
-
     numWaveforms = wfs.size
-    print "Fitting %d waveforms" % numWaveforms,
+    print ("Fitting %d waveforms" % numWaveforms,)
     if numWaveforms < numThreads:
       numThreads = numWaveforms
-    print "using %d threads" % numThreads
+    print ("using %d threads" % numThreads)
 
 else:
-  print "Saved waveform file %s not available" % wfFileName
+  print ("Saved waveform file %s not available" % wfFileName)
   exit(0)
 
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey", "chocolate" ]
@@ -113,8 +89,8 @@ for (wf_idx,wf) in enumerate(wfs):
   wf.WindowWaveformAroundMax(fallPercentage=fallPercentage, rmsMult=2, earlySamples=max_sample_idx)
   baselineLengths[wf_idx] = wf.t0Guess
 
-  print "wf %d (%d of %d):" % (wfidxs[wf_idx], wf_idx, len(wfidxs))
-  print "   length %d (entry %d from run %d, color is %s)" % ( wf.wfLength, wf.entry_number, wf.runNumber, colors[color_idx])
+  print( "wf %d (%d of %d):" % (wfidxs[wf_idx], wf_idx, len(wfidxs)))
+  print( "   length %d (entry %d from run %d, color is %s)" % ( wf.wfLength, wf.entry_number, wf.runNumber, colors[color_idx]))
   wfLengths[wf_idx] = wf.wfLength
   wfMaxes[wf_idx] = np.argmax(wf.windowedWf)
 
@@ -126,7 +102,7 @@ for (wf_idx,wf) in enumerate(wfs):
 
 baseline_origin_idx = np.amin(baselineLengths) - 30
 if baseline_origin_idx < 0:
-    print "not enough baseline!!"
+    print ("not enough baseline!!")
     exit(0)
 
 initT0Padding(max_sample_idx, baseline_origin_idx)
@@ -144,14 +120,12 @@ det =  Detector(detName, timeStep=timeStepSize, numSteps=siggen_wf_length, maxWf
 det.LoadFieldsGrad(fieldFileName)
 
 def fit(directory):
-  if reinitializeDetector:
-      initializeDetectorAndWaveforms(det.__getstate__(), wfs, reinit=reinitializeDetector, doInterp=doMaxInterp)
-  else:
-      initializeDetectorAndWaveforms(det, wfs, reinit=reinitializeDetector, doInterp=doMaxInterp)
+
+  initializeDetectorAndWaveforms(det, wfs, reinit=reinitializeDetector, doInterp=doMaxInterp)
   initMultiThreading(numThreads)
 
   # Create a model object and a sampler
-  model = Model()
+  model = Model(rc1,rc2,rcfrac)
   sampler = dnest4.DNest4Sampler(model,
                                  backend=dnest4.backends.CSVBackend(basedir ="./" + directory,
                                                                     sep=" "))
@@ -197,14 +171,14 @@ def plot(sample_file_name, directory):
 
     # data = pd.read_csv("sample_plot.txt", delim_whitespace=True, header=None)
     # num_samples = len(data.index)
-    print "found %d samples" % num_samples
+    print ("found %d samples" % num_samples)
 
     if sample_file_name== (directory+"sample_plot.txt"):
         if num_samples > plotNum: num_samples = plotNum
 
     if doWaveformPlot:
         if num_samples > plotNum: num_samples = plotNum
-    print "plotting %d samples" % num_samples
+    print ("plotting %d samples" % num_samples)
 
     r_arr = np.empty((numWaveforms, num_samples))
     z_arr = np.empty((numWaveforms, num_samples))
@@ -233,7 +207,7 @@ def plot(sample_file_name, directory):
         tf_c = c
         tf_d = d
 
-        h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta,  = params[velo_first_idx:velo_first_idx+6]
+        h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,  = params[velo_first_idx:velo_first_idx+6]
         # k0_0, k0_1, k0_2, k0_3 = params[k0_first_idx:k0_first_idx+4]
         charge_trapping = params[trap_idx]
         grad, avg_imp = params[grad_idx], params[grad_idx+1]
@@ -246,8 +220,8 @@ def plot(sample_file_name, directory):
         velo[:,idx] = params[velo_first_idx:velo_first_idx+6]
         det_params[:,idx] = grad, avg_imp, charge_trapping, aliasrc
 
-        h_100_va = h_100_multa * h_111_va
-        h_100_vmax = h_100_multmax * h_111_vmax
+        # h_100_va = h_100_multa * h_111_va
+        # h_100_vmax = h_100_multmax * h_111_vmax
 
         h_100_mu0, h_100_beta, h_100_e0 = get_velo_params(h_100_va, h_100_vmax, h_100_beta)
         h_111_mu0, h_111_beta, h_111_e0 = get_velo_params(h_111_va, h_111_vmax, h_111_beta)
@@ -291,7 +265,7 @@ def plot(sample_file_name, directory):
             resid = ml_wf[:dataLen] -  wf.windowedWf
 
             if np.amax(np.abs(resid)) > 20 and residWarnings[wf_idx] == 0:
-                print "wf %d has a big residual!" % wf_idx
+                print ("wf %d has a big residual!" % wf_idx)
                 residWarnings[wf_idx] = 1
 
             ax1.plot(t_data, resid, color=colors[color_idx],alpha=0.1)
@@ -322,38 +296,38 @@ def plot(sample_file_name, directory):
         # axis.axvline(x=(1+velo_lims)*velo_priors[i], color="r")
         # axis.axvline(x=velo_priors[i], color="g")
         max_idx = np.argmax(n)
-        print "%s mode: %f" % (vLabels[i], b[max_idx])
+        print ("%s mode: %f" % (vLabels[i], b[max_idx]))
 
         axis = vFig.add_subplot(6,3,idx-2)
         axis.set_ylabel(tfLabels[i])
         [n, b, p] = axis.hist(tf[i,:], bins=num_bins)
         max_idx = np.argmax(n)
-        print "%s mode: %f" % (tfLabels[i], b[max_idx])
+        print ("%s mode: %f" % (tfLabels[i], b[max_idx]))
 
         if i==0:
             axis = vFig.add_subplot(6,3,idx)
             axis.set_ylabel("imp grad")
             [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
             max_idx = np.argmax(n)
-            print "%s mode: %f" % ("imp_grad", b[max_idx])
+            print ("%s mode: %f" % ("imp_grad", b[max_idx]))
         if i==1:
             axis = vFig.add_subplot(6,3,idx)
             axis.set_ylabel("imp average")
             [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
             max_idx = np.argmax(n)
-            print "%s mode: %f" % ("avg_imp", b[max_idx])
+            print ("%s mode: %f" % ("avg_imp", b[max_idx]))
         if i==2:
             axis = vFig.add_subplot(6,3,idx)
             axis.set_ylabel("trapping_rc")
             [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
             max_idx = np.argmax(n)
-            print "%s mode: %f" % ("trapping_rc", b[max_idx])
+            print ("%s mode: %f" % ("trapping_rc", b[max_idx]))
         if i==3:
             axis = vFig.add_subplot(6,3,idx)
             axis.set_ylabel("alias_rc")
             [n, b, p] = axis.hist(det_params[i,:], bins=num_bins)
             max_idx = np.argmax(n)
-            print "%s mode: %f" % ("alias_rc", b[max_idx])
+            print( "%s mode: %f" % ("alias_rc", b[max_idx]))
 
 
     positionFig = plt.figure(3, figsize=(10,10))
@@ -367,7 +341,7 @@ def plot(sample_file_name, directory):
             yedges = np.linspace(0, np.around(det.detector_length,1), np.around(det.detector_length,1)*10+1)
             plt.hist2d(r_arr[wf_idx,:], z_arr[wf_idx,:],  bins=[ xedges,yedges  ],  cmap=plt.get_cmap(colorbars[colorbar_idx]), cmin=0.01)
             rad_mean = np.mean(wf_params[wf_idx, 0,:])
-            print "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) )
+            print( "wf %d rad: %f + %f - %f" % (wf_idx, rad_mean, np.percentile(wf_params[wf_idx, 0,:], 84.1)-rad_mean, rad_mean- np.percentile(wf_params[wf_idx, 0,:], 15.9) ))
             # print "--> guess was at %f" %  (np.sqrt(results[wf_idx]['x'][0]**2 + results[wf_idx]['x'][2]**2))
             # plt.colorbar()
         plt.xlabel("r from Point Contact (mm)")
@@ -422,12 +396,12 @@ def plot(sample_file_name, directory):
         fields = np.exp(fields_log)
 
         for  idx in range(num_samples):
-            h_111_va, h_111_vmax, h_100_multa, h_100_multmax, h_100_beta, h_111_beta, = velo[:,idx]
+            h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta, = velo[:,idx]
             # print "v params: ",
             # print mu_0, h_100_lnbeta, h_111_lnbeta, h_111_emu, h_100_mult
 
-            h_100_va = h_100_multa * h_111_va
-            h_100_vmax = h_100_multmax * h_111_vmax
+            # h_100_va = h_100_multa * h_111_va
+            # h_100_vmax = h_100_multmax * h_111_vmax
 
             h100 = np.empty_like(fields)
             h111 = np.empty_like(fields)
