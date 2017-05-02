@@ -67,11 +67,17 @@ class Model(object):
         for i in range(4):
             prior_vars[velo_first_idx+i] = 0.2*priors[velo_first_idx+i]
 
+        if self.conf.avg_imp_guess is None:
+            priors[imp_avg_idx] = self.detector.measured_impurity
+        else:
+            priors[imp_avg_idx] = self.conf.avg_imp_guess
+        prior_vars[imp_avg_idx] = np.abs(0.2*self.detector.measured_impurity)
+
         #imp avg and grad from ORTEC measurements
         priors[grad_idx] = self.detector.measured_imp_grad
-        priors[imp_avg_idx] = self.detector.measured_impurity
+
         prior_vars[grad_idx] =  np.amax((self.detector.measured_imp_grad, 0.02))
-        prior_vars[imp_avg_idx] = np.abs(0.2*self.detector.measured_impurity)
+
 
         self.priors = priors
         self.prior_vars = prior_vars

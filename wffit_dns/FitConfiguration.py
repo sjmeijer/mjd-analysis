@@ -14,7 +14,8 @@ class FitConfiguration(object):
         numSamples = 400,
         fallPercentage = 0.97,
         alignType = "max",
-        loadSavedConfig=False
+        loadSavedConfig=False,
+        avg_imp_guess = None
     ):
 
         self.wf_file_name=wf_file_name
@@ -39,6 +40,7 @@ class FitConfiguration(object):
         self.numSamples = numSamples
 
         #limits & priors for the actual fit
+        self.avg_imp_guess = None
         self.traprc_min = 150
         self.beta_lims = [0.4, 1]
 
