@@ -346,54 +346,26 @@ class Model(object):
                 if wf_which == 0:
                   theta = params[theta_idx]
 
-                  #FIND THE MAXIMUM RADIUS STILL INSIDE THE DETECTOR
-                  theta_eq = np.arctan(detector.detector_length/detector.detector_radius)
-                  theta_taper = np.arctan(detector.taper_length/detector.detector_radius)
-                  if theta <= theta_taper:
-                     z = np.tan(theta)*(detector.detector_radius - detector.taper_length) / (1-np.tan(theta))
-                     max_rad = z / np.sin(theta)
-                  elif theta <= theta_eq:
-                      max_rad = detector.detector_radius / np.cos(theta)
-                  else:
-                      theta_comp = np.pi/2 - theta
-                      max_rad = detector.detector_length / np.cos(theta_comp)
+                  IsInDetector = 0
+                  while not(IsInDetector):
+                    new_rad = self.get_new_rad(params[which], theta)
+                    r = new_rad * np.cos(theta)
+                    z = new_rad * np.sin(theta)
+                    IsInDetector = detector.IsInDetector(r, 0,z)
 
-                  #AND THE MINIMUM (from PC dimple)
-                  #min_rad  = 1./ ( np.cos(theta)**2/detector.pcRad**2  +  np.sin(theta)**2/detector.pcLen**2 )
-
-                  min_rad = np.amax([detector.pcRad, detector.pcLen])
-
-                  total_max_rad = np.sqrt(detector.detector_length**2 + detector.detector_radius**2 )
-
-                  params[which] += total_max_rad*dnest4.randh()
-                  params[which] = dnest4.wrap(params[which] , min_rad, max_rad)
+                  params[which] = new_rad
 
                 elif wf_which ==2: #theta
-                  rad = params[rad_idx]
+                    rad = params[rad_idx]
 
-                  if rad < np.amin([detector.detector_radius - detector.taper_length, detector.detector_length]):
-                      max_val = np.pi/2
-                      min_val = 0
-                  else:
-                      if rad < detector.detector_radius - detector.taper_length:
-                          #can't possibly hit the taper
-                          min_val = 0
-                      elif rad < np.sqrt(detector.detector_radius**2 + detector.taper_length**2):
-                          #low enough that it could hit the taper region
-                          a = detector.detector_radius - detector.taper_length
-                          z = 0.5 * (np.sqrt(2*rad**2-a**2) - a)
-                          min_val = np.arcsin(z/rad)
-                      else:
-                          #longer than could hit the taper
-                          min_val = np.arccos(detector.detector_radius/rad)
+                    IsInDetector = 0
+                    while not(IsInDetector):
+                      new_theta = self.get_new_theta(rad, params[which])
+                      r = rad * np.cos(new_theta)
+                      z = rad * np.sin(new_theta)
+                      IsInDetector = detector.IsInDetector(r, 0,z)
 
-                      if rad < detector.detector_length:
-                          max_val = np.pi/2
-                      else:
-                          max_val = np.pi/2 - np.arccos(detector.detector_length/rad)
-
-                  params[which] += np.pi/2*dnest4.randh()
-                  params[which] = dnest4.wrap(params[which], min_val, max_val)
+                    params[which] = new_theta
 
                 # if wf_which == 0:
                 #     params[which] += (detector.detector_radius)*dnest4.randh()
@@ -411,7 +383,7 @@ class Model(object):
 
                     logH -= -0.5*((params[which] - wf.wfMax  )/sig)**2
                     params[which] += sig*dnest4.randh()
-                    params[which] = dnest4.wrap(params[which], 0, 2*wf_guess)
+                    params[which] = dnest4.wrap(params[which], 0.8*wf_guess, 1.2*wf_guess)
                     logH += -0.5*((params[which] - wf.wfMax )/sig)**2
 
                 elif wf_which == 4: #t0
@@ -435,6 +407,53 @@ class Model(object):
                     exit(0)
 
         return logH
+
+    def get_new_rad(self,rad, theta):
+          detector = self.detector
+          #FIND THE MAXIMUM RADIUS STILL INSIDE THE DETECTOR
+          theta_eq = np.arctan(detector.detector_length/detector.detector_radius)
+          theta_taper = np.arctan(detector.taper_length/detector.detector_radius)
+          if theta <= theta_taper:
+             z = np.tan(theta)*(detector.detector_radius - detector.taper_length) / (1-np.tan(theta))
+             max_rad = z / np.sin(theta)
+          elif theta <= theta_eq:
+              max_rad = detector.detector_radius / np.cos(theta)
+          else:
+              theta_comp = np.pi/2 - theta
+              max_rad = detector.detector_length / np.cos(theta_comp)
+
+          #AND THE MINIMUM (from PC dimple)
+          #min_rad  = 1./ ( np.cos(theta)**2/detector.pcRad**2  +  np.sin(theta)**2/detector.pcLen**2 )
+
+          min_rad = np.amax([detector.pcRad, detector.pcLen])
+
+          new_rad = rad + (max_rad - min_rad)*dnest4.randh()
+          return new_rad
+    def get_new_theta(self,rad,theta):
+        detector = self.detector
+        if rad < np.amin([detector.detector_radius - detector.taper_length, detector.detector_length]):
+            max_val = np.pi/2
+            min_val = 0
+        else:
+            if rad < detector.detector_radius - detector.taper_length:
+                #can't possibly hit the taper
+                min_val = 0
+            elif rad < np.sqrt(detector.detector_radius**2 + detector.taper_length**2):
+                #low enough that it could hit the taper region
+                a = detector.detector_radius - detector.taper_length
+                z = 0.5 * (np.sqrt(2*rad**2-a**2) - a)
+                min_val = np.arcsin(z/rad)
+            else:
+                #longer than could hit the taper
+                min_val = np.arccos(detector.detector_radius/rad)
+
+            if rad < detector.detector_length:
+                max_val = np.pi/2
+            else:
+                max_val = np.pi/2 - np.arccos(detector.detector_length/rad)
+
+        new_theta = theta + (max_val - min_val)*dnest4.randh()
+        return new_theta
 
     def log_likelihood(self, params):
         return self.fit_manager.calc_likelihood(params)
