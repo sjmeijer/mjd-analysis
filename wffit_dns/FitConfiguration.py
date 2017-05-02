@@ -15,7 +15,8 @@ class FitConfiguration(object):
         fallPercentage = 0.97,
         alignType = "max",
         loadSavedConfig=False,
-        avg_imp_guess = None
+        avg_imp_guess = None,
+        beta_lims = [0, 1]
     ):
 
         self.wf_file_name=wf_file_name
@@ -42,7 +43,7 @@ class FitConfiguration(object):
         #limits & priors for the actual fit
         self.avg_imp_guess = None
         self.traprc_min = 150
-        self.beta_lims = [0.4, 1]
+        self.beta_lims = beta_lims
 
         if loadSavedConfig:
             self.load_config(directory)
