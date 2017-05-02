@@ -167,7 +167,6 @@ class Model(object):
             (r,z, scale, t0) = self.draw_position(wf_idx)
             rad = np.sqrt(r**2+z**2)
             theta = np.arctan(z/r)
-
             smooth_guess = 10
 
             rad_arr[wf_idx] = rad
@@ -176,6 +175,7 @@ class Model(object):
             scale_arr[wf_idx] = 5*rng.randn() + scale - .005*scale
             t0_arr[wf_idx] = dnest4.wrap(3*rng.randn() + self.alignidx_guess, self.min_maxt, self.max_maxt)
             smooth_arr[wf_idx] = dnest4.wrap(rng.randn() + smooth_guess, 0, 20)
+
 
         #TF params
         phi = dnest4.wrap(prior_vars[phi_idx]*rng.randn() + priors[phi_idx], -np.pi/2, np.pi/2)
@@ -275,20 +275,20 @@ class Model(object):
             logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
 
         elif which == aliasrc_idx:
-          params[which] += 19.9*dnest4.randh()
-          params[which] = dnest4.wrap(params[which], 0.1, 20)
+            params[which] += 19.9*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], 0.1, 20)
 
         elif which == grad_idx:
-          logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
-          params[which] += prior_vars[which] *dnest4.randh()
-          params[which] = dnest4.wrap(params[which], detector.gradList[0], detector.gradList[-1])
-          logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            params[which] += prior_vars[which] *dnest4.randh()
+            params[which] = dnest4.wrap(params[which], detector.gradList[0], detector.gradList[-1])
+            logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
 
         elif which == imp_avg_idx:
-          logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
-          params[which] += prior_vars[which] *dnest4.randh()
-          params[which] = dnest4.wrap(params[which], detector.impAvgList[0], detector.impAvgList[-1])
-          logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            params[which] += prior_vars[which] *dnest4.randh()
+            params[which] = dnest4.wrap(params[which], detector.impAvgList[0], detector.impAvgList[-1])
+            logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
 
         elif which == trap_idx:
             params[which] += (1000 - self.conf.traprc_min)*dnest4.randh()
@@ -301,8 +301,8 @@ class Model(object):
             logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
 
         elif which == velo_first_idx+4 or which == velo_first_idx+5:
-          params[which] += (self.conf.beta_lims[1] - self.conf.beta_lims[0])  *dnest4.randh()
-          params[which] = dnest4.wrap(params[which], self.conf.beta_lims[0], self.conf.beta_lims[1])
+            params[which] += (self.conf.beta_lims[1] - self.conf.beta_lims[0])  *dnest4.randh()
+            params[which] = dnest4.wrap(params[which], self.conf.beta_lims[0], self.conf.beta_lims[1])
 
         else: #velocity or rc params: cant be below 0, can be arb. large
             print ("which value %d not supported" % which)
@@ -364,7 +364,6 @@ class Model(object):
                       r = rad * np.cos(new_theta)
                       z = rad * np.sin(new_theta)
                       IsInDetector = detector.IsInDetector(r, 0,z)
-
                     params[which] = new_theta
 
                 # if wf_which == 0:
@@ -428,6 +427,7 @@ class Model(object):
           min_rad = np.amax([detector.pcRad, detector.pcLen])
 
           new_rad = rad + (max_rad - min_rad)*dnest4.randh()
+          new_rad = dnest4.wrap(new_rad, min_rad, max_rad)
           return new_rad
     def get_new_theta(self,rad,theta):
         detector = self.detector
@@ -453,6 +453,7 @@ class Model(object):
                 max_val = np.pi/2 - np.arccos(detector.detector_length/rad)
 
         new_theta = theta + (max_val - min_val)*dnest4.randh()
+        new_theta = dnest4.wrap(new_theta, min_val, max_val)
         return new_theta
 
     def log_likelihood(self, params):
