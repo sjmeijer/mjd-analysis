@@ -16,7 +16,7 @@ def WaveformLogLikeStar(a_b):
   return model.calc_wf_likelihood(*a_b)
 
 class ParallelFitManager():
-    '''Does the fit using one machine's parllel cores'''
+    '''Does the fit using one machine's parallel cores'''
 
     def __init__(self, fit_configuration, num_threads=None):
 
@@ -34,19 +34,17 @@ class ParallelFitManager():
         num_det_params = self.num_det_params
 
         wfs_param_arr = params[num_det_params:].reshape((6, self.num_waveforms))
-
-        wf_params = np.empty(num_det_params+6)
-        wf_params[:num_det_params] = params[:num_det_params]
+        wf_params = np.zeros((num_det_params+6,self.num_waveforms))
 
         args = []
         #parallelized calculation
         for wf_idx in range(self.num_waveforms):
-            my_wf_params = np.copy(wf_params)
-            wf_params[num_det_params:] = wfs_param_arr[:,wf_idx]
-            args.append( [my_wf_params, wf_idx])
-
+            wf_params[:num_det_params,wf_idx] = params[:num_det_params]
+            wf_params[num_det_params:,wf_idx] = wfs_param_arr[:,wf_idx]
+            args.append( [wf_params[:,wf_idx], wf_idx])
+            # print ("shipping {0}: {1}".format(wf_idx, wf_params[num_det_params:, wf_idx]))
         results = self.pool.map(WaveformLogLikeStar, args)
-
+        # exit()
         lnlike = 0
         for result in (results):
             lnlike += result
