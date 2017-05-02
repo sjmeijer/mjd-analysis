@@ -29,12 +29,13 @@ class Model(object):
 
 
         #Setup detector and waveforms
-        self.setup_waveforms()
+        self.setup_waveforms(doPrint=False)
         self.setup_detector()
 
         self.alignidx_guess = self.conf.max_sample_idx
-        self.max_maxt = self.alignidx_guess + 10
-        self.min_maxt = self.alignidx_guess - 10
+        self.max_maxt = self.alignidx_guess + 5
+        self.min_maxt = self.alignidx_guess - 5
+        self.maxt_sigma = 1
 
         self.changed_wfs = np.zeros(self.num_waveforms)
 
@@ -86,6 +87,7 @@ class Model(object):
         wfFileName = self.conf.wf_file_name
 
         if os.path.isfile(wfFileName):
+            print("Loading wf file {0}".format(wfFileName))
             data = np.load(wfFileName, encoding="latin1")
             wfs = data['wfs']
             wfs = wfs[self.conf.wf_idxs]
@@ -118,6 +120,13 @@ class Model(object):
           wfMaxes[wf_idx] = np.argmax(wf.windowedWf)
           baselineLengths[wf_idx] = wf.t0Guess
 
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # for wf in wfs:
+        #     plt.plot(wf.windowedWf)
+        # plt.show()
+        # plt.exit()
+
         # self.baseline_origin_idx = np.amin(baselineLengths) - 30
         # if self.baseline_origin_idx < 0:
         #     print( "not enough baseline!!")
@@ -134,9 +143,6 @@ class Model(object):
       r = rng.rand() * self.detector.detector_radius
       z = rng.rand() * self.detector.detector_length
       scale = np.amax(self.wfs[wf_idx].windowedWf)
-
-      alignPoint = np.searchsorted(self.wfs[wf_idx].windowedWf, self.conf.align_percent * scale)
-
 
       if not self.detector.IsInDetector(r, 0.1, z):
         return self.draw_position(wf_idx)
@@ -168,8 +174,8 @@ class Model(object):
             phi_arr[wf_idx] = rng.rand() * np.pi/4
             theta_arr[wf_idx] = theta
             scale_arr[wf_idx] = 5*rng.randn() + scale - .005*scale
-            t0_arr[wf_idx] = 3*rng.randn() + self.alignidx_guess
-            smooth_arr[wf_idx] = np.clip(rng.randn() + smooth_guess, 0, 20)
+            t0_arr[wf_idx] = dnest4.wrap(3*rng.randn() + self.alignidx_guess, self.min_maxt, self.max_maxt)
+            smooth_arr[wf_idx] = dnest4.wrap(rng.randn() + smooth_guess, 0, 20)
 
         #TF params
         phi = dnest4.wrap(prior_vars[phi_idx]*rng.randn() + priors[phi_idx], -np.pi/2, np.pi/2)
@@ -410,7 +416,7 @@ class Model(object):
 
                 elif wf_which == 4: #t0
                   #gaussian around 0, sigma... 5?
-                  t0_sig = 3
+                  t0_sig = self.maxt_sigma
                   logH -= -0.5*((params[which] - self.alignidx_guess )/t0_sig)**2
                   params[which] += t0_sig*dnest4.randh()
                   params[which] = dnest4.wrap(params[which], self.min_maxt, self.max_maxt)
