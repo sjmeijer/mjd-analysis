@@ -483,7 +483,7 @@ class Model(object):
 
         return ln_like
 
-    def make_waveform(self, data_len, wf_params):
+    def make_waveform(self, data_len, wf_params, charge_type=None):
 
         tf_phi, tf_omega, d, rc1, rc2, rcfrac, aliasrc = wf_params[tf_first_idx:tf_first_idx+7]
         h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta, = wf_params[velo_first_idx:velo_first_idx+6]
@@ -517,10 +517,18 @@ class Model(object):
         self.detector.SetAntialiasingRC(aliasrc)
         self.detector.SetGrads(grad, avg_imp)
 
-        if self.conf.alignType == "max":
-            model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max", doMaxInterp=self.conf.doMaxInterp)
-        elif self.conf.alignType == "timepoint":
-            model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint= self.conf.align_percent)
+        if charge_type is None:
+            if self.conf.alignType == "max":
+                model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max", doMaxInterp=self.conf.doMaxInterp)
+            elif self.conf.alignType == "timepoint":
+                model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint= self.conf.align_percent)
+        elif charge_type == 1:
+            model = self.detector.MakeRawSiggenWaveform(r, phi, z,1)
+        elif charge_type == -1:
+            model = self.detector.MakeRawSiggenWaveform(r, phi, z,-1)
+
+        else:
+            print("Not a valid charge type! {0}".format(charge_type))
 
         if model is None or np.any(np.isnan(model)):
             return None

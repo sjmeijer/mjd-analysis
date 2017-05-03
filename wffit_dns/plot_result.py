@@ -18,18 +18,26 @@ from Model import Model
 
 doContourHist = 0
 
-doPositionHist = 0
+
 doRSquaredPlot = 0
+#
+# doVeloPlot =1
+# doPositionHist = 0
+# doWaveformPlot =0
+# doHists = 0
+# plotNum = 500 #for plotting during the Run
+
+# doVeloPlot =0
+# doWaveformPlot =0
+# doPositionHist = 1
+# doHists = 1
+# plotNum = 5000 #for plotting during the Run
 
 doVeloPlot =0
-
+doPositionHist = 0
 doWaveformPlot =1
 doHists = 0
 plotNum = 100 #for plotting during the Run
-
-# doWaveformPlot =1
-# doHists = 0
-# plotNum = 10 #for plotting during the Run
 
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey", "chocolate" ]
 
@@ -67,6 +75,10 @@ def plot(sample_file_name, directory):
     maxt_arr =  plot_data.as_matrix(range(maxt_idx,maxt_idx+ model.num_waveforms))
     smooth_arr =  plot_data.as_matrix(range(smoothidx,smoothidx+ model.num_waveforms))
 
+    plot_hole_electron_contributions(plot_data, model, 0)
+    plt.show()
+    exit()
+
     if doWaveformPlot:
         plot_waveforms(plot_data, model)
 
@@ -79,6 +91,10 @@ def plot(sample_file_name, directory):
 
     if doVeloPlot:
         plot_velo_curves(velo, model)
+
+
+
+
 
     plt.show()
     exit()
@@ -128,6 +144,37 @@ def plot_waveforms(data, model):
 
     ax0.set_ylim(-20, wf.wfMax*1.1)
     ax1.set_ylim(-20, 20)
+
+def plot_hole_electron_contributions(data, model, plot_wf_idx):
+    plt.figure(figsize=(20,10))
+    plt.xlabel("Time [ns]")
+    plt.ylabel("Voltage [normalized]")
+
+    num_det_params = model.num_det_params
+    wf_params = np.empty(num_det_params+6)
+
+    for (idx) in range(len(data.index)):
+        params = data.iloc[idx].as_matrix()
+
+        wfs_param_arr = params[num_det_params:].reshape((6, model.num_waveforms))
+        wf_params[:num_det_params] = params[:num_det_params]
+
+        for (wf_idx,wf) in enumerate(model.wfs):
+            if plot_wf_idx != wf_idx: continue
+
+            wf_params[num_det_params:] = wfs_param_arr[:,wf_idx]
+
+            t_data = np.arange(model.siggen_wf_length)
+            hole_wf = model.make_waveform(wf.wfLength, wf_params, charge_type=1)
+            if hole_wf is None:
+                continue
+            plt.plot(t_data, hole_wf, color="red", alpha=0.1)
+
+            electron_wf = model.make_waveform(wf.wfLength, wf_params, charge_type=-1)
+            if electron_wf is None:
+                continue
+            plt.plot(t_data,electron_wf, color="black", alpha=0.1)
+
 
 def plot_wf_hist(phi, scale, maxt, smooth):
     fig = plt.figure(figsize=(15,10))
