@@ -21,15 +21,15 @@ doContourHist = 0
 doPositionHist = 0
 doRSquaredPlot = 0
 
-doVeloPlot =0
+# doVeloPlot =1
+# doWaveformPlot =0
+# doHists = 1
+# plotNum = 500 #for plotting during the Run
 
+doVeloPlot =0
 doWaveformPlot =1
 doHists = 0
 plotNum = 100 #for plotting during the Run
-
-# doWaveformPlot =1
-# doHists = 0
-# plotNum = 10 #for plotting during the Run
 
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey", "chocolate" ]
 
@@ -72,7 +72,7 @@ def plot(sample_file_name, directory):
 
     if doHists:
         plot_det_hist(velo, tf, det_params)
-        plot_wf_hist(phi_arr, scale_arr, maxt_arr, smooth_arr)
+        plot_wf_hist(phi_arr, scale_arr, maxt_arr, smooth_arr, rad_arr, theta_arr)
 
     if doPositionHist:
         plot_position_hist(rad_arr, theta_arr, model.detector.detector_radius, model.detector.detector_length)
@@ -85,6 +85,9 @@ def plot(sample_file_name, directory):
 
 
 def plot_waveforms(data, model):
+
+    bad_wf_thresh = 1000
+
     plt.figure(figsize=(20,10))
     gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
     ax0 = plt.subplot(gs[0])
@@ -109,6 +112,7 @@ def plot_waveforms(data, model):
         wf_params[:num_det_params] = params[:num_det_params]
 
         for (wf_idx,wf) in enumerate(model.wfs):
+            # if wf_idx != 7: continue
             wf_params[num_det_params:] = wfs_param_arr[:,wf_idx]
 
             fit_wf = model.make_waveform(wf.wfLength,wf_params)
@@ -122,21 +126,24 @@ def plot_waveforms(data, model):
             resid = fit_wf -  wf.windowedWf
             ax1.plot(t_data, resid, color=colors[color_idx],alpha=0.1)
 
-            if np.amax(np.abs(resid)) > 20 and residWarnings[wf_idx] == 0:
+            rad = wf_params[num_det_params]
+            theta = wf_params[num_det_params+2]
+
+            if np.amax(np.abs(resid)) > bad_wf_thresh and residWarnings[wf_idx] == 0:
                 print ("wf %d has a big residual!" % wf_idx)
                 residWarnings[wf_idx] = 1
 
     ax0.set_ylim(-20, wf.wfMax*1.1)
-    ax1.set_ylim(-20, 20)
+    # ax1.set_ylim(-bad_wf_thresh, bad_wf_thresh)
 
-def plot_wf_hist(phi, scale, maxt, smooth):
+def plot_wf_hist(phi, scale, maxt, smooth, rad, theta):
     fig = plt.figure(figsize=(15,10))
 
     num_bins = 100
-    data = [phi, scale, maxt, smooth]
-    labels = ["phi", "scale", "maxt", "smooth"]
-    for i in range(4):
-        axis = fig.add_subplot(4,1,i+1)
+    data = [phi, scale, maxt, smooth, rad, theta]
+    labels = ["phi", "scale", "maxt", "smooth", "rad", "theta"]
+    for i in range(6):
+        axis = fig.add_subplot(6,1,i+1)
         axis.set_ylabel(labels[i])
         for wf_idx in range(phi.shape[1]):
             color_idx = wf_idx % len(colors)
