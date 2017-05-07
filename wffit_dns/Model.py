@@ -315,7 +315,7 @@ class Model(object):
             # logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
 
             paramlist = detector.gradList
-            params[which] = (paramlist[-1] - paramlist[0])*dnest4.randh()
+            params[which] += (paramlist[-1] - paramlist[0])*dnest4.randh()
             params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
 
         elif which == imp_avg_idx:
@@ -324,17 +324,17 @@ class Model(object):
             # params[which] = dnest4.wrap(params[which], detector.impAvgList[0], detector.impAvgList[-1])
             # logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
             paramlist = detector.impAvgList
-            params[which] = (paramlist[-1] - paramlist[0])*dnest4.randh()
+            params[which] += (paramlist[-1] - paramlist[0])*dnest4.randh()
             params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
 
         elif which == pcrad_idx:
             paramlist = detector.pcRadList
-            params[which] = (paramlist[-1] - paramlist[0])*dnest4.randh()
+            params[which] += (paramlist[-1] - paramlist[0])*dnest4.randh()
             params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
 
         elif which == pclen_idx:
             paramlist = detector.pcLenList
-            params[which] = (paramlist[-1] - paramlist[0])*dnest4.randh()
+            params[which] += (paramlist[-1] - paramlist[0])*dnest4.randh()
             params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
 
         elif which == trap_idx:
