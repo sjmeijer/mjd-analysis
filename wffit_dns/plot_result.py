@@ -64,7 +64,7 @@ def plot(sample_file_name, directory):
     tf_first_idx, velo_first_idx, grad_idx, trap_idx = model.get_indices()
     velo = plot_data.as_matrix(range(velo_first_idx,velo_first_idx+6))
     tf = plot_data.as_matrix(range(tf_first_idx,tf_first_idx+6))
-    det_params =  plot_data.as_matrix(range(grad_idx,grad_idx+3))
+    det_params =  plot_data.as_matrix(range(grad_idx,grad_idx+5))
 
     rad_idx, phi_idx, th_idx, scale_idx, maxt_idx, smoothidx = range(model.num_det_params, 6*model.num_waveforms+model.num_det_params, model.num_waveforms)
 
@@ -256,7 +256,8 @@ def plot_det_hist(velo, tf, det_params, model):
         print ("%s mode: %f" % (tfLabels[i], b[max_idx]))
 
     #"other"
-    for i in range(4):
+    labels=["imp grad", "imp average", "pcrad", "pclen", "trapping_rc"]
+    for i in range(5):
         idx = (i+1)*3
         if i==0:
             axis = vFig.add_subplot(6,3,idx)
@@ -279,12 +280,12 @@ def plot_det_hist(velo, tf, det_params, model):
                     plt.axvline(x=imp_avg, color="r", ls=":")
 
             print ("%s mode: %f" % ("avg_imp", b[max_idx]))
-        if i==2:
+        if i>=2:
             axis = vFig.add_subplot(6,3,idx)
-            axis.set_ylabel("trapping_rc")
+            axis.set_ylabel(labels[i])
             [n, b, p] = axis.hist(det_params[:,i], bins=num_bins)
             max_idx = np.argmax(n)
-            print ("%s mode: %f" % ("trapping_rc", b[max_idx]))
+            print ("%s mode: %f" % (labels[i], b[max_idx]))
         # if i==3:
         #     axis = vFig.add_subplot(6,3,idx)
         #     axis.set_ylabel("alias_rc")
