@@ -12,9 +12,9 @@ from ParallelFitManager import ParallelFitManager
 from FitConfiguration import FitConfiguration
 
 def main():
-    directory = "8wf_noalias"
+    directory = "8wf_pc"
     wf_file = "dat/P42661A_64_may2_nofast.npz"
-    field_file = "dat/P42661A_may1_21by21.npz"
+    field_file = "dat/P42661A_bull_pcfields.npz"
     conf_file= "conf/P42661A_bull.conf"
 
     wf_num = 8
@@ -34,7 +34,7 @@ def main():
     fm = ParallelFitManager(conf, )
 
     conf.save_config()
-    fm.fit(numLevels=1000, directory = directory)
+    fm.fit(numLevels=1000, directory = directory,new_level_interval=10000)
 
 
 if __name__=="__main__":

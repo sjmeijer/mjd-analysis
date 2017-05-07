@@ -51,14 +51,14 @@ class ParallelFitManager():
             # print (result)
         return lnlike
 
-    def fit(self, numLevels, directory="",numPerSave=1000,numParticles=5 ):
+    def fit(self, numLevels, directory="",numPerSave=1000,numParticles=5,new_level_interval=10000 ):
 
       sampler = dnest4.DNest4Sampler(self.model,
                                      backend=dnest4.backends.CSVBackend(basedir ="./" + directory,
                                                                         sep=" "))
 
       # Set up the sampler. The first argument is max_num_levels
-      gen = sampler.sample(max_num_levels=numLevels, num_steps=200000, new_level_interval=10000,
+      gen = sampler.sample(max_num_levels=numLevels, num_steps=200000, new_level_interval=new_level_interval,
                             num_per_step=numPerSave, thread_steps=100,
                             num_particles=numParticles, lam=10, beta=100, seed=1234)
 

@@ -12,7 +12,9 @@ velo_first_idx = 6
 
 grad_idx = velo_first_idx + 6
 imp_avg_idx = grad_idx + 1
-trap_idx = imp_avg_idx + 1
+
+pcrad_idx, pclen_idx = imp_avg_idx+1, imp_avg_idx+2
+trap_idx = imp_avg_idx + 3
 
 phi_idx, omega_idx, d_idx = np.arange(3)+ tf_first_idx
 rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
@@ -82,18 +84,18 @@ class Model(object):
         for i in range(4):
             prior_vars[velo_first_idx+i] = 0.2*priors[velo_first_idx+i]
 
-        if self.conf.avg_imp_guess is None:
-            priors[imp_avg_idx] = self.detector.measured_impurity
-        else:
-            priors[imp_avg_idx] = self.conf.avg_imp_guess
-
-        if self.conf.avg_imp_guess is None:
-            priors[grad_idx] = self.detector.measured_imp_grad
-        else:
-            priors[grad_idx] = self.conf.imp_grad_guess
-
-        prior_vars[imp_avg_idx] = np.abs(0.2* priors[imp_avg_idx])
-        prior_vars[grad_idx] =  np.amax((0.2*priors[grad_idx], 0.1))
+        # if self.conf.avg_imp_guess is None:
+        #     priors[imp_avg_idx] = self.detector.measured_impurity
+        # else:
+        #     priors[imp_avg_idx] = self.conf.avg_imp_guess
+        #
+        # if self.conf.avg_imp_guess is None:
+        #     priors[grad_idx] = self.detector.measured_imp_grad
+        # else:
+        #     priors[grad_idx] = self.conf.imp_grad_guess
+        #
+        # prior_vars[imp_avg_idx] = np.abs(0.2* priors[imp_avg_idx])
+        # prior_vars[grad_idx] =  np.amax((0.2*priors[grad_idx], 0.1))
 
 
         self.priors = priors
@@ -220,8 +222,13 @@ class Model(object):
         h_100_beta = (self.conf.beta_lims[1] - self.conf.beta_lims[0]) * rng.rand() + self.conf.beta_lims[0]
         h_111_beta = (self.conf.beta_lims[1] - self.conf.beta_lims[0]) * rng.rand() + self.conf.beta_lims[0]
 
-        grad = dnest4.wrap(prior_vars[grad_idx]*rng.randn() + priors[grad_idx], detector.gradList[0], detector.gradList[-1])
-        avgImp = dnest4.wrap(prior_vars[imp_avg_idx]*rng.randn() + priors[imp_avg_idx], detector.impAvgList[0], detector.impAvgList[-1])
+        # grad = dnest4.wrap(prior_vars[grad_idx]*rng.randn() + priors[grad_idx], detector.gradList[0], detector.gradList[-1])
+        # avgImp = dnest4.wrap(prior_vars[imp_avg_idx]*rng.randn() + priors[imp_avg_idx], detector.impAvgList[0], detector.impAvgList[-1])
+
+        grad = rng.rand()*(detector.gradList[-1] - detector.gradList[0]) +  detector.gradList[0]
+        avgImp = rng.rand()*(detector.impAvgList[-1] - detector.impAvgList[0]) +  detector.impAvgList[0]
+        pcRad = rng.rand()*(detector.pcRadList[-1] - detector.pcRadList[0]) +  detector.pcRadList[0]
+        pcLen = rng.rand()*(detector.pcLenList[-1] - detector.pcLenList[0]) +  detector.pcLenList[0]
 
         #uniform random for charge trapping
         charge_trapping = rng.rand()*(5000 - self.conf.traprc_min) +  self.conf.traprc_min
@@ -230,7 +237,7 @@ class Model(object):
               phi, omega, d,
               rc1, rc2, rcfrac,#aliasrc,
               h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
-              grad, avgImp, charge_trapping,
+              grad, avgImp, pcRad, pcLen, charge_trapping,
               rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:],
             ])
 
@@ -302,16 +309,33 @@ class Model(object):
         #     params[which] = dnest4.wrap(params[which], 0.1, 20)
 
         elif which == grad_idx:
-            logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
-            params[which] += prior_vars[which] *dnest4.randh()
-            params[which] = dnest4.wrap(params[which], detector.gradList[0], detector.gradList[-1])
-            logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            # logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            # params[which] += prior_vars[which] *dnest4.randh()
+            # params[which] = dnest4.wrap(params[which], detector.gradList[0], detector.gradList[-1])
+            # logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+
+            paramlist = detector.gradList
+            params[which] = (paramlist[-1] - paramlist[0])*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
 
         elif which == imp_avg_idx:
-            logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
-            params[which] += prior_vars[which] *dnest4.randh()
-            params[which] = dnest4.wrap(params[which], detector.impAvgList[0], detector.impAvgList[-1])
-            logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            # logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            # params[which] += prior_vars[which] *dnest4.randh()
+            # params[which] = dnest4.wrap(params[which], detector.impAvgList[0], detector.impAvgList[-1])
+            # logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+            paramlist = detector.impAvgList
+            params[which] = (paramlist[-1] - paramlist[0])*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
+
+        elif which == pcrad_idx:
+            paramlist = detector.pcRadList
+            params[which] = (paramlist[-1] - paramlist[0])*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
+
+        elif which == pclen_idx:
+            paramlist = detector.pcLenList
+            params[which] = (paramlist[-1] - paramlist[0])*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
 
         elif which == trap_idx:
             params[which] += (5000 - self.conf.traprc_min)*dnest4.randh()
@@ -510,6 +534,8 @@ class Model(object):
         grad = wf_params[grad_idx]
         avg_imp = wf_params[imp_avg_idx]
 
+        pcrad,pclen = wf_params[pcrad_idx:pcrad_idx+2]
+
         rad, phi, theta, scale, maxt, smooth =  wf_params[self.num_det_params:]
 
         r = rad * np.cos(theta)
@@ -536,6 +562,7 @@ class Model(object):
         # self.detector.SetAntialiasingRC(aliasrc)
         self.detector.rc_int_exp = None
         self.detector.SetGrads(grad, avg_imp)
+        self.detector.SetPointContact(pcrad, pclen)
 
         if charge_type is None:
             if self.conf.alignType == "max":
