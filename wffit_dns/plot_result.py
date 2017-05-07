@@ -20,12 +20,23 @@ doContourHist = 0
 doRSquaredPlot = 0
 
 
+# doPositionHist = 0
+# doVeloPlot =1
+# doWaveformPlot =0
+# doHists = 0
+# plotNum =1000 #for plotting during the Run
 
 doPositionHist = 0
 doVeloPlot =0
-doWaveformPlot =1
-doHists = 0
-plotNum = 100 #for plotting during the Run
+doWaveformPlot =0
+doHists = 1
+plotNum = 50000 #for plotting during the Run
+#
+# doPositionHist = 0
+# doVeloPlot =0
+# doWaveformPlot =1
+# doHists = 0
+# plotNum = 50 #for plotting during the Run
 
 colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey", "chocolate" ]
 
@@ -35,6 +46,8 @@ def plot(sample_file_name, directory):
 
     # params = FitConfiguration(directory=directory, loadSavedConfig=True)
     model = Model(conf2)
+
+    # plot_waveform_current(model, sigma=1)
 
     #Load the data from csv (using pandas so its fast)
     sample_file_name = os.path.join(directory, sample_file_name)
@@ -50,7 +63,7 @@ def plot(sample_file_name, directory):
     #chunk data out into sub arrays
     tf_first_idx, velo_first_idx, grad_idx, trap_idx = model.get_indices()
     velo = plot_data.as_matrix(range(velo_first_idx,velo_first_idx+6))
-    tf = plot_data.as_matrix(range(tf_first_idx,tf_first_idx+7))
+    tf = plot_data.as_matrix(range(tf_first_idx,tf_first_idx+6))
     det_params =  plot_data.as_matrix(range(grad_idx,grad_idx+3))
 
     rad_idx, phi_idx, th_idx, scale_idx, maxt_idx, smoothidx = range(model.num_det_params, 6*model.num_waveforms+model.num_det_params, model.num_waveforms)
@@ -63,15 +76,15 @@ def plot(sample_file_name, directory):
     maxt_arr =  plot_data.as_matrix(range(maxt_idx,maxt_idx+ model.num_waveforms))
     smooth_arr =  plot_data.as_matrix(range(smoothidx,smoothidx+ model.num_waveforms))
 
-    plot_hole_electron_contributions(plot_data, model, 0)
-    plt.show()
-    exit()
+    # plot_hole_electron_contributions(plot_data, model, 1)
+    # plt.show()
+    # exit()
 
     if doWaveformPlot:
         plot_waveforms(plot_data, model)
 
     if doHists:
-        plot_det_hist(velo, tf, det_params)
+        plot_det_hist(velo, tf, det_params, model)
         plot_wf_hist(phi_arr, scale_arr, maxt_arr, smooth_arr, rad_arr, theta_arr)
 
     if doPositionHist:
@@ -134,7 +147,22 @@ def plot_waveforms(data, model):
                 residWarnings[wf_idx] = 1
 
     ax0.set_ylim(-20, wf.wfMax*1.1)
+    plt.axhline(y=0,color="black", ls=":")
     # ax1.set_ylim(-bad_wf_thresh, bad_wf_thresh)
+
+def plot_waveform_current(model, sigma):
+
+    plt.figure(figsize=(20,10))
+    for (wf_idx,wf) in enumerate(model.wfs):
+        wf_data = wf.windowedWf
+
+        from scipy.ndimage import gaussian_filter1d
+        filtered_wf = gaussian_filter1d(wf_data, sigma=sigma, order=1)
+        plt.plot(filtered_wf, color = colors[wf_idx])
+
+    plt.show()
+    exit()
+
 
 def plot_hole_electron_contributions(data, model, plot_wf_idx):
     plt.figure(figsize=(20,10))
@@ -156,7 +184,7 @@ def plot_hole_electron_contributions(data, model, plot_wf_idx):
             wf_params[num_det_params:] = wfs_param_arr[:,wf_idx]
 
             t_data = np.arange(model.siggen_wf_length)
-            hole_wf = model.make_waveform(wf.wfLength, wf_params, charge_type=1)
+            hole_wf = np.copy(model.make_waveform(wf.wfLength, wf_params, charge_type=1))
             if hole_wf is None:
                 continue
             plt.plot(t_data, hole_wf, color="red", alpha=0.1)
@@ -165,6 +193,20 @@ def plot_hole_electron_contributions(data, model, plot_wf_idx):
             if electron_wf is None:
                 continue
             plt.plot(t_data,electron_wf, color="black", alpha=0.1)
+
+            plt.plot(t_data,electron_wf+hole_wf, color="blue", alpha=0.1)
+
+            from scipy.ndimage import gaussian_filter1d
+
+            plt.plot(t_data,electron_wf+gaussian_filter1d(hole_wf,sigma=5), color="green", alpha=0.1)
+
+            plt.plot(t_data,gaussian_filter1d(electron_wf+hole_wf,sigma=5), color="purple", alpha=0.1)
+    plt.plot([],[], color="red", label = "Hole Signal")
+    plt.plot([],[], color="black", label = "Electron Signal")
+    plt.plot([],[], color="blue", label = "Sum Signal")
+    plt.plot([],[], color="purple", label = "Sum Signal w/ charge cloud")
+    plt.legend(loc=4)
+
 
 def plot_wf_hist(phi, scale, maxt, smooth, rad, theta):
     fig = plt.figure(figsize=(15,10))
@@ -186,7 +228,7 @@ def plot_wf_hist(phi, scale, maxt, smooth, rad, theta):
     # plt.axvline(x=np.pi/4, color="r", ls=":")
     # plt.xlabel("Azimuthal Angle (0 to pi/4)")
 
-def plot_det_hist(velo, tf, det_params):
+def plot_det_hist(velo, tf, det_params, model):
 
     vFig = plt.figure(figsize=(20,10))
 
@@ -222,11 +264,20 @@ def plot_det_hist(velo, tf, det_params):
             [n, b, p] = axis.hist(det_params[:,i], bins=num_bins)
             max_idx = np.argmax(n)
             print ("%s mode: %f" % ("imp_grad", b[max_idx]))
+            for imp_grad in model.detector.gradList:
+                if imp_grad > b[0] and imp_grad < b[-1]:
+                    plt.axvline(x=imp_grad, color="r", ls=":")
+
         if i==1:
             axis = vFig.add_subplot(6,3,idx)
             axis.set_ylabel("imp average")
             [n, b, p] = axis.hist(det_params[:,i], bins=num_bins)
             max_idx = np.argmax(n)
+
+            for imp_avg in model.detector.impAvgList:
+                if imp_avg > b[0] and imp_avg < b[-1]:
+                    plt.axvline(x=imp_avg, color="r", ls=":")
+
             print ("%s mode: %f" % ("avg_imp", b[max_idx]))
         if i==2:
             axis = vFig.add_subplot(6,3,idx)
@@ -234,12 +285,12 @@ def plot_det_hist(velo, tf, det_params):
             [n, b, p] = axis.hist(det_params[:,i], bins=num_bins)
             max_idx = np.argmax(n)
             print ("%s mode: %f" % ("trapping_rc", b[max_idx]))
-        if i==3:
-            axis = vFig.add_subplot(6,3,idx)
-            axis.set_ylabel("alias_rc")
-            [n, b, p] = axis.hist(tf[:,6], bins=num_bins)
-            max_idx = np.argmax(n)
-            print( "%s mode: %f" % ("alias_rc", b[max_idx]))
+        # if i==3:
+        #     axis = vFig.add_subplot(6,3,idx)
+        #     axis.set_ylabel("alias_rc")
+        #     [n, b, p] = axis.hist(tf[:,6], bins=num_bins)
+        #     max_idx = np.argmax(n)
+        #     print( "%s mode: %f" % ("alias_rc", b[max_idx]))
 
 def plot_position_hist(rad_arr, theta_arr,  det_radius, det_length, doContourHist=False,):
     positionFig = plt.figure(figsize=(10,10))
@@ -326,7 +377,9 @@ def plot_velo_curves(velo, model):
     plt.plot(fields, h111_bruy, color="orange", ls="--")
 
     # plt.axvline(x=250, color="black", ls=":")
-    plt.axvline(x=500, color="black", ls=":")
+    plt.axvline(x=model.conf.E_lo, color="black", ls=":")
+    plt.axvline(x=model.conf.E_hi, color="black", ls=":")
+    plt.axvline(x=model.conf.E_a, color="black", ls=":")
     plt.xscale('log')
     # plt.yscale('log')
     # plt.xlim(.45, 1E5)

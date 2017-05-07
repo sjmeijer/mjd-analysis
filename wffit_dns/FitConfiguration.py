@@ -16,6 +16,7 @@ class FitConfiguration(object):
         alignType = "max",
         loadSavedConfig=False,
         avg_imp_guess = None,
+        imp_grad_guess = None,
         beta_lims = [0, 1]
     ):
 
@@ -32,6 +33,8 @@ class FitConfiguration(object):
 
         #velocity model reference point field
         self.E_a = 500
+        self.E_lo = 250
+        self.E_hi = 1000
 
         if not (alignType == "max" or alignType == "timepoint"):
             print ("alignType must be 'max' or 'timepoint', not {0}".format(alignType))
@@ -41,7 +44,8 @@ class FitConfiguration(object):
         self.numSamples = numSamples
 
         #limits & priors for the actual fit
-        self.avg_imp_guess = None
+        self.avg_imp_guess = avg_imp_guess
+        self.imp_grad_guess = imp_grad_guess
         self.traprc_min = 150
         self.beta_lims = beta_lims
 

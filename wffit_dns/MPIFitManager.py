@@ -144,7 +144,7 @@ class MPIFitManager():
       # Run the postprocessing
       # dnest4.postprocess()
 
-    def fit_particle(self, manager_comm,  numLevels, directory="", numPerSave=1000, numParticles=5):
+    def fit_particle(self, manager_comm,  numLevels, directory="", numPerSave=1000, numParticles=5, new_level_interval=10000):
 
       mpi_sampler = dnest4.MPISampler(comm=manager_comm, debug=False)
 
@@ -153,7 +153,7 @@ class MPIFitManager():
           sampler = dnest4.DNest4Sampler(self.model, backend=dnest4.backends.CSVBackend(basedir ="./" + directory,
                                                                           sep=" "), MPISampler=mpi_sampler)
 
-          gen = sampler.sample(max_num_levels=numLevels, num_steps=200000, new_level_interval=10000,
+          gen = sampler.sample(max_num_levels=numLevels, num_steps=200000, new_level_interval=new_level_interval,
                                 num_per_step=numParticles, thread_steps=100,
                                 lam=10, beta=100, seed=1234)
 
@@ -167,7 +167,7 @@ class MPIFitManager():
                       f.write(meminfo)
 
       else:
-          mpi_sampler.wait(self.model, max_num_levels=numLevels, num_steps=200000, new_level_interval=10000,
+          mpi_sampler.wait(self.model, max_num_levels=numLevels, num_steps=200000, new_level_interval=new_level_interval,
                                 num_per_step=numPerSave, thread_steps=100,
                                 lam=10, beta=100, seed=1234)
           return

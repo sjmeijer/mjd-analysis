@@ -8,7 +8,7 @@ from pysiggen import Detector
 import numpy.random as rng
 
 tf_first_idx = 0
-velo_first_idx = 7
+velo_first_idx = 6
 
 grad_idx = velo_first_idx + 6
 imp_avg_idx = grad_idx + 1
@@ -16,7 +16,7 @@ trap_idx = imp_avg_idx + 1
 
 phi_idx, omega_idx, d_idx = np.arange(3)+ tf_first_idx
 rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
-aliasrc_idx = tf_first_idx+6
+# aliasrc_idx = tf_first_idx+6
 
 class Model(object):
     """
@@ -54,15 +54,30 @@ class Model(object):
         priors[rcfrac_idx], prior_vars[rcfrac_idx] = self.rcfrac_guess, 0.01
 
         #velo params from reggiani
-        h100_v500_meas = 7.156476E6
-        h111_v500_meas = 6.056016E6
-        h100_mu0E0_meas = 12.006273E6
-        h111_mu0E0_meas = 10.727000E6
+        # h100_v500_meas = 7.156476E6
+        # h111_v500_meas = 6.056016E6
+        # h100_mu0E0_meas = 12.006273E6
+        # h111_mu0E0_meas = 10.727000E6
+        #
+        # priors[velo_first_idx] = h100_v500_meas
+        # priors[velo_first_idx+1] = h111_v500_meas
+        # priors[velo_first_idx+2] = h100_mu0E0_meas
+        # priors[velo_first_idx+3] = h111_mu0E0_meas
 
-        priors[velo_first_idx] = h100_v500_meas
-        priors[velo_first_idx+1] = h111_v500_meas
-        priors[velo_first_idx+2] = h100_mu0E0_meas
-        priors[velo_first_idx+3] = h111_mu0E0_meas
+        h100_250= 5.50460266087E6
+        h111_250= 4.83393529058E6
+        h100_1000= 8.61282416937E6
+        h111_1000= 7.17181419648E6
+
+        # h100_100 = 3.40293878765E6
+        # h111_100 = 3.2468411889E6
+        # h100_3000 = 10.2630330467E6
+        # h111_3000 = 8.56978532533E6
+
+        priors[velo_first_idx] = h100_250
+        priors[velo_first_idx+1] = h111_250
+        priors[velo_first_idx+2] = h100_1000
+        priors[velo_first_idx+3] = h111_1000
 
         for i in range(4):
             prior_vars[velo_first_idx+i] = 0.2*priors[velo_first_idx+i]
@@ -71,12 +86,14 @@ class Model(object):
             priors[imp_avg_idx] = self.detector.measured_impurity
         else:
             priors[imp_avg_idx] = self.conf.avg_imp_guess
-        prior_vars[imp_avg_idx] = np.abs(0.2*self.detector.measured_impurity)
 
-        #imp avg and grad from ORTEC measurements
-        priors[grad_idx] = self.detector.measured_imp_grad
+        if self.conf.avg_imp_guess is None:
+            priors[grad_idx] = self.detector.measured_imp_grad
+        else:
+            priors[grad_idx] = self.conf.imp_grad_guess
 
-        prior_vars[grad_idx] =  np.amax((self.detector.measured_imp_grad, 0.02))
+        prior_vars[imp_avg_idx] = np.abs(0.2* priors[imp_avg_idx])
+        prior_vars[grad_idx] =  np.amax((0.2*priors[grad_idx], 0.1))
 
 
         self.priors = priors
@@ -194,7 +211,7 @@ class Model(object):
         rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
 
         # aliasrc = dnest4.wrap(prior_vars[aliasrc_idx]*rng.randn() + priors[aliasrc_idx], 0.01, 10)
-        aliasrc = rng.rand()*(10 - 0.01) +  0.01
+        # aliasrc = rng.rand()*(10 - 0.01) +  0.01
 
         h_100_va = dnest4.wrap(prior_vars[velo_first_idx]*rng.randn() + priors[velo_first_idx], 1, 10*priors[velo_first_idx])
         h_111_va = dnest4.wrap(prior_vars[velo_first_idx+1]*rng.randn() + priors[velo_first_idx+1], 1, 10*priors[velo_first_idx])
@@ -207,11 +224,11 @@ class Model(object):
         avgImp = dnest4.wrap(prior_vars[imp_avg_idx]*rng.randn() + priors[imp_avg_idx], detector.impAvgList[0], detector.impAvgList[-1])
 
         #uniform random for charge trapping
-        charge_trapping = rng.rand()*(1000 - self.conf.traprc_min) +  self.conf.traprc_min
+        charge_trapping = rng.rand()*(5000 - self.conf.traprc_min) +  self.conf.traprc_min
 
         return np.hstack([
               phi, omega, d,
-              rc1, rc2, rcfrac,aliasrc,
+              rc1, rc2, rcfrac,#aliasrc,
               h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
               grad, avgImp, charge_trapping,
               rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:],
@@ -280,9 +297,9 @@ class Model(object):
             params[which] += prior_vars[which]*dnest4.randh()
             logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
 
-        elif which == aliasrc_idx:
-            params[which] += 19.9*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0.1, 20)
+        # elif which == aliasrc_idx:
+        #     params[which] += 19.9*dnest4.randh()
+        #     params[which] = dnest4.wrap(params[which], 0.1, 20)
 
         elif which == grad_idx:
             logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
@@ -297,8 +314,8 @@ class Model(object):
             logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
 
         elif which == trap_idx:
-            params[which] += (1000 - self.conf.traprc_min)*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], self.conf.traprc_min, 1000)
+            params[which] += (5000 - self.conf.traprc_min)*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], self.conf.traprc_min, 5000)
 
         elif which >= velo_first_idx and which < velo_first_idx+4:
             logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
@@ -485,8 +502,10 @@ class Model(object):
 
     def make_waveform(self, data_len, wf_params, charge_type=None):
 
-        tf_phi, tf_omega, d, rc1, rc2, rcfrac, aliasrc = wf_params[tf_first_idx:tf_first_idx+7]
-        h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta, = wf_params[velo_first_idx:velo_first_idx+6]
+        # tf_phi, tf_omega, d, rc1, rc2, rcfrac, aliasrc = wf_params[tf_first_idx:tf_first_idx+7]
+        tf_phi, tf_omega, d, rc1, rc2, rcfrac,  = wf_params[tf_first_idx:tf_first_idx+6]
+        # h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta, = wf_params[velo_first_idx:velo_first_idx+6]
+        h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_beta, h_111_beta = wf_params[velo_first_idx:velo_first_idx+6]
         charge_trapping = wf_params[trap_idx]
         grad = wf_params[grad_idx]
         avg_imp = wf_params[imp_avg_idx]
@@ -501,8 +520,8 @@ class Model(object):
         a = 1./(1+b_ov_a)
         tf_b = a * b_ov_a
 
-        h_100_mu0, h_100_beta, h_100_e0 = self.get_velo_params(h_100_va, h_100_vmax, h_100_beta)
-        h_111_mu0, h_111_beta, h_111_e0 = self.get_velo_params(h_111_va, h_111_vmax, h_111_beta)
+        h_100_mu0, h_100_beta, h_100_e0 = self.get_velo_params(h_100_vlo, h_100_vhi, h_100_beta)
+        h_111_mu0, h_111_beta, h_111_e0 = self.get_velo_params(h_111_vlo, h_111_vhi, h_111_beta)
 
         if scale < 0:
             return None
@@ -514,7 +533,8 @@ class Model(object):
         self.detector.SetTransferFunction(tf_b, c, d, rc1, rc2, rcfrac, )
         self.detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
         self.detector.trapping_rc = charge_trapping
-        self.detector.SetAntialiasingRC(aliasrc)
+        # self.detector.SetAntialiasingRC(aliasrc)
+        self.detector.rc_int_exp = None
         self.detector.SetGrads(grad, avg_imp)
 
         if charge_type is None:
@@ -534,13 +554,26 @@ class Model(object):
             return None
 
         return model
+    #
+    # def get_velo_params(self, v_a, v_max, beta):
+    #     E_a = self.conf.E_a
+    #     E_0 = np.power( (v_max*E_a/v_a)**beta - E_a**beta , 1./beta)
+    #     mu_0 = v_max / E_0
+    #
+    #     return (mu_0,  beta, E_0)
 
-    def get_velo_params(self, v_a, v_max, beta):
-        E_a = self.conf.E_a
-        E_0 = np.power( (v_max*E_a/v_a)**beta - E_a**beta , 1./beta)
-        mu_0 = v_max / E_0
+    def get_velo_params(self, v_a, v_c, beta):
+        E_a = self.conf.E_lo
+        E_c = self.conf.E_hi
+
+        # beta = 1./np.exp(logb)
+
+        psi = (E_a * v_c) / ( E_c * v_a )
+        E_0 = np.power((psi**beta* E_c**beta - E_a**beta) / (1-psi**beta), 1./beta)
+        mu_0 = (v_a / E_a) * (1 + (E_a / E_0)**beta )**(1./beta)
 
         return (mu_0,  beta, E_0)
+
 
     def get_indices(self):
         return (tf_first_idx, velo_first_idx, grad_idx, trap_idx)

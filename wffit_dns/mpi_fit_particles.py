@@ -51,23 +51,28 @@ particle_comm = comm.Create(particle_group)
 
 def main():
 
-    directory = "16wf_nofast"
-    wf_file = "dat/P42661A_64_may1_nofast.npz"
-    field_file = "dat/P42661A_apr27_21by21.npz"
+    directory = "32wf_no1"
+    wf_file = "dat/P42661A_64_may2_nofast.npz"
+    field_file = "dat/P42661A_may6_21by21.npz"
     conf_file= "conf/P42661A_bull.conf"
 
-    num_wfs = 16
+    num_wfs = 32
     wf_idxs = list(range(0,64, int(64/num_wfs)))
 
-    # #replace wf 0 with wf 1, because 0 looks bad maybe
-    # wf_idxs[0] = 1
+    #replace wf 1 [idx 4] with new wf [idx 5], because 1 looks MS maybe?
+    wf_idxs[1] = wf_idxs[1]+1
+    wf_idxs[2] = wf_idxs[2]+1
+    #wf 3 (idx 12) is pegged to r=0.  try a new one.
+    wf_idxs[6] = wf_idxs[6]+1
 
     conf = FitConfiguration(
         wf_file, field_file, conf_file, wf_idxs,
         directory = directory,
         alignType="timepoint",
-        max_sample_idx = 100,
-        numSamples = 250
+        max_sample_idx = 125,
+        numSamples = 300,
+        imp_grad_guess= 0.1,
+        avg_imp_guess= -0.408716
     )
 
     required_particles = (num_wfs+1) * (num_particles) + 1
@@ -80,7 +85,7 @@ def main():
     if rank == 0:
         conf.save_config()
     if rank ==0 or part_rank == 0:
-        fm.fit_particle(manager_comm, numLevels=5000, numPerSave=1000, directory = directory, numParticles=num_particles)
+        fm.fit_particle(manager_comm, numLevels=5000, numPerSave=1000, directory = directory, numParticles=num_particles, new_level_interval=10000)
         fm.close()
     else:
         fm.wait_and_process()
