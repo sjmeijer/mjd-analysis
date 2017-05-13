@@ -47,7 +47,7 @@ class Model(object):
         priors = np.empty(self.num_det_params) #6 + 2)
         prior_vars =  np.empty_like(priors)
 
-        priors[phi_idx], prior_vars[phi_idx] = -1.5, 0.2
+        priors[phi_idx], prior_vars[phi_idx] = -np.pi/2, 0.2
         priors[omega_idx], prior_vars[omega_idx] = 0.11, 0.1
         priors[d_idx], prior_vars[d_idx] = 0.8, 0.05
 
@@ -203,7 +203,7 @@ class Model(object):
 
 
         #TF params
-        phi = dnest4.wrap(prior_vars[phi_idx]*rng.randn() + priors[phi_idx], -np.pi/2, np.pi/2)
+        phi = dnest4.wrap(prior_vars[phi_idx]*rng.randn() + priors[phi_idx], -np.pi, 0)
         omega = dnest4.wrap(prior_vars[omega_idx]*rng.randn() + priors[omega_idx], 0, np.pi)
         d = dnest4.wrap(prior_vars[d_idx]*rng.randn() + priors[d_idx], 0.5, 1)
 
@@ -285,7 +285,7 @@ class Model(object):
         if which == phi_idx: #lets call this phi
             logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
             params[which] += prior_vars[which]*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], -np.pi/2, np.pi/2)
+            params[which] = dnest4.wrap(params[which], -np.pi, 0)
             logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
         elif which == omega_idx: #call it omega
             logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
@@ -302,7 +302,9 @@ class Model(object):
             #all normally distributed priors
             logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
             params[which] += prior_vars[which]*dnest4.randh()
+            if which ==  rcfrac_idx:  params[which] = dnest4.wrap(params[which], 0, 1)
             logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
+
 
         # elif which == aliasrc_idx:
         #     params[which] += 19.9*dnest4.randh()
