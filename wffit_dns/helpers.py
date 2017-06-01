@@ -8,15 +8,18 @@ from scipy import ndimage
 #funnyEntries = [4110, 66905]
 
 class Waveform:
-  def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_rms, energy=None, timeSinceLast=None, energyLast=None):
+  def __init__(self, waveform_data, channel_number, run_number, entry_number, baseline_mean, baseline_rms,
+                energy=None, timeSinceLast=None, energyLast=None, current=None):
     self.waveformData = waveform_data
     self.channel = channel_number
     self.runNumber = run_number
     self.entry_number = entry_number
+    self.baselineMean = baseline_mean
     self.baselineRMS = baseline_rms
     self.timeSinceLast = timeSinceLast
     self.energyLast = energyLast
     self.energy = energy
+    self.current = current
 
 
   def WindowWaveform(self, numSamples, earlySamples=20, t0riseTime = 0.005, rmsMult=1):
