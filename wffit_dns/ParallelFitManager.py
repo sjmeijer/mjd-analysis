@@ -23,6 +23,7 @@ class ParallelFitManager():
         self.model = Model( fit_configuration, fit_manager=self)
         self.num_waveforms = self.model.num_waveforms
         self.num_det_params = self.model.num_det_params
+        self.num_wf_params = fit_configuration.num_wf_params
 
         if num_threads is None: num_threads = cpu_count()
 
@@ -33,8 +34,8 @@ class ParallelFitManager():
     def calc_likelihood(self, params):
         num_det_params = self.num_det_params
 
-        wfs_param_arr = params[num_det_params:].reshape((6, self.num_waveforms))
-        wf_params = np.zeros((num_det_params+6,self.num_waveforms))
+        wfs_param_arr = params[num_det_params:].reshape((self.num_wf_params, self.num_waveforms))
+        wf_params = np.zeros((num_det_params+self.num_wf_params,self.num_waveforms))
 
         args = []
         #parallelized calculation

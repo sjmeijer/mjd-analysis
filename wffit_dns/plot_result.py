@@ -26,11 +26,12 @@ doRSquaredPlot = 0
 # doHists = 0
 # plotNum =1000 #for plotting during the Run
 
-doPositionHist = 0
+doPositionHist = 1
 doVeloPlot =0
 doWaveformPlot =0
 doHists = 1
-plotNum = 50000 #for plotting during the Run
+plotNum = 10000 #for plotting during the Run
+
 #
 # doPositionHist = 0
 # doVeloPlot =0
@@ -38,7 +39,9 @@ plotNum = 50000 #for plotting during the Run
 # doHists = 0
 # plotNum = 50 #for plotting during the Run
 
-colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "goldenrod", "brown", "deeppink", "lightsteelblue", "maroon", "violet", "lawngreen", "grey", "chocolate" ]
+colors = ["red" ,"blue", "green", "purple", "orange", "cyan", "magenta", "brown", "deeppink", "goldenrod", "lightsteelblue", "maroon", "violet", "lawngreen", "grey", "chocolate" ]
+
+num_wf_params = 6
 
 def plot(sample_file_name, directory):
 
@@ -47,7 +50,16 @@ def plot(sample_file_name, directory):
     # params = FitConfiguration(directory=directory, loadSavedConfig=True)
     model = Model(conf2)
 
-    # plot_waveform_current(model, sigma=1)
+    # print (model.detector.pcLenList)
+    # print (model.detector.pcRadList)
+    # exit()
+
+    # sample_file_name = os.path.join(directory, "sample_info.txt")
+    # data = pd.read_csv(sample_file_name, delim_whitespace=True, header=1)
+    # num_samples = len(data.index)
+    # print( "found %d samples... " % num_samples,)
+    # exit()
+
 
     #Load the data from csv (using pandas so its fast)
     sample_file_name = os.path.join(directory, sample_file_name)
@@ -55,18 +67,26 @@ def plot(sample_file_name, directory):
     num_samples = len(data.index)
     print( "found %d samples... " % num_samples,)
 
+
+
     if num_samples > plotNum: num_samples = plotNum
     print( "plotting %d samples" % num_samples)
 
-    plot_data = data.iloc[-(num_samples+1):]
+    end_idx = len(data.index) - 1
+    # end_idx = 30000
+
+    plot_data = data.iloc[(end_idx - num_samples):end_idx]
 
     #chunk data out into sub arrays
     tf_first_idx, velo_first_idx, grad_idx, trap_idx = model.get_indices()
     velo = plot_data.as_matrix(range(velo_first_idx,velo_first_idx+6))
     tf = plot_data.as_matrix(range(tf_first_idx,tf_first_idx+6))
-    det_params =  plot_data.as_matrix(range(grad_idx,grad_idx+5))
+    det_params =  plot_data.as_matrix(range(grad_idx,grad_idx+6))
 
-    rad_idx, phi_idx, th_idx, scale_idx, maxt_idx, smoothidx = range(model.num_det_params, 6*model.num_waveforms+model.num_det_params, model.num_waveforms)
+    if num_wf_params == 7:
+        rad_idx, phi_idx, th_idx, scale_idx, maxt_idx, smoothidx, p_idx = range(model.num_det_params, num_wf_params*model.num_waveforms+model.num_det_params, model.num_waveforms)
+    elif num_wf_params == 6:
+        rad_idx, phi_idx, th_idx, scale_idx, maxt_idx, smoothidx, = range(model.num_det_params, num_wf_params*model.num_waveforms+model.num_det_params, model.num_waveforms)
 
     rad_arr =  plot_data.as_matrix(range(rad_idx,rad_idx+ model.num_waveforms))
     theta_arr =  plot_data.as_matrix(range(th_idx,th_idx+ model.num_waveforms))
@@ -76,19 +96,24 @@ def plot(sample_file_name, directory):
     maxt_arr =  plot_data.as_matrix(range(maxt_idx,maxt_idx+ model.num_waveforms))
     smooth_arr =  plot_data.as_matrix(range(smoothidx,smoothidx+ model.num_waveforms))
 
-    # plot_hole_electron_contributions(plot_data, model, 1)
+    if num_wf_params > 6:
+        p_arr =  plot_data.as_matrix(range(p_idx,p_idx+ model.num_waveforms))
+    else:
+        p_arr = None
+
+    # plot_hole_electron_contributions(plot_data, model, 2)
     # plt.show()
     # exit()
 
     if doWaveformPlot:
-        plot_waveforms(plot_data, model)
+        plot_waveforms(plot_data, model,)
 
     if doHists:
         plot_det_hist(velo, tf, det_params, model)
-        plot_wf_hist(phi_arr, scale_arr, maxt_arr, smooth_arr, rad_arr, theta_arr)
+        plot_wf_hist(phi_arr, scale_arr, maxt_arr, smooth_arr, p_arr, rad_arr, theta_arr)
 
     if doPositionHist:
-        plot_position_hist(rad_arr, theta_arr, model.detector.detector_radius, model.detector.detector_length)
+        plot_position_hist(rad_arr, theta_arr, model.detector.detector_radius, model.detector.detector_length,)
 
     if doVeloPlot:
         plot_velo_curves(velo, model)
@@ -97,7 +122,7 @@ def plot(sample_file_name, directory):
     exit()
 
 
-def plot_waveforms(data, model):
+def plot_waveforms(data, model, wf_to_plot=None):
 
     bad_wf_thresh = 1000
 
@@ -110,23 +135,43 @@ def plot_waveforms(data, model):
     ax1.set_ylabel("Residual")
 
     num_det_params = model.num_det_params
-    wf_params = np.empty(num_det_params+6)
+    wf_params = np.empty(num_det_params+num_wf_params)
     residWarnings = np.zeros(model.num_waveforms)
 
-    for wf in model.wfs:
+    resids = np.zeros_like(residWarnings)
+
+    resid_arr = np.zeros(model.wfs[0].wfLength)
+
+    for wf_idx, wf in enumerate(model.wfs):
       dataLen = wf.wfLength
       t_data = np.arange(dataLen) * 10
-      ax0.plot(t_data, wf.windowedWf, color="black")
+      ax0.plot(t_data, wf.windowedWf, color=colors[wf_idx], ls = ":")
+      print ("wf %d max %d" % (wf_idx, np.amax(wf.windowedWf)))
 
     for (idx) in range(len(data.index)):
         params = data.iloc[idx].as_matrix()
 
-        wfs_param_arr = params[num_det_params:].reshape((6, model.num_waveforms))
+        wfs_param_arr = params[num_det_params:].reshape((num_wf_params, model.num_waveforms))
         wf_params[:num_det_params] = params[:num_det_params]
 
+        if idx == 0:
+                print ("tf = [{0}]".format(",".join([str(x) for x in wf_params[:6]]    )))
+                print ("velo = [{0}]".format(",".join([str(x) for x in wf_params[6:12]]    )))
+                print ("others = [{0}]".format(",".join([str(x) for x in wf_params[12:num_det_params]] )))
+                exit()
+
+
         for (wf_idx,wf) in enumerate(model.wfs):
-            # if wf_idx != 7: continue
+            # if wf_idx < 4: continue
+            # wfs_param_arr[-1,wf_idx] = 1
             wf_params[num_det_params:] = wfs_param_arr[:,wf_idx]
+
+            # energy = wfs_param_arr[3,wf_idx]
+            # if energy > 6440: continue
+            # print (energy)
+            #
+
+
 
             fit_wf = model.make_waveform(wf.wfLength,wf_params)
             if fit_wf is None:
@@ -137,7 +182,14 @@ def plot_waveforms(data, model):
             ax0.plot(t_data,fit_wf, color=colors[color_idx], alpha=0.1)
 
             resid = fit_wf -  wf.windowedWf
-            ax1.plot(t_data, resid, color=colors[color_idx],alpha=0.1)
+            resid_arr += resid
+
+            resids[wf_idx] += np.sum(resid[150:])
+            if idx == len(data.index) - 1:
+                print ("wf %d resid %f" % (model.conf.wf_idxs[wf_idx], resids[wf_idx]/len(data.index) ))
+
+
+            ax1.plot(t_data, resid, color=colors[color_idx],alpha=0.1,)# linestyle="steps")
 
             rad = wf_params[num_det_params]
             theta = wf_params[num_det_params+2]
@@ -148,7 +200,16 @@ def plot_waveforms(data, model):
 
     ax0.set_ylim(-20, wf.wfMax*1.1)
     plt.axhline(y=0,color="black", ls=":")
+    ax0.axvline(x=model.conf.max_sample_idx*10,color="black", ls=":")
+    ax1.axvline(x=model.conf.max_sample_idx*10,color="black", ls=":")
     # ax1.set_ylim(-bad_wf_thresh, bad_wf_thresh)
+
+    plt.figure(figsize=(6.5,4))
+    plt.plot(resid_arr/len(model.wfs)/len(data.index), ls="steps", color = "blue")
+    plt.axhline(y=0,color="black", ls=":")
+    plt.xlabel("Sample number [10s of ns]")
+    plt.ylabel("Average residual [adc]")
+    plt.savefig("average_residual.pdf")
 
 def plot_waveform_current(model, sigma):
 
@@ -170,12 +231,12 @@ def plot_hole_electron_contributions(data, model, plot_wf_idx):
     plt.ylabel("Voltage [normalized]")
 
     num_det_params = model.num_det_params
-    wf_params = np.empty(num_det_params+6)
+    wf_params = np.empty(num_det_params+num_wf_params)
 
     for (idx) in range(len(data.index)):
         params = data.iloc[idx].as_matrix()
 
-        wfs_param_arr = params[num_det_params:].reshape((6, model.num_waveforms))
+        wfs_param_arr = params[num_det_params:].reshape((num_wf_params, model.num_waveforms))
         wf_params[:num_det_params] = params[:num_det_params]
 
         for (wf_idx,wf) in enumerate(model.wfs):
@@ -183,7 +244,7 @@ def plot_hole_electron_contributions(data, model, plot_wf_idx):
 
             wf_params[num_det_params:] = wfs_param_arr[:,wf_idx]
 
-            t_data = np.arange(model.siggen_wf_length)
+            t_data = np.arange(1200)
             hole_wf = np.copy(model.make_waveform(wf.wfLength, wf_params, charge_type=1))
             if hole_wf is None:
                 continue
@@ -208,14 +269,14 @@ def plot_hole_electron_contributions(data, model, plot_wf_idx):
     plt.legend(loc=4)
 
 
-def plot_wf_hist(phi, scale, maxt, smooth, rad, theta):
+def plot_wf_hist(phi, scale, maxt, smooth, p, rad, theta):
     fig = plt.figure(figsize=(15,10))
 
     num_bins = 100
-    data = [phi, scale, maxt, smooth, rad, theta]
-    labels = ["phi", "scale", "maxt", "smooth", "rad", "theta"]
-    for i in range(6):
-        axis = fig.add_subplot(6,1,i+1)
+    data = [phi, scale, maxt, rad, theta, smooth, p, ]
+    labels = ["phi", "scale", "maxt", "rad", "theta", "smooth","p",]
+    for i in range(num_wf_params):
+        axis = fig.add_subplot(num_wf_params,1,i+1)
         axis.set_ylabel(labels[i])
         for wf_idx in range(phi.shape[1]):
             color_idx = wf_idx % len(colors)
@@ -256,8 +317,8 @@ def plot_det_hist(velo, tf, det_params, model):
         print ("%s mode: %f" % (tfLabels[i], b[max_idx]))
 
     #"other"
-    labels=["imp grad", "imp average", "pcrad", "pclen", "trapping_rc"]
-    for i in range(5):
+    labels=["imp grad", "imp average", "pcrad", "pclen", "trapping_rc", "releasing_rc"]
+    for i in range(6):
         idx = (i+1)*3
         if i==0:
             axis = vFig.add_subplot(6,3,idx)
@@ -280,26 +341,28 @@ def plot_det_hist(velo, tf, det_params, model):
                     plt.axvline(x=imp_avg, color="r", ls=":")
 
             print ("%s mode: %f" % ("avg_imp", b[max_idx]))
-        if i>=2:
+        if i>=2 and i < 5:
             axis = vFig.add_subplot(6,3,idx)
             axis.set_ylabel(labels[i])
             [n, b, p] = axis.hist(det_params[:,i], bins=num_bins)
             max_idx = np.argmax(n)
             print ("%s mode: %f" % (labels[i], b[max_idx]))
-        # if i==3:
-        #     axis = vFig.add_subplot(6,3,idx)
-        #     axis.set_ylabel("alias_rc")
-        #     [n, b, p] = axis.hist(tf[:,6], bins=num_bins)
-        #     max_idx = np.argmax(n)
-        #     print( "%s mode: %f" % ("alias_rc", b[max_idx]))
+        if i==5:
+            axis = vFig.add_subplot(6,3,idx)
+            axis.set_ylabel("num")
+            [n, b, p] = axis.hist(det_params[:,i], bins=num_bins)
+            max_idx = np.argmax(n)
+            print( "%s mode: %f" % ("releasing_rc", b[max_idx]))
 
-def plot_position_hist(rad_arr, theta_arr,  det_radius, det_length, doContourHist=False,):
+def plot_position_hist(rad_arr, theta_arr,  det_radius, det_length, doContourHist=False,wf_to_plot=None):
     positionFig = plt.figure(figsize=(10,10))
     plt.clf()
     colorbars = ["Reds","Blues", "Greens", "Purples", "Oranges", "Greys", "YlOrBr", "PuRd"]
 
     if not doContourHist:
         for wf_idx in range(rad_arr.shape[1]):
+            if wf_to_plot is not None:
+                if wf_idx != wf_to_plot: continue
             colorbar_idx = wf_idx % len(colorbars)
             xedges = np.linspace(0, np.around(det_radius,1), np.around(det_radius,1)*10+1)
             yedges = np.linspace(0, np.around(det_length,1), np.around(det_length,1)*10+1)

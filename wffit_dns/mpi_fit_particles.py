@@ -51,28 +51,46 @@ particle_comm = comm.Create(particle_group)
 
 def main():
 
-    directory = "32wf_no1"
-    wf_file = "dat/P42661A_64_may2_nofast.npz"
-    field_file = "dat/P42661A_may6_21by21.npz"
-    conf_file= "conf/P42661A_bull.conf"
+    # directory = "16wf_final4"
+    # wf_file = "dat/P42661A_64_slow.npz"
+    # # wf_file = "dat/P42661A_64_may2_nofast.npz"
+    # # field_file = "dat/P42661A_fine_fields.npz"
+    # # conf_file= "conf/P42661A_fine.conf"
+    # # field_file = "dat/P42661A_bull_pcfields_wideimp.npz"
+    #
+    # # field_file = "dat/P42661A_bull_may26_fields.npz"
+    # field_file = "dat/P42661A_bull_may24_fields.npz"
+    # conf_file= "conf/P42661A_bull.conf"
+    #
+    # num_wfs = 16
+    # # all_wfs = list(range(64))
+    # # good_wfs = np.delete(all_wfs, [ 24, 25,  56, 54, 46, 38, 26, 27, 44], axis=0)
+    # # wf_idxs = good_wfs[::np.int(64/num_wfs)]
+    # #
+    # # for val in [23,45]:
+    # #     insert_idx = np.searchsorted(wf_idxs, val)
+    # #     wf_idxs = np.insert(wf_idxs, insert_idx, val)
+    #
+    # #before was 1,5
+    # wf_idxs = [ 0,  9,  8, 12, 16, 20, 23, 25, 31, 35, 40, 42, 49, 52, 57, 62]
 
-    num_wfs = 32
-    wf_idxs = list(range(0,64, int(64/num_wfs)))
-
-    #replace wf 1 [idx 4] with new wf [idx 5], because 1 looks MS maybe?
-    wf_idxs[1] = wf_idxs[1]+1
-    wf_idxs[2] = wf_idxs[2]+1
-    #wf 3 (idx 12) is pegged to r=0.  try a new one.
-    wf_idxs[6] = wf_idxs[6]+1
+    directory = "16wf_P42538A"
+    wf_file = "dat/P42538A_64_slow.npz"
+    field_file = "dat/P42538A_bull_fields.npz"
+    conf_file= "conf/P42538A_bull.conf"
+    num_wfs = 16
+    wf_idxs = list(range(0,64,4))
 
     conf = FitConfiguration(
         wf_file, field_file, conf_file, wf_idxs,
         directory = directory,
         alignType="timepoint",
         max_sample_idx = 125,
-        numSamples = 300,
+        numSamples = 250,
         imp_grad_guess= 0.1,
-        avg_imp_guess= -0.408716
+        avg_imp_guess= -0.408716,
+        interpType = "linear",
+        smooth_type = "gen_gaus"
     )
 
     required_particles = (num_wfs+1) * (num_particles) + 1

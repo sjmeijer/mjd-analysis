@@ -13,12 +13,25 @@ velo_first_idx = 6
 grad_idx = velo_first_idx + 6
 imp_avg_idx = grad_idx + 1
 
-pcrad_idx, pclen_idx = imp_avg_idx+1, imp_avg_idx+2
-trap_idx = imp_avg_idx + 3
+doPC = 1
+if doPC:
+    pcrad_idx, pclen_idx = imp_avg_idx+1, imp_avg_idx+2
+    trap_idx = imp_avg_idx + 3
+else:
+    trap_idx = imp_avg_idx + 1
+    pcrad_idx, pclen_idx = -1,-1
+
+untrap_idx = trap_idx + 1
+
+energy_idx = trap_idx + 2
 
 phi_idx, omega_idx, d_idx = np.arange(3)+ tf_first_idx
 rc1_idx, rc2_idx, rcfrac_idx = np.arange(3)+ tf_first_idx+3
+
+# num0_idx = tf_first_idx + 6
 # aliasrc_idx = tf_first_idx+6
+
+timeStepMult = 1
 
 class Model(object):
     """
@@ -41,15 +54,15 @@ class Model(object):
 
         self.changed_wfs = np.zeros(self.num_waveforms)
 
-        self.num_det_params = trap_idx+1
+        self.num_det_params = energy_idx+1
 
         #set up prior information (for gausian prior vars)
         priors = np.empty(self.num_det_params) #6 + 2)
         prior_vars =  np.empty_like(priors)
 
         priors[phi_idx], prior_vars[phi_idx] = -np.pi/2, 0.2
-        priors[omega_idx], prior_vars[omega_idx] = 0.11, 0.1
-        priors[d_idx], prior_vars[d_idx] = 0.8, 0.05
+        priors[omega_idx], prior_vars[omega_idx] = 0.011/timeStepMult , 0.1
+        priors[d_idx], prior_vars[d_idx] = 0.9, 0.1#1550, 100
 
         priors[rc1_idx], prior_vars[rc1_idx] = self.rc1_guess, 0.2
         priors[rc2_idx], prior_vars[rc2_idx] = self.rc2_guess, 0.3
@@ -103,7 +116,8 @@ class Model(object):
 
     def setup_detector(self):
         timeStepSize = 1 #ns
-        det =  Detector(self.conf.siggen_conf_file, timeStep=timeStepSize, numSteps=self.siggen_wf_length, maxWfOutputLength =self.output_wf_length, t0_padding=100 )
+        num_steps = np.amax([1200,self.siggen_wf_length*timeStepMult])
+        det =  Detector(self.conf.siggen_conf_file, timeStep=timeStepSize/timeStepMult, numSteps=num_steps, maxWfOutputLength =self.output_wf_length, t0_padding=100 )
         det.LoadFieldsGrad(self.conf.field_file_name)
 
         self.detector = det
@@ -186,39 +200,45 @@ class Model(object):
         scale_arr  = np.empty(num_waveforms)
         t0_arr     = np.empty(num_waveforms)
         smooth_arr = np.empty(num_waveforms)
+        p_arr = np.empty(num_waveforms)
 
         #draw waveform params for each waveform
         for (wf_idx) in range(num_waveforms):
             (r,z, scale, t0) = self.draw_position(wf_idx)
             rad = np.sqrt(r**2+z**2)
             theta = np.arctan(z/r)
-            smooth_guess = 10
+            smooth_guess = 20*timeStepMult
 
             rad_arr[wf_idx] = rad
             phi_arr[wf_idx] = rng.rand() * np.pi/4
             theta_arr[wf_idx] = theta
-            scale_arr[wf_idx] = 5*rng.randn() + scale - .005*scale
-            t0_arr[wf_idx] = dnest4.wrap(3*rng.randn() + self.alignidx_guess, self.min_maxt, self.max_maxt)
-            smooth_arr[wf_idx] = dnest4.wrap(rng.randn() + smooth_guess, 0, 20)
+            scale_arr[wf_idx] = 20*rng.randn() + scale
+            t0_arr[wf_idx] = dnest4.wrap(self.maxt_sigma*rng.randn() + self.alignidx_guess, self.min_maxt, self.max_maxt)
+            smooth_arr[wf_idx] = dnest4.wrap(rng.randn() + smooth_guess, 1, 40)
 
+            if self.conf.smooth_type == "gen_gaus":
+                p_arr[wf_idx] = dnest4.wrap(10*rng.randn() + 2, 1, 20)
+            elif self.conf.smooth_type == "skew":
+                p_arr[wf_idx] = rng.rand()*20 - 20
 
         #TF params
         phi = dnest4.wrap(prior_vars[phi_idx]*rng.randn() + priors[phi_idx], -np.pi, 0)
         omega = dnest4.wrap(prior_vars[omega_idx]*rng.randn() + priors[omega_idx], 0, np.pi)
-        d = dnest4.wrap(prior_vars[d_idx]*rng.randn() + priors[d_idx], 0.5, 1)
+        d = dnest4.wrap(prior_vars[d_idx]*rng.randn() + priors[d_idx], 0.5, 0.999)
+        # gain = dnest4.wrap(prior_vars[d_idx]*rng.randn() + priors[d_idx], 0, 5000)
 
         #RC params are normal & clipped
-        rc1 = dnest4.wrap(prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx], 65, 80)
-        rc2 = dnest4.wrap(prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx], 0.1, 10)
-        rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0.9, 1)
+        rc1 = prior_vars[rc1_idx]*rng.randn() + priors[rc1_idx]
+        rc2 = prior_vars[rc2_idx]*rng.randn() + priors[rc2_idx]
+        rcfrac = dnest4.wrap(prior_vars[rcfrac_idx]*rng.randn() + priors[rcfrac_idx], 0, 1)
 
         # aliasrc = dnest4.wrap(prior_vars[aliasrc_idx]*rng.randn() + priors[aliasrc_idx], 0.01, 10)
         # aliasrc = rng.rand()*(10 - 0.01) +  0.01
 
         h_100_va = dnest4.wrap(prior_vars[velo_first_idx]*rng.randn() + priors[velo_first_idx], 1, 10*priors[velo_first_idx])
-        h_111_va = dnest4.wrap(prior_vars[velo_first_idx+1]*rng.randn() + priors[velo_first_idx+1], 1, 10*priors[velo_first_idx])
-        h_100_vmax = dnest4.wrap(prior_vars[velo_first_idx+2]*rng.randn() + priors[velo_first_idx+2], 1, 10*priors[velo_first_idx])
-        h_111_vmax = dnest4.wrap(prior_vars[velo_first_idx+3]*rng.randn() + priors[velo_first_idx+3], 1, 10*priors[velo_first_idx])
+        h_111_va = dnest4.wrap(prior_vars[velo_first_idx+1]*rng.randn() + priors[velo_first_idx+1], 1, 10*priors[velo_first_idx]+1)
+        h_100_vmax = dnest4.wrap(prior_vars[velo_first_idx+2]*rng.randn() + priors[velo_first_idx+2], 1, 10*priors[velo_first_idx+2])
+        h_111_vmax = dnest4.wrap(prior_vars[velo_first_idx+3]*rng.randn() + priors[velo_first_idx+3], 1, 10*priors[velo_first_idx+3])
         h_100_beta = (self.conf.beta_lims[1] - self.conf.beta_lims[0]) * rng.rand() + self.conf.beta_lims[0]
         h_111_beta = (self.conf.beta_lims[1] - self.conf.beta_lims[0]) * rng.rand() + self.conf.beta_lims[0]
 
@@ -231,15 +251,32 @@ class Model(object):
         pcLen = rng.rand()*(detector.pcLenList[-1] - detector.pcLenList[0]) +  detector.pcLenList[0]
 
         #uniform random for charge trapping
-        charge_trapping = rng.rand()*(5000 - self.conf.traprc_min) +  self.conf.traprc_min
+        charge_trapping = rng.rand()*(1000 - 10) + 10
+        charge_releasing = rng.rand()*(1000000 - 1000) +  1000
 
-        return np.hstack([
-              phi, omega, d,
-              rc1, rc2, rcfrac,#aliasrc,
-              h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
-              grad, avgImp, pcRad, pcLen, charge_trapping,
-              rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:],
-            ])
+        #
+        # charge_trapping = rng.rand()*(100 - 0.1) +  0.1
+        # charge_releasing = rng.rand()*(100 - 0.1) +  0.1
+        energy = dnest4.wrap(rng.rand()*10 + self.conf.energy_guess, self.conf.energy_guess-30, self.conf.energy_guess+30)
+
+        if doPC:
+            return np.hstack([
+                  phi, omega, d,#gain,
+                  rc1, rc2, rcfrac,#num0,#aliasrc,
+                  h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
+                  grad, avgImp,pcRad, pcLen, charge_trapping,charge_releasing, energy,
+                  rad_arr[:], phi_arr[:], theta_arr[:], t0_arr[:],smooth_arr[:], p_arr[:]
+                #   rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], p_arr[:]
+                ])
+        else:
+            return np.hstack([
+                  phi, omega, d,#gain,
+                  rc1, rc2, rcfrac,#num0,#aliasrc,
+                  h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta,
+                  grad, avgImp, charge_trapping,charge_releasing, energy,
+                  rad_arr[:], phi_arr[:], theta_arr[:], t0_arr[:],smooth_arr[:], p_arr[:]
+                #   rad_arr[:], phi_arr[:], theta_arr[:], scale_arr[:], t0_arr[:],smooth_arr[:], p_arr[:]
+                ])
 
     def perturb(self, params):
 
@@ -273,6 +310,15 @@ class Model(object):
             for wf_idx in range(num_waveforms):
                 if self.changed_wfs[wf_idx] == 1:
                     logH += self.perturb_wf(params, wf_idx)
+
+            #50% chance to also change detector params
+            if(rng.rand() < 0.5):
+                reps = 1;
+                reps += np.int(np.power(100.0, rng.rand()));
+                for i in range(reps):
+                    which = rng.randint(len(self.priors))
+                    logH += self.perturb_detector(params, which)
+
         return logH
 
     def perturb_detector(self, params, which):
@@ -295,7 +341,8 @@ class Model(object):
         elif which == d_idx: #d
             logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
             params[which] += prior_vars[which]*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], 0.5, 1)
+            params[which] = dnest4.wrap(params[which], 0.5, 0.999)
+            # params[which] = dnest4.wrap(params[which], 0, 5000)
             logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
 
         elif which == rc1_idx or which == rc2_idx or which == rcfrac_idx:
@@ -304,7 +351,12 @@ class Model(object):
             params[which] += prior_vars[which]*dnest4.randh()
             if which ==  rcfrac_idx:  params[which] = dnest4.wrap(params[which], 0, 1)
             logH += -0.5*((params[which] - priors[which])/prior_vars[which])**2
-
+        #
+        # elif which == num0_idx:
+        #   sig = 3*timeStepMult
+        #   logH -= -0.5*((params[which] - 0.)/sig)**2
+        #   params[which] += sig*dnest4.randh()
+        #   logH += -0.5*((params[which] - 0.)/sig)**2
 
         # elif which == aliasrc_idx:
         #     params[which] += 19.9*dnest4.randh()
@@ -340,8 +392,36 @@ class Model(object):
             params[which] = dnest4.wrap(params[which], paramlist[0], paramlist[-1])
 
         elif which == trap_idx:
-            params[which] += (5000 - self.conf.traprc_min)*dnest4.randh()
-            params[which] = dnest4.wrap(params[which], self.conf.traprc_min, 5000)
+            # let's go with log10-uniform on this
+            # log_trap = np.log10(params[which])
+            # log_trap += 3*dnest4.randh()
+            # log_trap = dnest4.wrap(log_trap, 1, 4)
+            # params[which] = 10**(log_trap)
+
+            # p_guess = 350
+            # sig = 50
+            # logH -= -0.5*((params[which] - p_guess )/sig)**2
+            # params[which] += sig*dnest4.randh()
+            # params[which] = dnest4.wrap(params[which], 100, 600)
+            # logH += -0.5*((params[which] - p_guess)/sig)**2
+
+            traprc_min = 10
+            params[which] += (1000 - traprc_min)*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], traprc_min, 1000)
+
+        elif which == untrap_idx:
+            traprc_min = 1000
+            params[which] += (1000000 - traprc_min)*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], traprc_min, 1000000)
+        elif which == energy_idx:
+            wf_guess = self.conf.energy_guess
+            sig = 10
+
+            logH -= -0.5*((params[which] - wf_guess  )/sig)**2
+            params[which] += sig*dnest4.randh()
+            params[which] = dnest4.wrap(params[which], wf_guess - 30, wf_guess + 30)
+            logH += -0.5*((params[which] - wf_guess)/sig)**2
+
 
         elif which >= velo_first_idx and which < velo_first_idx+4:
             logH -= -0.5*((params[which] - priors[which])/prior_vars[which])**2
@@ -367,12 +447,14 @@ class Model(object):
         detector = self.detector
         priors = self.priors
 
+        wf_params = 6
+
         reps = 1
         if rng.rand() < 0.5:
             reps += np.int(np.power(100.0, rng.rand()));
 
         for i in range(reps):
-            wf_which = rng.randint(6)
+            wf_which = rng.randint(wf_params)
 
             # my_which = rng.randint(len(priors) + 8)
 
@@ -381,7 +463,7 @@ class Model(object):
             #     logH += self.perturb_detector(params, my_which)
             #
             # else:
-            if wf_which < 6:
+            if wf_which < wf_params:
                 #this is a waveform variable!
                 # wf_which =  np.int(my_which - len(priors))
 
@@ -423,18 +505,16 @@ class Model(object):
                     params[which] += np.pi/4*dnest4.randh()
                     params[which] = dnest4.wrap(params[which], 0, max_val)
 
-                elif wf_which == 3: #scale
-                    wf = self.wfs[wf_idx]
-                    wf_guess = wf.wfMax
+                # elif wf_which == 3: #scale
+                #     wf_guess = self.conf.energy_guess
+                #     sig = 10
+                #
+                #     logH -= -0.5*((params[which] - wf_guess  )/sig)**2
+                #     params[which] += sig*dnest4.randh()
+                #     params[which] = dnest4.wrap(params[which], wf_guess - 30, wf_guess + 30)
+                #     logH += -0.5*((params[which] - wf_guess)/sig)**2
 
-                    sig = 20
-
-                    logH -= -0.5*((params[which] - wf.wfMax  )/sig)**2
-                    params[which] += sig*dnest4.randh()
-                    params[which] = dnest4.wrap(params[which], 0.8*wf_guess, 1.2*wf_guess)
-                    logH += -0.5*((params[which] - wf.wfMax )/sig)**2
-
-                elif wf_which == 4: #t0
+                elif wf_which == 3: #t0
                   #gaussian around 0, sigma... 5?
                   t0_sig = self.maxt_sigma
                   logH -= -0.5*((params[which] - self.alignidx_guess )/t0_sig)**2
@@ -442,17 +522,32 @@ class Model(object):
                   params[which] = dnest4.wrap(params[which], self.min_maxt, self.max_maxt)
                   logH += -0.5*((params[which] - self.alignidx_guess)/t0_sig)**2
 
-                elif wf_which == 5: #smooth
+                elif wf_which == 4: #smooth
                   #gaussian around 10
-                  sig = 3
-                  logH -= -0.5*((params[which] - 10 )/sig)**2
+                  smooth_guess = 20
+                  sig = 20*timeStepMult
+                  logH -= -0.5*((params[which] - smooth_guess*timeStepMult )/sig)**2
                   params[which] += sig*dnest4.randh()
-                  params[which] = dnest4.wrap(params[which], 0, 20)
-                  logH += -0.5*((params[which] - 10)/sig)**2
+                  params[which] = dnest4.wrap(params[which], 1, 40*timeStepMult)
+                  logH += -0.5*((params[which] - smooth_guess*timeStepMult)/sig)**2
 
-                else:
-                    print( "wf which value %d (which value %d) not supported" % (wf_which, which) )
-                    exit(0)
+                elif wf_which == 5: #p
+                    #gaussian around 10
+
+                    if self.conf.smooth_type == "gen_gaus":
+                        p_guess = 2
+                        sig = 10
+                        logH -= -0.5*((params[which] - p_guess )/sig)**2
+                        params[which] += sig*dnest4.randh()
+                        params[which] = dnest4.wrap(params[which], 1, 20)
+                        logH += -0.5*((params[which] - p_guess)/sig)**2
+                    elif self.conf.smooth_type == "skew":
+                        params[which] += 20*dnest4.randh()
+                        params[which] = dnest4.wrap(params[which], -20, 0)
+
+            else:
+                print( "wf which value %d (which value %d) not supported" % (wf_which, which) )
+                exit(0)
 
         return logH
 
@@ -532,21 +627,21 @@ class Model(object):
         tf_phi, tf_omega, d, rc1, rc2, rcfrac,  = wf_params[tf_first_idx:tf_first_idx+6]
         # h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta, = wf_params[velo_first_idx:velo_first_idx+6]
         h_100_vlo, h_111_vlo, h_100_vhi, h_111_vhi, h_100_beta, h_111_beta = wf_params[velo_first_idx:velo_first_idx+6]
-        charge_trapping = wf_params[trap_idx]
+
         grad = wf_params[grad_idx]
         avg_imp = wf_params[imp_avg_idx]
 
-        pcrad,pclen = wf_params[pcrad_idx:pcrad_idx+2]
+        charge_trapping  = wf_params[trap_idx]
+        # charge_untrapping = 10000
+        charge_untrapping  = wf_params[trap_idx+1]
 
-        rad, phi, theta, scale, maxt, smooth =  wf_params[self.num_det_params:]
+        # rad, phi, theta, scale, maxt, smooth, =  wf_params[self.num_det_params:]
+        # rad, phi, theta, scale, maxt, smooth,p =  wf_params[self.num_det_params:]
+        rad, phi, theta,  maxt, smooth,p =  wf_params[self.num_det_params:]
+        scale = wf_params[energy_idx]
 
         r = rad * np.cos(theta)
         z = rad * np.sin(theta)
-
-        c = -d * np.cos(tf_omega)
-        b_ov_a = c - np.tan(tf_phi) * np.sqrt(d**2-c**2)
-        a = 1./(1+b_ov_a)
-        tf_b = a * b_ov_a
 
         h_100_mu0, h_100_beta, h_100_e0 = self.get_velo_params(h_100_vlo, h_100_vhi, h_100_beta)
         h_111_mu0, h_111_beta, h_111_e0 = self.get_velo_params(h_111_vlo, h_111_vhi, h_111_beta)
@@ -558,19 +653,29 @@ class Model(object):
         if not self.detector.IsInDetector(r, phi, z):
             return None
 
-        self.detector.SetTransferFunction(tf_b, c, d, rc1, rc2, rcfrac, )
+        self.detector.SetTransferFunctionPhi(tf_phi, tf_omega, d, rc1, rc2, rcfrac, digPeriod=1E9*timeStepMult, )
+        # self.detector.SetTransferFunctionGain(tf_phi, tf_omega, gain, rc1, rc2, rcfrac, digPeriod=1E9*timeStepMult, )
         self.detector.siggenInst.set_hole_params(h_100_mu0, h_100_beta, h_100_e0, h_111_mu0, h_111_beta, h_111_e0)
-        self.detector.trapping_rc = charge_trapping
         # self.detector.SetAntialiasingRC(aliasrc)
-        self.detector.rc_int_exp = None
+        self.detector.SetTrapping(charge_trapping , charge_untrapping)
         self.detector.SetGrads(grad, avg_imp)
-        self.detector.SetPointContact(pcrad, pclen)
+
+        if doPC:
+            pcrad,pclen = wf_params[pcrad_idx:pcrad_idx+2]
+            self.detector.SetPointContact(pcrad,pclen)
+
+        if not hasattr(self.conf, 'smooth_type'):
+            smooth_type = "gen_gaus"
+        else:
+            smooth_type = self.conf.smooth_type
+
 
         if charge_type is None:
             if self.conf.alignType == "max":
-                model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint="max", doMaxInterp=self.conf.doMaxInterp)
+                model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing2=(smooth,p), alignPoint="max", doMaxInterp=self.conf.doMaxInterp)
             elif self.conf.alignType == "timepoint":
-                model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint= self.conf.align_percent)
+                model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing2=(smooth,p), alignPoint= self.conf.align_percent, interpType=self.conf.interp_type, smoothType=smooth_type)
+                # model = self.detector.MakeSimWaveform(r, phi, z, scale, maxt, data_len, h_smoothing=smooth, alignPoint= self.conf.align_percent, interpType=self.conf.interp_type)
         elif charge_type == 1:
             model = self.detector.MakeRawSiggenWaveform(r, phi, z,1)
         elif charge_type == -1:
@@ -592,13 +697,29 @@ class Model(object):
     #     return (mu_0,  beta, E_0)
 
     def get_velo_params(self, v_a, v_c, beta):
+
+
+
+
         E_a = self.conf.E_lo
         E_c = self.conf.E_hi
 
         # beta = 1./np.exp(logb)
 
         psi = (E_a * v_c) / ( E_c * v_a )
+        # print(psi, beta, 1-psi**beta, 1./beta )
+
         E_0 = np.power((psi**beta* E_c**beta - E_a**beta) / (1-psi**beta), 1./beta)
+
+        # import warnings
+        # warnings.filterwarnings('error')
+        # try:
+        #     E_0 = np.power((psi**beta* E_c**beta - E_a**beta) / (1-psi**beta), 1./beta)
+        # except Warning:
+        #     # print()
+        #     print ((psi**beta* E_c**beta - E_a**beta) / (1-psi**beta))
+        #     print (beta, 1./beta)
+        #     print ( np.power((psi**beta* E_c**beta - E_a**beta) / (1-psi**beta), 1./beta))
         mu_0 = (v_a / E_a) * (1 + (E_a / E_0)**beta )**(1./beta)
 
         return (mu_0,  beta, E_0)

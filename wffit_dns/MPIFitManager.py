@@ -36,6 +36,8 @@ class MPIFitManager():
         self.debug = debug
         self.debug_mem_file = "memory_info.txt"
 
+        self.num_wf_params = fit_configuration.num_wf_params
+
     def is_master(self):
         """
         Is the current process the master?
@@ -55,9 +57,9 @@ class MPIFitManager():
                 with open(self.debug_mem_file, "a") as f:
                     f.write(meminfo)
 
-        wfs_param_arr = params[num_det_params:].reshape((6, self.num_waveforms))
+        wfs_param_arr = params[num_det_params:].reshape((self.num_wf_params, self.num_waveforms))
 
-        wf_params = np.empty(num_det_params+6)
+        wf_params = np.empty(num_det_params+self.num_wf_params)
         wf_params[:num_det_params] = params[:num_det_params]
 
         #nonparallelized: should only be called on init

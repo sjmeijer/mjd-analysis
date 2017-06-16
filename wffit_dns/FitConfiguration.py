@@ -17,7 +17,10 @@ class FitConfiguration(object):
         loadSavedConfig=False,
         avg_imp_guess = None,
         imp_grad_guess = None,
-        beta_lims = [0, 1]
+        beta_lims = [0.1, 1],
+        interpType = "linear",
+        energy_guess = 6430,
+        smooth_type = "gen_gaus"
     ):
 
         self.wf_file_name=wf_file_name
@@ -36,11 +39,18 @@ class FitConfiguration(object):
         self.E_lo = 250
         self.E_hi = 1000
 
+        self.energy_guess = energy_guess
+
+        self.num_wf_params = 6
+
+        self.interp_type = interpType
+        self.smooth_type = smooth_type
+
         if not (alignType == "max" or alignType == "timepoint"):
             print ("alignType must be 'max' or 'timepoint', not {0}".format(alignType))
             exit()
         self.alignType = alignType
-        self.align_percent = 0.5
+        self.align_percent = 0.95
         self.numSamples = numSamples
 
         #limits & priors for the actual fit
