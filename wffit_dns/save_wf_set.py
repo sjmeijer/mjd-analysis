@@ -13,8 +13,8 @@ gatDataName = "mjd_run"
 gatTreeName = "mjdTree"
 builtDataName = "OR_run"
 builtTreeName = "MGTree"
-dataSetName = "surfmjd"
-detectorName = "P3KJR"
+dataSetType = "surfmjd"
+dataSetName = "P3KJR"
 
 def main(argv):
 
@@ -66,7 +66,7 @@ def main(argv):
     chainGat = TChain(gatTreeName)
     chainGat.SetDirectory(0)
 
-    gatName =  os.path.expandvars("$MJDDATADIR/%s/data/gatified/%s/%s" % (dataSetName, detectorName, gatDataName  ) )
+    gatName =  os.path.expandvars("$MJDDATADIR/%s/data/gatified/%s/%s" % (dataSetType, dataSetName, gatDataName  ) )
     for i in runList:
       fileNameGAT = gatName + "%d.root" % i
       if not os.path.isfile(fileNameGAT):
