@@ -9,33 +9,28 @@ import pandas as pd
 
 def main(argv):
 
-  detectorName = "P42574A"
-  numGrads = 21
-  numImps  = 21
-  # gradList = np.linspace(0.00, 0.001, numGrads)
-  # impAvgList = np.linspace(-0.565, -0.545, numImps)
-  gradList = np.linspace(0, 0.04, numGrads)
-  impAvgList = np.linspace(-0.55, -0.4, numImps)
+  detectorName = "P42661A_bull_smallpc"
 
-  pcRad = 2.5
-  pcLen = 1.7
+  gradientRange = np.linspace(0.08, 0.09, 3)
+  impAvgRange = np.linspace(-0.52, -0.5, 3)
 
-  print "grad step = %f" % (gradList[1] - gradList[0])
-  print "imp step = %f" % (impAvgList[1] - impAvgList[0])
+  numGrads = len(gradientRange)
+  numImps  = len(impAvgRange)
+
+  print "grad step = %f" % (gradientRange[1] - gradientRange[0])
+  print "imp step = %f" % (impAvgRange[1] - impAvgRange[0])
   # exit(0)
 
-  filename = detectorName + "_bull_fields_impAndAvg_%dby%d.npz" % (numGrads, numImps)
+  filename = detectorName + "_fields_%dby%d.npz" % (numGrads, numImps)
 
   wpArray  = None
   efld_rArray = None
   efld_zArray = None
-  # efld_rArray = np.empty((21,21),dtype=np.object)
-  # efld_zArray = np.empty((21,21),dtype=np.object)
 
-  for (gradIdx,grad) in enumerate(gradList):
-      for (avgIdx, impAvg) in enumerate(impAvgList):
-        print "on %d of %d" % (gradIdx*len(impAvgList) + avgIdx, len(impAvgList)*len(impAvgList))
-        detName = "conf/%s_bull_grad%0.5f_avgimp%0.5f.conf" % (detectorName, grad, impAvg)
+  for (gradIdx,grad) in enumerate(gradientRange):
+      for (avgIdx, impAvg) in enumerate(impAvgRange):
+        print "on %d of %d" % (gradIdx*len(impAvgRange) + avgIdx, len(impAvgRange)*len(impAvgRange))
+        detName = "conf/%s_grad%0.5f_avgimp%0.5f.conf" % (detectorName, grad, impAvg)
 
         if not os.path.isfile(detName):
           print "Detector file %s not available" % detName
@@ -72,8 +67,8 @@ def main(argv):
         wp = wp.reshape(nr,nz)
 
         if efld_rArray is None:
-          efld_rArray = np.zeros(  (efld_r.shape[0], efld_r.shape[1], len(gradList), len(impAvgList) ), dtype=np.dtype('f4'), order="C" )
-          efld_zArray = np.zeros(  (efld_z.shape[0], efld_z.shape[1], len(gradList),len(impAvgList) ), dtype=np.dtype('f4'), order="C" )
+          efld_rArray = np.zeros(  (efld_r.shape[0], efld_r.shape[1], len(gradientRange), len(impAvgRange) ), dtype=np.dtype('f4'), order="C" )
+          efld_zArray = np.zeros(  (efld_z.shape[0], efld_z.shape[1], len(gradientRange),len(impAvgRange) ), dtype=np.dtype('f4'), order="C" )
 
 
         # #turn them into c-contiguous style array of floats
@@ -84,8 +79,9 @@ def main(argv):
         efld_rArray[:,:,gradIdx,avgIdx]=(efld_r)
         efld_zArray[:,:,gradIdx,avgIdx]=(efld_z)
 
-  np.savez(filename,  wpArray = wp, efld_rArray= np.ascontiguousarray(efld_rArray), efld_zArray =  np.ascontiguousarray(efld_zArray), gradList = gradList, impAvgList =   impAvgList,
-                pcRadList=None, pcLenList=None, wp_function = None, efld_r_function=None, efld_z_function = None, pcLen=pcLen, pcRad=pcRad  )
+  np.savez(filename,  wpArray = wp, efld_rArray= np.ascontiguousarray(efld_rArray), efld_zArray =  np.ascontiguousarray(efld_zArray),
+                        gradList = gradientRange, impAvgList =   impAvgRange,
+                  )
 
 if __name__=="__main__":
     main(sys.argv[1:])

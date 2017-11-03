@@ -31,7 +31,7 @@ impurity_grad_max = 0.08
 #reads in alan's ortec data from .csv files generated from the google spreadsheet
 # https://docs.google.com/spreadsheets/d/1ONxi-gF6ccdkqF6d2W0zujPkNA0UbruEej-ESQlxIg4/edit#gid=0
 # spits back a dict with things one would expect to want to put into a siggen conf file
-def read_alans_ortec_data(crystalID, ortecMeasurementFile, starrettMeasurementFile):
+def read_alans_ortec_data(crystalID, ortecMeasurementFile, starrettMeasurementFile, applyMins=True):
 
     # read in the ortec measurements
     ortecFile = open(ortecMeasurementFile, 'r')
@@ -90,6 +90,9 @@ def read_alans_ortec_data(crystalID, ortecMeasurementFile, starrettMeasurementFi
     try:
         impurity_tail = float( ortecDict['impurity_tail'] )
         impurity_seed = float( ortecDict['impurity_seed'] )
+        siggenInfo.ortec_impurity_tail = impurity_tail
+        siggenInfo.ortec_impurity_seed = impurity_seed
+
     except ValueError:
         print "No impurity information found.  Using default values..."
 
@@ -106,13 +109,14 @@ def read_alans_ortec_data(crystalID, ortecMeasurementFile, starrettMeasurementFi
 
     #check to make sure the gradient is something reasonable
 
-    if impurity_grad < impurity_grad_min:
-      print "   Adjusting impurity gradient upwards from %f to %f\n" % (impurity_grad, impurity_grad_min)
-      impurity_grad = impurity_grad_min
-    if impurity_grad > impurity_grad_max:
-      print "   Adjusting impurity gradient downards from %f to %f\n" % (impurity_grad, impurity_grad_max)
-      impurity_grad = impurity_grad_max
-       
+    if applyMins:
+        if impurity_grad < impurity_grad_min:
+          print "   Adjusting impurity gradient upwards from %f to %f\n" % (impurity_grad, impurity_grad_min)
+          impurity_grad = impurity_grad_min
+        if impurity_grad > impurity_grad_max:
+          print "   Adjusting impurity gradient downards from %f to %f\n" % (impurity_grad, impurity_grad_max)
+          impurity_grad = impurity_grad_max
+
     siggenInfo.siggen_impurity_z0 = impurity_z0
     siggenInfo.siggen_impurity_gradient = impurity_grad
 
@@ -130,7 +134,7 @@ def parse_alan_ortec_measurement_line(line):
     ORTEC_IMPURITY_SEED_COL = 12 #in e9
     ORTEC_DEPLETION_V_COL   = 13 #in e9
     ORTEC_OPERATING_V_COL   = 14 #in e9
-    
+
     #assume its a csv
     lineCol = line.split(",")
     #read in value by value
@@ -165,4 +169,3 @@ def parse_alan_starrett_measurement_line(line):
     valueDict['xtal_length']     = float( lineCol[STARRETT_LENGTH_COL]         )
 
     return valueDict
-
