@@ -74,20 +74,13 @@ def copyConfFileWithNewGradient(fileName, newGradient):
 
     return newConfigFileStr
 
-def copyConfFileWithNewImpurities(fileName, newGradient, newAvgImpurity):
+def copyConfFileWithNewGradAndZ0(fileName, newGradient, new_z0):
 
-    oldParams = readConfigurationFile(fileName)
-    det_z = oldParams['xtal_length']/10. # in cm
-    if det_z == 0:
-        print "zero det_Z: some bug is here"
-        exit(0)
-
-    new_z0 = newAvgImpurity - newGradient*det_z/2.
 
     # print "avg imp: %f, imp z0: %f" % (newAvgImpurity, new_z0)
 
     configFileSplit = fileName.split(".")
-    appendString = "_grad%0.5f_avgimp%0.5f" % (newGradient, newAvgImpurity)
+    appendString = "_grad%0.5f_z0%0.5f" % (newGradient, new_z0)
     newConfigFileStr = configFileSplit[0] + appendString +  "." + configFileSplit[1]
 
     if verbose:
@@ -104,6 +97,60 @@ def copyConfFileWithNewImpurities(fileName, newGradient, newAvgImpurity):
 
     return newConfigFileStr
 
+def copyConfFileWithNewImpurities(fileName, newGradient, newAvgImpurity):
+
+    oldParams = readConfigurationFile(fileName)
+    det_z = oldParams['xtal_length']/10. # in cm
+    if det_z == 0:
+        print "zero det_Z: some bug is here"
+        exit(0)
+
+    new_z0 = newAvgImpurity - newGradient*det_z/2.
+    configFileSplit = fileName.split(".")
+    appendString = "_grad%0.5f_avgimp%0.5f" % (newGradient, newAvgImpurity)
+    newConfigFileStr = configFileSplit[0] + appendString +  "." + configFileSplit[1]
+
+    if verbose:
+        print "cp %s %s" % (fileName, newConfigFileStr)
+
+    #os.rename(fileName, newConfigFileStr )
+    shutil.copy(fileName, newConfigFileStr)
+    replaceConfFileValue(newConfigFileStr, 'impurity_gradient', newGradient)
+    replaceConfFileValue(newConfigFileStr, 'impurity_z0', new_z0)
+
+    field_name= "conf/fields/" + configFileSplit[0] + appendString + "_"
+    replaceConfFileValue(newConfigFileStr, 'field_name', field_name + "ev.dat")
+    replaceConfFileValue(newConfigFileStr, 'wp_name', field_name + "wp.dat")
+    return newConfigFileStr
+    '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
+def copyConfFileWithNewEverything(fileName, newGradient, newAvgImpurity, newpcRadius, newpcLength):
+
+    oldParams = readConfigurationFile(fileName)
+    det_z = oldParams['xtal_length']/10. # in cm
+    if det_z == 0:
+        print "zero det_Z: some bug is here"
+        exit(0)
+
+    new_z0 = newAvgImpurity - newGradient*det_z/2.
+    configFileSplit = fileName.split(".")
+    appendString = "_grad%0.5f_avgimp%0.5f_pcrad%0.2f_pclen%0.2f" % (newGradient, newAvgImpurity,newpcRadius, newpcLength)
+
+    newConfigFileStr = configFileSplit[0] + appendString +  "." + configFileSplit[1]
+
+    if verbose:
+        print "cp %s %s" % (fileName, newConfigFileStr)
+
+    #os.rename(fileName, newConfigFileStr )
+    shutil.copy(fileName, newConfigFileStr)
+    replaceConfFileValue(newConfigFileStr, 'impurity_gradient', newGradient)
+    replaceConfFileValue(newConfigFileStr, 'impurity_z0', new_z0)
+    replaceConfFileValue(newConfigFileStr, 'pc_length', newpcLength)
+    replaceConfFileValue(newConfigFileStr, 'pc_radius', newpcRadius)
+
+    field_name= "conf/fields/" + configFileSplit[0] + appendString + "_"
+    replaceConfFileValue(newConfigFileStr, 'field_name', field_name + "ev.dat")
+    replaceConfFileValue(newConfigFileStr, 'wp_name', field_name + "wp.dat")
+    return newConfigFileStr
     '''%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'''
 
 def copyConfFileWithNewRadialGradient(fileName, gradMult, gradPow, newFileStart=None):

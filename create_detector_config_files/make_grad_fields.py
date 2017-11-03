@@ -21,18 +21,16 @@ from progressbar import ProgressBar, Percentage, Bar, ETA
 
 ortec_spreadsheet = "ortec_ORTEC_Measurements.csv"
 
-detectorName = "P42574A"
+detectorName = "P42661A_bull_smallpc"
+
+startingFileName = "%s.conf" % detectorName
 
 def main():
   numThreads = multiprocessing.cpu_count()
 
-  gradientRange = np.linspace(0, 0.1, 31)
-  gradAvgRange = np.linspace(-0.7, -0.5, 31)
+  gradientRange = np.linspace(0.08, 0.09, 3)
+  impAvgRange = np.linspace(-0.52, -0.5, 3)
 
-  pcRadiusRange = [2.5]
-  pcLengthRange = [1.7]
-
-  startingFileName = "%s_bull.conf" % detectorName
   if not os.path.exists(startingFileName):
     print "The starting file %s does not exist." % startingFileName
     sys.exit()
@@ -43,21 +41,26 @@ def main():
   args = []
 
   for g in gradientRange:
-      for avg in gradAvgRange:
+      for avg in impAvgRange:
+        wp_string = "conf/fields/%s_grad%0.5f_avgimp%0.5f_wp.dat" % (detectorName,g,avg)
+        if os.path.exists(wp_string):
+            print ("skipping (%f,%f)" % (g,avg))
+            continue
+
         newFileStr = copyConfFileWithNewImpurities(startingFileName, g, avg)
         args.append( [ newFileStr] )
 
         # print "on %f,%f" % (g,avg)
         # runFieldgen(newFileStr)
 
+  if len(args) >= 1:
+      pool = Pool(numThreads)
 
-  pool = Pool(numThreads)
-
-  bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=len(args)).start()
-  for i, _ in enumerate(pool.imap_unordered(gen_conf_star, args )):
-      bar.update(i+1)
-  bar.finish()
-  pool.close()
+      bar = ProgressBar(widgets=[Percentage(), Bar(), ETA()], maxval=len(args)).start()
+      for i, _ in enumerate(pool.imap_unordered(gen_conf_star, args )):
+          bar.update(i+1)
+      bar.finish()
+      pool.close()
 
 def generateConfigFile(newFileStr):
   # print newFileStr
