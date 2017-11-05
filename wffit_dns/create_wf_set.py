@@ -26,7 +26,7 @@ def main(argv):
   '''
 
   numBins = 16
-  numWfsToSavePerBin = 4
+  numWfsToSavePerBin = 2
 
   bl_variance = 3 #deviation (in adc) allowed from mode baseline value
   wfmax_variance = 15 #deviation (in adc) allowed from mode wf_max value
@@ -36,17 +36,47 @@ def main(argv):
   # save_file_name = "P42662A_%d_spread.npz" % (numBins*numWfsToSavePerBin)
 
   # channel = 626
-  # wfFileName = "fep_event_set_runs11510-11539_channel%d" % channel
+  # wfFileName = "fep_event_set_runs11510-11630_channel%d.npz" % channel
   # save_file_name = "P42574A_%d_spread.npz" % (numBins*numWfsToSavePerBin)
-  # baseline_value = 107
-  # max_limit = 6430
+  # risetime_limits = (40, 110) #this will be detector specific
+  # collecttime_limits = (0, 16.0) #this will be detector specific
+  # ae_return_cut = 150
+  # ignore_wfs = []
 
   channel = 672
   wfFileName = "fep_event_set_runs11510-11610.npz"
   # wfFileName = "cs_event_set_runs11510-11630_channel%d.npz" % channel
-  save_file_name = "P42661A_%d_slow.npz" % (numBins*numWfsToSavePerBin)
+  save_file_name = "P42661A_%d_slow_secondset.npz" % (numBins*numWfsToSavePerBin)
   risetime_limits = (50, 100) #this will be detector specific
   collecttime_limits = (0, 17.1) #this will be detector specific
+  ae_return_cut = 151
+  ignore_wfs = []
+
+#   ignore_wfs = [(11515,128965),
+# (11511,96633),
+# (11510,317207),
+# (11511,48362),
+# (11510,56040),
+# (11511,202862),
+# (11515,62152),
+# (11512,71698),
+# (11511,95195),
+# (11514,208461),
+# (11511,13079),
+# (11516,92744),
+# (11515,225892),
+# (11513,1225),
+# (11513,6869),
+# (11542,8401)]
+
+  # channel = 578
+  # wfFileName = "fep_event_set_runs11510-11630_channel%d.npz" % channel
+  # # wfFileName = "cs_event_set_runs11510-11630_channel%d.npz" % channel
+  # save_file_name = "P42538A_%d_slow.npz" % (numBins*numWfsToSavePerBin)
+  # risetime_limits = (45, 110) #this will be detector specific
+  # collecttime_limits = (0, 20.0) #this will be detector specific
+  # ae_return_cut = 161
+
 
   doPlots = 1
 
@@ -58,7 +88,7 @@ def main(argv):
     print( "No saved waveforms available... exiting.")
     exit(0)
 
-  rt_995 = np.empty(numWaveforms)
+  rt_995 = np.ones(numWaveforms)
   rt_50 = np.empty(numWaveforms)
   rt_95 = np.empty(numWaveforms)
   baseline = np.empty(numWaveforms)
@@ -70,6 +100,8 @@ def main(argv):
   current_rejoin_idxs = np.empty(numWaveforms)
 
   if doPlots: preCutfig = plt.figure(1)
+
+  preCutfigCurrent = plt.figure(0)
 
   #calculate some params.
   for (idx,wf) in enumerate(wfs):
@@ -89,6 +121,16 @@ def main(argv):
     current_rejoin_idx = np.argwhere(current >diff_threshold)[-1]
     current_rejoin_idxs[idx] = current_rejoin_idx
 
+    if doPlots:
+        plt.figure(0)
+        plt.plot(current)
+
+        plt.figure(1)
+        plt.plot(wf.windowedWf + wf.baselineMean)
+        plt.xlabel("Digitizer sampler [10s of ns]")
+        plt.ylabel("ADC Value [unchanged from digitzer]")
+        plt.title("Pre-cut waveforms")
+
     #find the current max
     current = ndimage.gaussian_filter1d(wf.windowedWf, sigma=1, order=1)
     current_max_idx = np.argmax(current)
@@ -106,12 +148,6 @@ def main(argv):
     # num_maxes[idx] = len(maxes)
 
 
-    if doPlots:
-        plt.plot(wf.windowedWf + wf.baselineMean)
-        plt.xlabel("Digitizer sampler [10s of ns]")
-        plt.ylabel("ADC Value [unchanged from digitzer]")
-        plt.title("Pre-cut waveforms")
-
   #find the normal baseline value
   bl_mode = findMode(baseline, doPlots, (bl_variance,), xlabel="mean baseline [adc]")
   risetime_mode = findMode(rt_995, doPlots, risetime_limits, xlabel="99.5% risetime [10s of ns]")
@@ -121,28 +157,35 @@ def main(argv):
 
   #cut based on wf max and baseline
   bl_cut = np.logical_and(baseline > (bl_mode - bl_variance), baseline < (bl_mode + bl_variance))
+  print ("baseline cut: %d pass (of %d)" % (np.count_nonzero(bl_cut),   len(wfs)))
 
   #cuts REAL long waveforms (can also be used to cut real fast ones)
   rt_cut = np.logical_and(rt_995 > risetime_limits[0], rt_995 < risetime_limits[1])
+  print ("rt cut: %d pass" % np.count_nonzero(rt_cut)  )
 
   #cuts those weird slow-on-top events that survive A/E
-  current_rejoin_cut = (current_rejoin_idxs) < 151
+  current_rejoin_cut = (current_rejoin_idxs) < ae_return_cut
+  print ("current_rejoin_cut cut: %d pass" % np.count_nonzero(current_rejoin_cut)  )
 
   length_cut = np.logical_and(length > (length_mode - 10), length < (length_mode + 10))
-  energy_cut = np.logical_and(energy > (energy_mode - 4), energy < (energy_mode + 4))
+  energy_cut = np.logical_and(energy > (energy_mode - 1), energy < (energy_mode + 1))
 
+  print ("length_cut cut: %d pass" % np.count_nonzero(length_cut)  )
+  print ("energy_cut cut: %d pass" % np.count_nonzero(energy_cut)  )
 
   #cut based on t50-t995: cuts events near the PC
   t_collect = rt_995 - rt_50
   t_collect_mode = findMode(t_collect, doPlots, collecttime_limits, xlabel="t50 - t99.5% risetime [10s of ns]", binMult=5)
   pc_cut = np.logical_and(t_collect > collecttime_limits[0], t_collect < collecttime_limits[1])
+  print ("pc_cut cut: %d pass" % np.count_nonzero(pc_cut)  )
+
 
   num_ae_peaks_cut = num_ae_peaks == 1
+  print ("num_ae_peaks_cut cut: %d pass" % np.count_nonzero(num_ae_peaks_cut)  )
 
   #stack the cuts
-  full_cut = np.stack(( bl_cut, rt_cut, current_rejoin_cut, length_cut,  pc_cut, energy_cut, num_ae_peaks_cut) )
+  full_cut = np.stack(( bl_cut, rt_cut,current_rejoin_cut, length_cut,  pc_cut, energy_cut, num_ae_peaks_cut) )
   full_cut = np.all(full_cut, axis=0)
-  print("wfs surving all cuts %d of %d" % (np.count_nonzero(full_cut), numWaveforms))
 
 # #2d hist of max current vs rt
 #   plt.figure()
@@ -150,8 +193,13 @@ def main(argv):
 #   plt.show()
 #   exit()
 
+  for (idx,wf) in enumerate(wfs):
+      if (wf.runNumber, wf.entry_number) in ignore_wfs:
+          full_cut[idx] = 0
+          print ("skipping wf %d" % idx)
   cut_wfs = wfs[full_cut]
 
+  print("wfs surving all cuts %d of %d" % (np.count_nonzero(full_cut), numWaveforms))
 
   # plt.ion()
   if doPlots:
@@ -165,6 +213,9 @@ def main(argv):
           plt.plot(np.arange(len(wf.windowedWf))*10, wf.windowedWf )
       plt.xlabel("Time (ns)")
       plt.ylabel("Voltage [adc]")
+
+  # plt.show()
+  # exit()
 
   #check out charge trapping properties
   plt.figure()
@@ -229,14 +280,14 @@ def main(argv):
 
   print( "generating a set of %d waveforms" % (numWfsToSavePerBin*numBins) )
   #regen risetime array w/ cut
-  risetimes = rt_50[full_cut]
+  risetimes = rt_95[full_cut]
 
   #snag a random subset from the bins
   (n,b) = np.histogram(risetimes, bins=numBins)
   wfs_to_save = np.empty(numWfsToSavePerBin*numBins, dtype=np.object)
   for i in range(len(n)):
       if n[i] < numWfsToSavePerBin:
-          print( "not enough waveforms per bin to save!" )
+          print( "not enough waveforms per bin to save! index %d has %d wfs between: " %(i, n[i]), b[i], b[i+1] )
           exit(0)
       else:
           idxs = np.logical_and(np.less(risetimes, b[i+1]), np.greater(risetimes, b[i]) )
