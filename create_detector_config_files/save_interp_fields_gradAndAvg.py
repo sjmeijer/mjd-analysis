@@ -9,7 +9,8 @@ import pandas as pd
 
 def main(argv):
 
-  detectorName = "P42661A_bull_smallpc"
+  # detectorName = "P42661A_bull_smallpc"
+  # detectorName = "P42574B_bull"
 
   gradientRange = np.linspace(0.08, 0.09, 3)
   impAvgRange = np.linspace(-0.52, -0.5, 3)

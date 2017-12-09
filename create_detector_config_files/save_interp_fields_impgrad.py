@@ -25,7 +25,7 @@ def main(argv):
 #  pcRadList = np.linspace(1.5, 2.9, num=15)
 #  pcLenList = np.linspace(1.5, 2.9, num=15)
 
-  detectorName = "P42574A"
+  detectorName = "P42574B"
   gradList =np.linspace(0.00, 0.001, 101)
   pcRad = 2.5
   pcLen = 1.6

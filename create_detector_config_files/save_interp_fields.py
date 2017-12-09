@@ -16,11 +16,24 @@ def main(argv):
     # gradientRange = np.linspace(-0.1,0.2,3)
     # impAvgRange = np.linspace(-0.65, -0.35, 3)
 
-    detectorName = "P42574A_bull"
-    pcRadiusRange = np.linspace(1.3,2.7,5)
-    pcLengthRange = np.linspace(1.4,1.8,5)
+    # detectorName = "P42574A_bull"
+    # pcRadiusRange = np.linspace(1.3,2.7,5)
+    # pcLengthRange = np.linspace(1.4,1.8,5)
+    # gradientRange = np.linspace(-0.05,0.1,3)
+    # impAvgRange = np.linspace(-1., -0.1, 3)
+
+    # detectorName = "P42574B_bull"
+    # pcRadiusRange = np.linspace(1.3,2.7,5)
+    # pcLengthRange = np.linspace(1.6,2.4,5)
+    # gradientRange = np.linspace(-0.05,0.1,3)
+    # impAvgRange = np.linspace(-1., -0.1, 3)
+
+    detectorName = "B8482"
+    pcRadiusRange = np.linspace(1.5,3.5,5)
+    pcLengthRange = [0] #np.linspace(1.6,2.4,5)
     gradientRange = np.linspace(-0.05,0.1,3)
     impAvgRange = np.linspace(-1., -0.1, 3)
+
 
     # detectorName = "P42538A_bull"
     # pcRadiusRange = np.linspace(1.8,2.2,5)

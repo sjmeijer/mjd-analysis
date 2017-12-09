@@ -56,7 +56,7 @@ from progressbar import ProgressBar, Percentage, Bar, ETA
 
 detectorName = "B8482"
 depletionVoltage = 3500.
-pcRadiusRange = np.linspace(1.5,3.5,5)
+pcRadiusRange = np.linspace(1.5,3 .5,5)
 pcLengthRange = [0] #np.linspace(1.6,2.4,5)
 gradientRange = np.linspace(-0.05,0.1,3)
 impAvgRange = np.linspace(-1., -0.1, 3)

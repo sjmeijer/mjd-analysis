@@ -21,7 +21,8 @@ from progressbar import ProgressBar, Percentage, Bar, ETA
 
 ortec_spreadsheet = "ortec_ORTEC_Measurements.csv"
 
-detectorName = "P42661A_bull_smallpc"
+# detectorName = "P42661A_bull_smallpc"
+detectorName = "P42574B_bull"
 
 startingFileName = "%s.conf" % detectorName
 
