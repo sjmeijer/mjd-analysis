@@ -12,12 +12,15 @@ from ParallelFitManager import ParallelFitManager
 from FitConfiguration import FitConfiguration
 
 def main():
-    directory = "16wf_P42538A"
-    wf_file = "dat/P42538A_64_slow.npz"
-    field_file = "dat/P42538A_bull_fields.npz"
-    conf_file= "conf/P42538A_bull.conf"
+    directory = "8wf_P42574B"
+    # wf_file = "dat/fep_event_set_runs11510-11630_channel598.npz"
+    wf_file = "dat/P42574B_8_slow.npz"
+    field_file = "dat/P42574B_bull_fields.npz"
+    conf_file= "conf/P42574B.conf"
     num_wfs = 4
-    wf_idxs = list(range(0,64,16))
+    # wf_idxs = list(range(0,64,16))
+    wf_idxs = list(range(0,8,2))
+
 
     conf = FitConfiguration(
         wf_file, field_file, conf_file, wf_idxs,

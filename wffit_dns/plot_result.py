@@ -16,8 +16,8 @@ from pysiggen import Detector
 from FitConfiguration import FitConfiguration
 from Model import Model
 
-doContourHist = 0
-doRSquaredPlot = 0
+doContourHist = 1
+doRSquaredPlot = 1
 
 
 # doPositionHist = 0
@@ -26,11 +26,12 @@ doRSquaredPlot = 0
 # doHists = 0
 # plotNum =1000 #for plotting during the Run
 
-doPositionHist = 1
-doVeloPlot =0
-doWaveformPlot =0
-doHists = 1
-plotNum = 10000 #for plotting during the Run
+doPositionHist = True
+doVeloPlot = True
+doHists = True
+doWaveformPlot =False
+doHists = True
+plotNum = 30381  #for plotting during the Run
 
 #
 # doPositionHist = 0
@@ -106,16 +107,20 @@ def plot(sample_file_name, directory):
     # exit()
 
     if doWaveformPlot:
+        print "Doing waveform plot..."
         plot_waveforms(plot_data, model,)
 
     if doHists:
+        print "Doing histograms..."
         plot_det_hist(velo, tf, det_params, model)
         plot_wf_hist(phi_arr, scale_arr, maxt_arr, smooth_arr, p_arr, rad_arr, theta_arr)
 
     if doPositionHist:
+        print "Doing position hist..."
         plot_position_hist(rad_arr, theta_arr, model.detector.detector_radius, model.detector.detector_length,)
 
     if doVeloPlot:
+        print "Doing velocity plot..."
         plot_velo_curves(velo, model)
 
     plt.show()
@@ -291,6 +296,7 @@ def plot_wf_hist(phi, scale, maxt, smooth, p, rad, theta):
 
 def plot_det_hist(velo, tf, det_params, model):
 
+    # print det_params
     vFig = plt.figure(figsize=(20,10))
 
     num_bins = 100
@@ -409,6 +415,9 @@ def plot_velo_curves(velo, model):
     fields_log = np.linspace(np.log(100), np.log(10000), 100)
     fields = np.exp(fields_log)
 
+    h100 = np.empty_like(fields)
+    h111 = np.empty_like(fields)
+
     for  idx in range(velo.shape[0]):
         h_100_va, h_111_va, h_100_vmax, h_111_vmax, h_100_beta, h_111_beta, = velo[idx,:]
 
@@ -445,6 +454,9 @@ def plot_velo_curves(velo, model):
     plt.axvline(x=model.conf.E_hi, color="black", ls=":")
     plt.axvline(x=model.conf.E_a, color="black", ls=":")
     plt.xscale('log')
+
+    plt.xlabel("Field?")
+    plt.ylabel("Velocity?")
     # plt.yscale('log')
     # plt.xlim(.45, 1E5)
     # plt.ylim(1E4, 1E8)

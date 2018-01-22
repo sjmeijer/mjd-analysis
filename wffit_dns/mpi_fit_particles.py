@@ -22,6 +22,8 @@ status = MPI.Status()   # get MPI status object
 #
 proc_per_part = (size-1) / np.float(num_particles)
 
+sys.stdout.write("size is %d process(es), rank of this process is %d, processes per particle is %f.\n" % (size, rank, proc_per_part))
+
 if not proc_per_part.is_integer():
     sys.stdout.write("size is %d, processes per particle is %f. must be integer\n" % (size, proc_per_part))
     exit(0)
@@ -74,12 +76,12 @@ def main():
     # #before was 1,5
     # wf_idxs = [ 0,  9,  8, 12, 16, 20, 23, 25, 31, 35, 40, 42, 49, 52, 57, 62]
 
-    directory = "16wf_P42538A"
-    wf_file = "dat/P42538A_64_slow.npz"
-    field_file = "dat/P42538A_bull_fields.npz"
-    conf_file= "conf/P42538A_bull.conf"
-    num_wfs = 16
-    wf_idxs = list(range(0,64,4))
+    directory = "8wf_P42574B"
+    wf_file = "dat/P42574B_8_slow.npz"
+    field_file = "dat/P42574B_bull_fields.npz"
+    conf_file= "conf/P42574B_bull.conf"
+    num_wfs = 8
+    wf_idxs = list(range(0,8,2))
 
     conf = FitConfiguration(
         wf_file, field_file, conf_file, wf_idxs,

@@ -16,13 +16,17 @@ comm = MPI.COMM_WORLD   # get MPI communicator object
 rank = comm.Get_rank()
 
 def main():
-    directory = "16wf_P42538A"
-    wf_file = "dat/P42538A_64_slow.npz"
-    field_file = "dat/P42538A_bull_fields.npz"
-    conf_file= "conf/P42538A_bull.conf"
-    num_wfs = 16
-    wf_idxs = list(range(0,64,4))
-
+    directory = "8wf_P42574B"
+    # wf_file = "dat/P42538A_64_slow.npz"
+    wf_file = "dat/P42574B_8_slow.npz"
+    field_file = "dat/P42574B_bull_fields.npz"
+    conf_file= "conf/P42574B.conf"
+    # wf_file = "dat/P42574B_64_slow.npz"
+    # field_file = "dat/P42538A_bull_fields.npz"
+    # conf_file= "conf/P42538A_bull.conf"
+    num_wfs = 8
+    wf_idxs = list(range(0,8,4))
+    
     conf = FitConfiguration(
         wf_file, field_file, conf_file, wf_idxs,
         directory = directory,
@@ -39,7 +43,7 @@ def main():
 
     if rank == 0:
         conf.save_config()
-        fm.fit(numLevels=1000, directory = directory)
+        fm.fit(numLevels=1000, directory = directory, numParticles=5)
         fm.close()
     else:
         fm.wait_and_process()

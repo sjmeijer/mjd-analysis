@@ -709,6 +709,8 @@ class Model(object):
         psi = (E_a * v_c) / ( E_c * v_a )
         # print(psi, beta, 1-psi**beta, 1./beta )
 
+        # print(1./beta)
+    
         E_0 = np.power((psi**beta* E_c**beta - E_a**beta) / (1-psi**beta), 1./beta)
 
         # import warnings

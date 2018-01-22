@@ -25,8 +25,8 @@ def main(argv):
   so you have waveforms from all over in the detector.
   '''
 
-  numBins = 16
-  numWfsToSavePerBin = 2
+  numBins = 2
+  numWfsToSavePerBin = 4
 
   bl_variance = 3 #deviation (in adc) allowed from mode baseline value
   wfmax_variance = 15 #deviation (in adc) allowed from mode wf_max value
@@ -43,12 +43,25 @@ def main(argv):
   # ae_return_cut = 150
   # ignore_wfs = []
 
-  channel = 672
-  wfFileName = "fep_event_set_runs11510-11610.npz"
-  # wfFileName = "cs_event_set_runs11510-11630_channel%d.npz" % channel
-  save_file_name = "P42661A_%d_slow_secondset.npz" % (numBins*numWfsToSavePerBin)
+#   channel = 672
+#   wfFileName = "fep_event_set_runs11510-11610.npz"
+#   # wfFileName = "cs_event_set_runs11510-11630_channel%d.npz" % channel
+#   save_file_name = "P42661A_%d_slow_secondset.npz" % (numBins*numWfsToSavePerBin)
+#   risetime_limits = (50, 100) #this will be detector specific
+#   collecttime_limits = (0, 17.1) #this will be detector specific
+#   ae_return_cut = 151
+#   ignore_wfs = []
+
+#  channel = 598
+#  wfFileName = "dat/fep_event_set_runs11510-11630_channel598.npz"
+#  save_file_name = "dat/P42574B_%d_slow.npz" % (numBins*numWfsToSavePerBin)
+
+  channel = 600
+  wfFileName = "dat/fep_event_set_runs11510-11630_channel%d.npz" % (channel)
+  save_file_name = "dat/B8482_%d_slow.npz" % (numBins*numWfsToSavePerBin)
+
   risetime_limits = (50, 100) #this will be detector specific
-  collecttime_limits = (0, 17.1) #this will be detector specific
+  collecttime_limits = (0, 18.2) #this will be detector specific
   ae_return_cut = 151
   ignore_wfs = []
 
@@ -78,7 +91,7 @@ def main(argv):
   # ae_return_cut = 161
 
 
-  doPlots = 1
+  doPlots = True
 
   if os.path.isfile(wfFileName ):
     data = np.load(wfFileName)
@@ -200,6 +213,9 @@ def main(argv):
   cut_wfs = wfs[full_cut]
 
   print("wfs surving all cuts %d of %d" % (np.count_nonzero(full_cut), numWaveforms))
+  if(np.count_nonzero(full_cut) == 0):
+      print("There were no waveforms left. Check your cuts and try again...\n")
+      return
 
   # plt.ion()
   if doPlots:
